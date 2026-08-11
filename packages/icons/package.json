@@ -1,0 +1,10 @@
+{
+  "name": "@papa/icons",
+  "version": "0.1.0",
+  "description": "Hand-drawn duotone SVG icon set shared by Papa Rentals and Papa Vendor",
+  "type": "module",
+  "files": ["src"],
+  "exports": { ".": "./src/index.tsx" },
+  "peerDependencies": { "react": ">=18" },
+  "scripts": { "test": "node --test \"test/**/*.test.mjs\"" }
+}
