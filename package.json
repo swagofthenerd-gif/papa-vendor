@@ -12,7 +12,9 @@
     "build": "npm run build:tokens",
     "build:tokens": "npm run build -w @papa/tokens",
     "pretest": "npm run build",
-    "test": "node --test \"packages/*/test/**/*.test.mjs\" \"apps/*/test/**/*.test.mjs\""
+    "test": "node --test \"packages/*/test/**/*.test.mjs\" \"apps/*/test/**/*.test.mjs\"",
+    "test:sql": "./supabase/run-tests.sh",
+    "test:all": "npm test && npm run test:sql"
   },
   "engines": {
     "node": ">=20"
