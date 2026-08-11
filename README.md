@@ -2,11 +2,35 @@
 
 Inventory and operations for film equipment rental houses. Every physical item carries a QR tag; staff scan gear in and out; inventory stays live and accurate — offline, one-handed, at 6am on a loading dock.
 
-The vendor-side companion to the [Papa Rentals](../papa-rentals) marketplace. Standalone for now; designed so the marketplace can plug in later as a demand channel.
+The vendor-side companion to the Papa Rentals marketplace. Standalone for now; designed so the marketplace can plug in later as a demand channel.
 
 ## Status
 
 **Phase 0 — foundations.** Planning complete, no application code yet.
+
+## How this connects to Papa Rentals
+
+**Separate repos, deliberately.** This is its own git repo; Papa Rentals lives inside the `Scrrenplay-papa` monorepo at `../papa-rentals` and is ignored by that repo's `.gitignore`. Different lifecycles, different release cadence, different risk profile — a marketplace demo and a system a business depends on shouldn't share a commit history.
+
+Three connections, in order of when they matter:
+
+| Connection | When | How |
+|---|---|---|
+| **Design tokens + icons** | Phase 0 | `packages/tokens` and `packages/icons` are consumed by both apps. Separate repos means these must be *published*, not path-imported — see below. |
+| **`global_product_id`** | Phase 1 | A nullable column on `products` pointing at a small shared catalogue, so "Sony FX9" is one thing across every vendor. Cheap now, impossible to retrofit. |
+| **Marketplace integration** | Phase 5 | Push available inventory out, pull marketplace bookings in as Papa Vendor bookings. When it happens, the marketplace adopts *this* schema's vocabulary through an adapter — not the reverse. |
+
+### The shared-package consequence
+
+With one repo, `packages/tokens` is a workspace path import. With two, it isn't. Options, in order of preference:
+
+1. **A third small repo** (`papa-design`) published to GitHub Packages, consumed by both as a versioned dependency. Cleanest; a breaking token change is a major version and both apps upgrade deliberately.
+2. **Git dependency** — `"@papa/tokens": "github:user/papa-design#v1.2.0"`. No registry setup, works today, but no local dev loop without linking.
+3. **Copy, with a sync script and a CI check** that fails if the two drift. Ugly, honest, and fine until there's a second consumer.
+
+Decide this in Phase 0, before either app imports anything. Whichever wins, the rule from `docs/PLAN.md` holds: **primitives are shared, semantic tokens are owned by each app** — so a marketplace brand refresh can't silently change what "overdue" looks like on a loading dock.
+
+**Companion vault:** `~/PapaVendor-Vault` (Obsidian) holds the thinking layer — decisions, domain research, and why the architecture doc is partially superseded.
 
 ## Read in this order
 
