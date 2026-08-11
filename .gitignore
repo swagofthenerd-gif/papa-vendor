@@ -1,0 +1,10 @@
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+.env
+.env.local
+.DS_Store
+android/app/build/
+android/.gradle/
+supabase/.temp/
