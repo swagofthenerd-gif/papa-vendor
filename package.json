@@ -1,0 +1,20 @@
+{
+  "name": "papa-vendor",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Inventory and operations for film equipment rental houses",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build:tokens",
+    "build:tokens": "npm run build -w @papa/tokens",
+    "pretest": "npm run build",
+    "test": "node --test \"packages/*/test/**/*.test.mjs\" \"apps/*/test/**/*.test.mjs\""
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

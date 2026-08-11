@@ -157,7 +157,7 @@ Full precision appears only as **plain text** on the asset page, where there is 
 
 ### Three themes, not two — dark is wrong for sunlight
 
-The architecture proposes defaulting the scanner to dark because the warm off-white "washes out in direct sun". That is inverted: dark themes emit least light and are *least* readable in sun. And the sibling's dark theme is a *cozy* dark — `--bg #161310` against `--card #211d18` is ~1.35:1, a phone-in-bed palette whose card boundaries vanish next to a live camera viewfinder.
+The architecture proposes defaulting the scanner to dark because the warm off-white "washes out in direct sun". That is inverted: dark themes emit least light and are *least* readable in sun. And the sibling's dark theme is a *cozy* dark — `--card #211d18` on `--bg #161310` measures **1.10:1** (an earlier estimate of ~1.35 was wrong; the real figure is worse), a phone-in-bed palette whose card boundaries vanish next to a live camera viewfinder. Note that *darkening* the background makes this worse, not better — at these luminances the WCAG `+0.05` term dominates and both ends converge. The separation has to come from raising `--card`.
 
 | | indoor (default) | truck (dark) | **sun (new)** |
 |---|---|---|---|

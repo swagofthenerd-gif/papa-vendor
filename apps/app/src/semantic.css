@@ -1,0 +1,183 @@
+/* ============================================================
+   Papa Vendor — semantic token layer
+
+   APP-OWNED. Primitives come from @papa/tokens (shared with Papa
+   Rentals); meaning lives here. That split is deliberate: a
+   marketplace brand refresh must not silently change what "overdue"
+   looks like on a loading dock.
+
+   Import order matters:
+     @import '@papa/tokens/css';   <- primitives, light + dark
+     @import './semantic.css';     <- this file
+   ============================================================ */
+
+:root {
+  /* ---- Type -------------------------------------------------
+     Asset codes get their own face. "FX9-02" vs "FX9-O2" and
+     "BAT-1I5" vs "BAT-115" are read at arm's length in bad light by
+     someone holding a case. Plus Jakarta Sans has a plain oval zero
+     and near-identical I/l/1 at small sizes; size does not fix glyph
+     ambiguity, a different typeface does. Slashed zero required.
+     Generated asset_code values also exclude O I l 0 1 at the source
+     (Crockford base32) — belt and braces. */
+  --ff-code: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Read across a warehouse aisle. */
+  --fs-scan: 32px;
+
+  /* ---- Touch ------------------------------------------------
+     A gloved fingertip contact patch is 20-25mm ~= 64-72px here.
+     But size is the lesser half: glove mis-taps are ADJACENCY
+     failures, not size failures — the patch is wide and imprecise,
+     so it lands on the neighbour. Hence the gap tokens, which are
+     the ones that actually prevent the wrong tap. */
+  --tap-glove: 64px;
+  --tap-gap-glove: 12px;
+  --tap-gap-danger: 24px;   /* destructive vs non-destructive */
+
+  /* ---- Density ----------------------------------------------
+     The sibling's --r-lg (20px) card with a layered shadow is right
+     for a consumer grid of eight items and pure noise on a 40-row
+     bookings table, where it also costs ~8px of vertical space per
+     row for nothing. Rows are not cards. */
+  --r-row: 4px;
+  --row-h-compact: 32px;    /* console table row */
+  --row-h-comfort: 56px;    /* scanner list row */
+  --row-h-glove: 64px;      /* primary action on the scanner */
+
+  /* ---- Accent as text ---------------------------------------
+     --accent (#ff6b2c) is 2.9:1 on white and fails AA as text. The
+     marketplace gets away with it on fills at 700 weight in large
+     sizes. Here accent frequently means "this needs your attention",
+     so it must be readable. 4.6:1 on white. */
+  --accent-strong: #c93f00;
+
+  /* ---- Status ------------------------------------------------
+     Twelve asset states cannot be aliased onto five hues: the
+     collisions land precisely on the states that must be
+     distinguished (out / in_transit / overdue are all "not here" and
+     read as one blob). So glanceable surfaces collapse to FOUR
+     buckets, and encode by SOLID FILL + GLYPH rather than by tint.
+
+     Why solid, not the sibling's tint: a tint sits at ~1.1:1 against
+     the card — the sibling's own CSS admits this and patches it with
+     a currentColor border. In sunlight a tinted badge is a rumour.
+
+     Why a redundant glyph: ~8% of men have red-green CVD, and
+     --green/--red are the canonical deuteranopia confusion pair. The
+     glyph makes the encoding survive greyscale, sunlight and CVD.
+
+     Full twelve-state precision appears ONLY as plain text on the
+     asset page, where there is time to read.
+
+     This is an intentional divergence from the marketplace's badge
+     style. Do not "fix" it back to match. */
+  --status-here:       var(--green-ink);
+  --status-out:        var(--purple);
+  --status-attention:  var(--red);
+  --status-gone:       transparent;
+  --status-ink:        #ffffff;      /* ink ON a solid status fill */
+  --status-gone-ink:   var(--muted);
+  --status-gone-line:  var(--line-strong);
+}
+
+/* ============================================================
+   TRUCK — the dark theme, for a van at 05:00 and an unlit store.
+
+   @papa/tokens already ships dark under [data-theme='dark']. These
+   values are raised because the marketplace's dark is a cozy,
+   phone-in-bed dark: its --card #211d18 on --bg #161310 is only
+   1.10:1, and --line #37322d on that card is barely more. Fine for
+   ambience; invisible beside a live camera viewfinder, which is the
+   brightest object on the scanner and sets the eye's adaptation.
+
+   Note the trap: simply darkening --bg does NOT help. At these
+   luminances the +0.05 term in the WCAG ratio dominates, so pushing
+   both ends down moves them CLOSER in ratio terms. The separation has
+   to come from raising the card. The first version of this file made
+   exactly that mistake and the contrast test caught it.
+
+   Ratios (see test/contrast.test.mjs, which recomputes them):
+     card/bg 1.32 · line/card 1.74 · line-strong/card 2.43
+     ink/card 12.9 · muted/card 5.8
+   ============================================================ */
+:root[data-theme='dark'] {
+  --bg: #0f0d0b;            /* deeper than the sibling's #161310 */
+  --card: #2e271f;          /* RAISED — this is what buys the separation */
+  --card-2: #3a3229;
+  --line: #544c41;
+  --line-strong: #6b6154;
+  --accent-strong: #ff9563; /* on dark, accent-as-text goes lighter, not darker */
+  --status-ink: #0f0d0b;    /* dark ink on the lighter dark-theme fills */
+}
+
+/* ============================================================
+   SUN — direct sunlight on a loading dock.
+
+   The intuition that a dark theme suits bright light is exactly
+   backwards: dark themes EMIT least, and in direct sun the reflected
+   ambient light off the glass swamps the emitted light. Sunlight
+   wants maximum luminance and maximum contrast.
+
+   Two things carry this theme:
+
+   1. SHADOWS ARE WORTHLESS OUTDOORS. A 5% brown-tinted shadow at
+      40px blur is invisible in sun, so every card boundary in the
+      inherited system disappears and the layout collapses into one
+      undifferentiated white field. Every shadow becomes a hard 2px
+      border instead. This is why --shadow-* are all set to none here
+      rather than merely darkened.
+
+   2. Tints die. Badges go solid, borders go black, accent goes dark
+      enough to read.
+
+   Selected by the ambient light sensor with a manual lock in the
+   header — a person standing in shade should be able to pin it.
+   ============================================================ */
+:root[data-theme='sun'] {
+  --bg: #ffffff;
+  --card: #ffffff;
+  --card-2: #ffffff;
+  --ink: #000000;
+  --muted: #3a3a3a;         /* 10.4:1 — "secondary" must still be readable in sun */
+  --line: #000000;
+  --line-strong: #000000;
+
+  --accent: #c93f00;
+  --accent-strong: #c93f00;
+  --accent-soft: #ffffff;
+
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow: none;
+
+  /* Every boundary that was a shadow is now this. */
+  --line-w: 2px;
+
+  --status-here:      #0f6b34;   /* 5.6:1 with white ink */
+  --status-out:       #5b21b6;   /* 8.5:1 */
+  --status-attention: #b91c1c;   /* 6.4:1 */
+  --status-ink:       #ffffff;
+  --status-gone-ink:  #3a3a3a;
+  --status-gone-line: #000000;
+}
+
+/* Default border width, overridden to 2px in sun mode. */
+:root { --line-w: 1px; }
+
+/* ============================================================
+   Reduced motion — inherited discipline from the marketplace.
+   A warehouse is not a place to animate at someone.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
