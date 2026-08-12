@@ -1,0 +1,73 @@
+name: CI
+
+# Everything else in the production-readiness ledger degrades silently without
+# this. It is listed first there for that reason.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-bookworm
+        env:
+          POSTGRES_PASSWORD: papa
+          POSTGRES_DB: papa
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # Typecheck, unit tests, and the real Vite build. A green typecheck over
+      # source says nothing about whether Rollup can resolve it — that is how
+      # the missing @papa/design dist/ slipped through locally.
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build:app
+
+      - name: Install pgTAP
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client postgresql-16-pgtap || \
+            sudo apt-get install -y -qq postgresql-client
+          PGPASSWORD=papa psql -h localhost -U postgres -d papa -c 'create extension if not exists pgtap;'
+
+      - name: Migrations and pgTAP
+        env:
+          PGPASSWORD: papa
+        run: |
+          set -euo pipefail
+          for f in supabase/migrations/*.sql; do
+            echo "-- $f"
+            psql -h localhost -U postgres -d papa -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+          failed=0
+          for f in supabase/tests/*.sql; do
+            echo "--- $(basename "$f")"
+            out=$(psql -h localhost -U postgres -d papa -q -f "$f" 2>&1)
+            # Both failure shapes: a failed assertion prints "not ok"; a broken
+            # FILE aborts its transaction and prints ERROR with no "not ok" at
+            # all. Grepping only for the former reports a dead suite as green.
+            if grep -qE '^\s*not ok' <<<"$out" || grep -q 'ERROR:' <<<"$out"; then
+              failed=1
+              grep -E '^\s*not ok|ERROR:|^\s*#' <<<"$out" | head -40
+            fi
+            grep -cE '^\s*ok [0-9]+' <<<"$out" | xargs -I{} echo "    {} assertions passed"
+          done
+          [ $failed -eq 0 ] || { echo '==> FAILED'; exit 1; }
+          echo '==> all green'
