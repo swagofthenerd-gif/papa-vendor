@@ -145,7 +145,7 @@ is unpartitioned and unpruned, and that is where 100k users actually breaks.
 ### Real, tested, enforced by the database
 
 - **Multi-tenant isolation via RLS**, forced on every table, proven from inside
-  the RPCs as a non-superuser. 264 SQL assertions, including explicit
+  the RPCs as a non-superuser. 277 SQL assertions, including explicit
   cross-org leak tests in both directions.
 - **`papa_app` is `NOSUPERUSER NOBYPASSRLS` with no DELETE grant** — hard
   deletes are impossible for the application role, not merely discouraged.
@@ -167,13 +167,13 @@ is unpartitioned and unpruned, and that is where 100k users actually breaks.
 | Gap | Consequence if shipped as-is | Effort |
 |---|---|---|
 | **No authentication at all** | Nobody can log in. There is no Supabase project. | Days |
-| **No device DB encryption** (SQLCipher) | A stolen warehouse phone is the whole fleet, purchase prices, replacement values and the customer list, in plaintext | Days |
+| **No device DB encryption** (SQLCipher) | A stolen warehouse phone is the whole fleet, purchase prices, replacement values and the customer list, in plaintext | **Re-scoped 2026-08-12.** Not "days to add a flag" — **there is no device driver at all.** Capacitor is anticipated in comments and the Vite config but is not installed; the only `SqlDriver` is the node:sqlite one used by tests. The risk is ordering: whoever builds the Capacitor driver will get sync working first and come back for encryption, and SQLCipher **cannot open a plaintext database**, so retrofitting means an offline export/re-import on every installed phone — including the outbox, which exists nowhere else. `packages/core/src/db/device-key.ts` now makes the requirement a **type**: `openDeviceDatabase` will not accept a non-encrypted driver, and an empty key (which SQLCipher silently treats as *no encryption*) is refused. Encryption itself still has to be written. |
 | ~~**CNIC/NTN still sync to scanners**~~ | **Corrected 2026-08-12 — this was never true.** There is no `customers` table and no `cnic`/`ntn` column in the schema; they arrive in phase 2, so nothing was leaking. The real exposure was that `pull_changes` uses `select *` for six of eight tables, so adding `customers` to `make_syncable()` — a one-line change that will look routine — would have shipped `cnic` to every warehouse phone. `0009` adds a registry of column names that may not exist on any syncable table, and the test fails the build if one ever does. Enforced structurally instead of documented. | ✅ |
 | **No backups / PITR** | No project exists, so nothing is backed up | **Corrected: PITR on Supabase is $100/mo — 4× the infra budget, not "hours".** Pre-revenue substitute: Pro's 7-day daily backups + the append-only event log + a nightly cold export. Turn PITR on at first revenue. |
 | ~~**No cold export of `scan_events`**~~ | **Done 2026-08-12** (`0010`). NDJSON export past a cursor, with a **settle lag** because `server_seq` is handed out before commit and transactions commit out of order — the same hazard that produced the row-skipping cursor bug in `0005`. The lag is a probability argument, so it is backed by a batch ledger and `export_gap_check()`, which proves completeness below the cursor rather than assuming it. Still needs the nightly job and a bucket to write to. | ✅ schema |
 | **No secrets management** | No keys exist yet; needs doing before any do | Hours |
-| ~~No CI~~ | **Done 2026-08-12.** Typecheck + 120 JS tests + the real Vite build + all migrations + 264 pgTAP assertions, on every push, against stock Postgres. | ✅ |
-| **No error tracking / monitoring** | A device with 400 queued writes for three days is invisible | Days |
+| ~~No CI~~ | **Done 2026-08-12.** Typecheck + 127 JS tests + the real Vite build + all migrations + 277 pgTAP assertions, on every push, against stock Postgres. | ✅ |
+| **No error tracking / monitoring** | ~~A device with 400 queued writes for three days is invisible~~ — **`sync_health` done 2026-08-12** (`0011`): per-device freshness plus `raise_stale_device_alerts()`, idempotent so the channel does not become noise, and self-resolving when the phone returns. Built on **silence**, not `queued_writes` — an offline device cannot report its own queue depth, and the server only ever writes that column as zero. Sentry and app-level error tracking are still missing. |
 | **No dependency scanning** | | Hours |
 | **No penetration test** | | External |
 
@@ -207,8 +207,10 @@ In order, because each depends on the last:
    decision**, see `docs/partitioning-decision.md`. The cold NDJSON export is
    ✅ done (`0010`); it still needs a nightly job and a bucket to write to.
 6. ~~**A concurrent-write load test**~~ — ✅ done 2026-08-12. Measured, attributed, and cleared with ~400× headroom. `db/bench/concurrent-writes.sh`.
-7. **Monitoring**: Sentry, a `sync_health` view, and an alert when a device's
-   queue ages past 24h.
+7. **Monitoring**: ~~a `sync_health` view and an alert when a device goes
+   quiet past 24h~~ — ✅ done (`0011`); it still needs a scheduler to call
+   `raise_stale_device_alerts()` hourly, and a WhatsApp sender behind the
+   alert's `channel`. Sentry is still missing.
 8. Only then: the pilot warehouse.
 
 ---
@@ -216,7 +218,7 @@ In order, because each depends on the last:
 ## What I would tell a prospective customer today
 
 The inventory model, the tenancy isolation and the offline sync are real,
-measured and defended by 264 database assertions plus 120 application tests.
+measured and defended by 277 database assertions plus 127 application tests.
 That is the hard, expensive part and it is done.
 
 It is not deployed, nobody can log in, and a lost phone is currently an

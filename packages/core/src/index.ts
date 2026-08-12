@@ -1,4 +1,14 @@
 export type { SqlDriver, SqlValue, Row } from './db/driver.ts'
+export {
+  openDeviceDatabase,
+  openEphemeralDatabase,
+  UnencryptedDeviceDatabaseError,
+} from './db/device-key.ts'
+export type {
+  DeviceKeyProvider,
+  DeviceDriverFactory,
+  StorageProtection,
+} from './db/device-key.ts'
 export { LOCAL_SCHEMA, DEVICE_ONLY_TABLES, MIRROR_TABLES } from './db/schema.ts'
 export { Outbox, syncStatus, MAX_ATTEMPTS } from './outbox.ts'
 export type { OutboxRow, OutboxState, EnqueueInput, SyncTone } from './outbox.ts'
