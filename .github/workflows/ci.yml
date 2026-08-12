@@ -39,4 +39,4 @@ jobs:
       # run-tests.sh auto-detects podman or docker, so it works unchanged in
       # both places and cannot drift from what is tested locally.
       - name: Migrations and pgTAP
-        run: ./supabase/run-tests.sh
+        run: ./db/run-tests.sh

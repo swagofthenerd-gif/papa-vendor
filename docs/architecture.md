@@ -4,6 +4,15 @@
 > mechanism, the sync engine choice, the theme strategy, and the phasing. Read
 > `PLAN.md` → "What overrides the architecture document" before implementing anything
 > from this file.
+>
+> **Also superseded on hosting.** This document recommends PowerSync as the read
+> path and pairs the app tightly with Supabase services. The built code has
+> deliberately diverged toward portability — cursor-pull sync instead of
+> PowerSync, no vendor SDK anywhere, identity read from `current_setting()` with
+> a vendor-free fallback. That is worth roughly 1–2 days of migration cost
+> instead of months. **Do not reintroduce a vendor SDK as the data layer on the
+> strength of this file.** See `docs/hosting-decision.md` and the portability
+> rules in `CONTRIBUTING.md`.
 
 # Papa Vendor — Technical Architecture
 

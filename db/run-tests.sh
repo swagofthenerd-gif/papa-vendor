@@ -7,8 +7,8 @@
 # rather than merely written; an untested migration is a liability, and RLS
 # bugs are silent by nature.
 #
-#   ./supabase/run-tests.sh          # run
-#   KEEP=1 ./supabase/run-tests.sh   # leave the container up to poke at it
+#   ./db/run-tests.sh          # run
+#   KEEP=1 ./db/run-tests.sh   # leave the container up to poke at it
 #
 set -euo pipefail
 

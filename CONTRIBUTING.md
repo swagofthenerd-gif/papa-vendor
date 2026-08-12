@@ -34,6 +34,51 @@ The device already knows this camera is checked out to a different job. Warn ins
 2. **`docs/architecture.md`** — the detailed technical reference (schema DDL, sync design, the full conflict enumeration). **Twenty of its decisions are overridden by PLAN.md.** Read PLAN.md's override table before implementing anything from here.
 3. **`docs/research-pain-points.md`** — the sourced evidence base. When a design decision is questioned, the answer is usually already in here with a URL.
 4. **`docs/assumptions.md`** — every guess made in the absence of field data, to be walked with the pilot vendor at the end.
+5. **`docs/hosting-decision.md`** — where this runs and why, with the decision triggers that should cause a change. Backed by `docs/research/`.
+6. **`docs/production-readiness.md`** — the honest gap list between here and running a business.
+
+
+## Staying portable
+
+The database layer is **plain Postgres**, not Supabase — one extension, a
+hand-written UUIDv7, identity read from `current_setting()` with a vendor-free
+fallback. Moving to RDS, Aurora, Cloud SQL or Neon is **1–2 days** of work.
+
+That is worth real money: it means the hosting decision is reversible, so it can
+be made cheaply now and revisited with evidence later, instead of being agonised
+over before there is a single customer. **These rules are what keep it true.**
+
+- **Never write a foreign key from `users.id` to an auth provider's table.**
+  Own the `users` row; keep a nullable `external_auth_id` if you need the link.
+- **Never let a vendor SDK become the data layer.** No `supabase-js` (or
+  equivalent) issuing queries. All writes go through RPCs; reads go through the
+  sync path.
+- **Never call `auth.uid()` — or any vendor identity function — in a policy or
+  function body.** Read identity only from `current_org_id()` /
+  `current_user_id()`, which already carry the `papa.*` fallback that every test
+  uses.
+- **CI stays on stock `postgres:16`.** A test that requires a hosted vendor to
+  pass is a failing build. `db/run-tests.sh` is a continuous portability
+  regression test and it is the most valuable thing protecting this.
+- **Store opaque storage keys, never vendor-signed URLs.** A signed URL embeds
+  the vendor in your data.
+- **Keep any scheduled-job body to a single `SELECT some_function();`** so the
+  scheduler is replaceable.
+- **No new extensions without a written decision** recording what it buys and
+  which hosts support it.
+
+> **The one-way door: letting the identity model live in the vendor.** Do that
+> and migration stops being a data move and becomes re-authenticating every user
+> and every device in the field — on offline phones, in warehouses, at 6am.
+> Nothing else in this codebase comes close to that cost.
+
+### RLS policies: wrap function calls
+
+Write `using (org_id = (select current_org_id()))`, never
+`using (org_id = current_org_id())`. The wrapped form is hoisted into an
+InitPlan and evaluated **once per query**; the inline form runs **once per
+row**. Measured on a single org with 200k assets: **90ms → 13ms**. Enforced by
+`db/tests/0008_rls_initplan_test.sql`.
 
 ## Assumptions
 

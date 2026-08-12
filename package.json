@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "pretest": "npm run build",
     "test": "node --test \"packages/*/test/**/*.test.mjs\" \"apps/*/test/**/*.test.mjs\"",
-    "test:sql": "./supabase/run-tests.sh",
+    "test:sql": "./db/run-tests.sh",
     "test:all": "npm run typecheck && npm test && npm run build:app && npm run test:sql",
     "build:app": "npm run build -w @papa/app"
   },

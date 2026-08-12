@@ -4,7 +4,9 @@ An honest ledger of what would have to be true to run this as a business, and
 where it actually stands. Written because "is it secure and does it scale" is
 not a yes/no question, and a confident yes would be the least useful answer.
 
-**Status date:** 2026-08-12 · **Verdict: not production-ready.** The data layer
+**Status date:** 2026-08-12 · **Verdict: not production-ready.**
+**Hosting decided:** Supabase Pro (~$25/mo), region **Singapore**, photos on
+**Cloudflare R2**. Reasoning and the ten-lens analysis: `docs/hosting-decision.md`. The data layer
 is genuinely solid and measured. Nothing is deployed, nobody can log in, and
 several controls exist as schema without the surrounding operations.
 
@@ -30,19 +32,46 @@ decision has been re-tested rather than defended.
 | Caught-up poll | **0.09ms** | Was ~1.1ms; watermark short-circuit |
 | First-sync page (2000 assets) | **68ms** | Was 97ms; static SQL + column projection. One-time per device |
 | RLS predicate | Pushed into `Index Cond` | Sargable, not a post-filter — this is what makes org scoping free |
+| RLS function calls | **90ms → 13ms** on a 200k-asset org | Policies wrapped as `(select current_org_id())` so they hoist into an InitPlan and evaluate once per query, not once per row (`0008`) |
 
 **A correction worth recording:** I first measured a caught-up poll at 89ms and
 diagnosed dynamic-SQL re-planning. That was wrong — the benchmark timed two
 *nested* `pull_changes` calls. The real figure was already ~1ms. The wrong
 number nearly justified a much larger rewrite.
 
+### ⚠ The two costs this document originally missed entirely
+
+Both are larger than the database bill, and neither appeared in the first
+version of this ledger.
+
+**SMS is the real budget crisis.** Twilio charges ~$0.47 per segment to
+Pakistan. At 100 customers × 5 staff × 2 logins/month that is **~$473/month —
+19× the entire infrastructure budget**, against a $25 database. The design
+already contains the fix and it must be held to: **OTP at enrolment only**, then
+a long-lived device session + per-user PIN, delivered by a local aggregator or
+WhatsApp rather than Twilio. That converts a recurring per-login cost into a
+one-time per-staff cost of roughly **$2 lifetime**.
+
+**Photos are the only line that can ever hurt.** ~2GB per rental house per
+month, accumulating forever while revenue per customer stays flat — the classic
+runaway shape. **Use Cloudflare R2, not Supabase Storage**: R2 charges **$0
+egress** vs $0.09/GB. A ~$9/month difference today; **~$8,000/month at 10,000
+customers.** Also: decide a **24-month retention/downscale policy before Phase 1
+ships** — unbounded retention is the real long-run risk.
+
 ### What has NOT been tested, and would break first
 
-1. **Concurrent write throughput.** Everything above is read-path. `change_seq`
-   is a single global sequence — fine for sequence allocation (it is not
-   transactional), but the per-statement watermark upsert serialises writes
-   *within an org*. Two techs scanning fast in the same warehouse is the case
-   to measure. **Untested.**
+1. **Concurrent write throughput.** Everything above is read-path. The
+   per-statement watermark upsert serialises writes *within an org*, so two
+   techs scanning fast in one warehouse is the case to measure. **Still
+   untested — but downgraded.** The lock is held for sub-millisecond
+   transaction duration, giving thousands/sec per org in theory against a real
+   org's <5/sec. Worth measuring; unlikely to be the wall.
+
+   **`change_seq` is no longer a concern at all.** `nextval` is
+   non-transactional and cacheable; aggregate write rate at 10,000 orgs is
+   ~46/sec average and ~500/sec peak against a ~2,000/sec durable ceiling on
+   ordinary hardware. Previously listed here as a risk; it is not one.
 2. **`scan_events` growth.** Append-only and never pruned. At 10k orgs × 400
    scans/day that is ~1.5bn rows/year. It needs **monthly partitioning** before
    real volume, and partitioning after the fact is painful. **Not done.**
@@ -64,7 +93,7 @@ system as proven at that scale would be false.
 ### Real, tested, enforced by the database
 
 - **Multi-tenant isolation via RLS**, forced on every table, proven from inside
-  the RPCs as a non-superuser. 226 SQL assertions, including explicit
+  the RPCs as a non-superuser. 241 SQL assertions, including explicit
   cross-org leak tests in both directions.
 - **`papa_app` is `NOSUPERUSER NOBYPASSRLS` with no DELETE grant** — hard
   deletes are impossible for the application role, not merely discouraged.
@@ -88,10 +117,10 @@ system as proven at that scale would be false.
 | **No authentication at all** | Nobody can log in. There is no Supabase project. | Days |
 | **No device DB encryption** (SQLCipher) | A stolen warehouse phone is the whole fleet, purchase prices, replacement values and the customer list, in plaintext | Days |
 | **CNIC/NTN still sync to scanners** | PII on a warehouse phone under Pakistan's PECA regime. Column-level exclusion is specified, not implemented | Hours |
-| **No backups / PITR** | No project exists, so nothing is backed up | Hours, once hosted |
+| **No backups / PITR** | No project exists, so nothing is backed up | **Corrected: PITR on Supabase is $100/mo — 4× the infra budget, not "hours".** Pre-revenue substitute: Pro's 7-day daily backups + the append-only event log + a nightly cold export. Turn PITR on at first revenue. |
 | **No cold export of `scan_events`** | The one table that cannot be reconstructed has no independent copy | Hours |
 | **No secrets management** | No keys exist yet; needs doing before any do | Hours |
-| **No CI** | Tests run only when someone remembers. This is the one I would fix first — everything else degrades silently without it | Hours |
+| ~~No CI~~ | **Done 2026-08-12.** Typecheck + 120 JS tests + the real Vite build + all migrations + 241 pgTAP assertions, on every push, against stock Postgres. | ✅ |
 | **No error tracking / monitoring** | A device with 400 queued writes for three days is invisible | Days |
 | **No dependency scanning** | | Hours |
 | **No penetration test** | | External |
@@ -115,10 +144,8 @@ connectivity, a JSON-lines mirror against SQLite corruption, and an actionable
 
 In order, because each depends on the last:
 
-1. **CI** — GitHub Actions running `npm run test:all` on every push. Everything
-   below rots silently without it.
-2. **A Supabase project** — migrations applied from CI, PITR on, secrets in
-   place.
+1. ~~**CI**~~ — ✅ done. Runs `db/run-tests.sh`, the same script used locally, so CI and local cannot drift.
+2. **A Supabase project** — Singapore region, migrations applied from CI, secrets in place. **Plus the R2 bucket and photo pipeline before the pilot**, not after: re-keying stored photos later is painful.
 3. **Auth**: phone OTP at enrolment, device session, per-user PIN gate. Wire
    `rate_limit_check` into the PIN path.
 4. **Device encryption + CNIC sync exclusion.** Both are small; both are
@@ -135,7 +162,7 @@ In order, because each depends on the last:
 ## What I would tell a prospective customer today
 
 The inventory model, the tenancy isolation and the offline sync are real,
-measured and defended by 226 database assertions plus 134 application tests.
+measured and defended by 241 database assertions plus 120 application tests.
 That is the hard, expensive part and it is done.
 
 It is not deployed, nobody can log in, and a lost phone is currently an
