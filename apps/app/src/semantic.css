@@ -1,13 +1,13 @@
 /* ============================================================
    Papa Vendor — semantic token layer
 
-   APP-OWNED. Primitives come from @papa/tokens (shared with Papa
+   APP-OWNED. Primitives come from @papa/design (shared with Papa
    Rentals); meaning lives here. That split is deliberate: a
    marketplace brand refresh must not silently change what "overdue"
    looks like on a loading dock.
 
    Import order matters:
-     @import '@papa/tokens/css';   <- primitives, light + dark
+     @import '@papa/design/tokens.css';   <- primitives, light + dark
      @import './semantic.css';     <- this file
    ============================================================ */
 
@@ -84,7 +84,7 @@
 /* ============================================================
    TRUCK — the dark theme, for a van at 05:00 and an unlit store.
 
-   @papa/tokens already ships dark under [data-theme='dark']. These
+   @papa/design already ships dark under [data-theme='dark']. These
    values are raised because the marketplace's dark is a cozy,
    phone-in-bed dark: its --card #211d18 on --bg #161310 is only
    1.10:1, and --line #37322d on that card is barely more. Fine for

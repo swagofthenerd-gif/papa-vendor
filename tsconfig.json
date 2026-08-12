@@ -21,7 +21,13 @@
     "allowImportingTsExtensions": true,
     "types": [
       "node"
-    ]
+    ],
+    "paths": {
+      "@papa/design": [
+        "./node_modules/@papa/design/src/index.ts"
+      ]
+    },
+    "baseUrl": "."
   },
   "include": [
     "packages/*/src",

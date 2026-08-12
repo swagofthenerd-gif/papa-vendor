@@ -157,7 +157,7 @@ describe('truck mode — a dark van at 05:00', () => {
   test('body and secondary text pass AA on the raised card', () => {
     const card = declared(SEL, 'card')
     for (const [name, min] of [['ink', 4.5], ['muted', 4.5]]) {
-      // --ink and --muted come from @papa/tokens, not this file. Raising
+      // --ink and --muted come from @papa/design, not this file. Raising
       // --card moves them; this asserts the raise did not break them.
       const value = name === 'ink' ? '#f2efec' : '#a8a29e'
       const ratio = contrast(value, card)
@@ -167,7 +167,7 @@ describe('truck mode — a dark van at 05:00', () => {
 
   test('status fills carry the flipped dark ink', () => {
     const ink = declared(SEL, 'status-ink')
-    // Dark-theme fills come from @papa/tokens (--green/--purple/--red dark).
+    // Dark-theme fills come from @papa/design (--green/--purple/--red dark).
     for (const [bucket, fill] of [
       ['here', '#34d074'],
       ['out', '#a78bfa'],

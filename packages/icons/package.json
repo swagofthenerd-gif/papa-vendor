@@ -1,10 +1,21 @@
 {
   "name": "@papa/icons",
   "version": "0.1.0",
-  "description": "Hand-drawn duotone SVG icon set shared by Papa Rentals and Papa Vendor",
+  "description": "Papa Vendor's warehouse glyphs, merged with the shared @papa/design set",
   "type": "module",
-  "files": ["src"],
-  "exports": { ".": "./src/index.tsx" },
-  "peerDependencies": { "react": ">=18" },
-  "scripts": { "test": "node --test \"test/**/*.test.mjs\"" }
+  "files": [
+    "src"
+  ],
+  "exports": {
+    ".": "./src/index.tsx"
+  },
+  "dependencies": {
+    "@papa/design": "github:swagofthenerd-gif/papa-design#v0.1.0"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\""
+  }
 }

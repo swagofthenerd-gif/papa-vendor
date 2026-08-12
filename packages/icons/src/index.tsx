@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
-import { ICON_PATHS, type IconName as CoreIconName } from './core'
+import { ICON_PATHS, type IconName as CoreIconName } from '@papa/design'
 import { VENDOR_ICON_PATHS, type VendorIconName } from './vendor-glyphs'
 
-export { STAR_PATH, ICON_PATHS, IconSketchFilter, Avatar, LogoMark } from './core'
-export type { IconName as CoreIconName } from './core'
+export { STAR_PATH, ICON_PATHS, IconSketchFilter, Avatar, LogoMark } from '@papa/design'
+export type { IconName as CoreIconName } from '@papa/design'
 export { VENDOR_ICON_PATHS } from './vendor-glyphs'
 export type { VendorIconName } from './vendor-glyphs'
 
