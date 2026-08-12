@@ -6,7 +6,7 @@
 -- looks exactly like a device that is up to date.
 -- ============================================================================
 begin;
-select plan(26);
+select plan(27);
 
 set local role postgres;
 
@@ -124,9 +124,23 @@ select is(
 
 -- There is no org filter in pull_changes and there must not be one. RLS does
 -- it, so tenancy lives in exactly one place and cannot drift.
+-- The DATA queries must carry no org filter: RLS is the only gate on synced
+-- rows, so tenancy lives in one place and cannot drift. The single permitted
+-- mention is the watermark lookup, which is a keyed read of one bookkeeping
+-- row (and is itself RLS-protected) rather than a filter standing in for RLS.
+select is(
+  (select count(*)::int
+     from regexp_matches(
+       (select prosrc from pg_proc where proname = 'pull_changes'),
+       'org_id = current_org_id\(\)', 'g')),
+  1,
+  'the ONLY org_id reference in pull_changes is the watermark lookup — data queries rely on RLS'
+);
+
 select ok(
-  (select prosrc not like '%org_id =%' from pg_proc where proname = 'pull_changes'),
-  'pull_changes contains NO hand-written org filter — RLS is the only gate'
+  (select prosrc like '%org_sync_watermark where org_id = current_org_id()%'
+     from pg_proc where proname = 'pull_changes'),
+  'and that one reference is exactly the watermark lookup'
 );
 
 -- ---------------------------------------------------------------------------

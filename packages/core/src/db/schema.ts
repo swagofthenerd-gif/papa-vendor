@@ -33,6 +33,7 @@ create table if not exists assets (
   current_parent_id   text,
   current_job_id      text,
   last_scanned_at     text,
+  notes               text,
   updated_at          text
 );
 create index if not exists assets_code_idx     on assets (asset_code);
