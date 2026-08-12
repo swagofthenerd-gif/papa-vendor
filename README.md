@@ -27,7 +27,7 @@ Tokens and the shared icon set live in their own repo,
 here as a versioned git dependency:
 
 ```jsonc
-"@papa/design": "github:swagofthenerd-gif/papa-design#v0.1.0"
+"@papa/design": "github:swagofthenerd-gif/papa-design#v0.1.1"
 ```
 
 It is **public**, deliberately: it holds colour values and SVG paths that are

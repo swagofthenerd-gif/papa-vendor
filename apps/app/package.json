@@ -1,0 +1,19 @@
+{
+  "name": "@papa/app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test \"test/**/*.test.mjs\""
+  },
+  "dependencies": {
+    "@papa/core": "*",
+    "@papa/design": "github:swagofthenerd-gif/papa-design#v0.1.1",
+    "@papa/icons": "*",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}

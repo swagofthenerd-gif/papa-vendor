@@ -1,0 +1,293 @@
+/* ============================================================
+   Papa Vendor — component styles
+
+   Primitives from @papa/design, meaning from semantic.css. Nothing here
+   invents a colour or a size; everything references a token, so the three
+   themes (indoor / truck / sun) all work without this file knowing they exist.
+   ============================================================ */
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  font-family: var(--ff-sans);
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  /* A warehouse app has no business rubber-banding. */
+  overscroll-behavior: none;
+  /* Text selection on a scan screen only ever happens by accident. */
+  user-select: none;
+}
+
+.code {
+  font-family: var(--ff-code);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.muted { color: var(--muted); }
+
+/* ---- screens ---------------------------------------------- */
+.screen {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.screen-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+}
+.screen-head h1 { margin: 0; font-size: var(--fs-2xl); letter-spacing: -0.3px; }
+.who {
+  margin: var(--sp-1) 0 0;
+  display: flex; align-items: center; gap: 6px;
+  color: var(--muted); font-size: var(--fs-sm); font-weight: 600;
+}
+
+.screen-foot {
+  display: flex; gap: var(--tap-gap-glove);
+  padding: var(--sp-4);
+  border-top: var(--line-w) solid var(--line);
+}
+.screen-foot .btn { flex: 1; }
+
+/* ---- buttons ----------------------------------------------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: var(--sp-2);
+  min-height: var(--tap);
+  padding: 13px 18px;
+  border: none; border-radius: var(--r-sm);
+  font: inherit; font-weight: 700; font-size: var(--fs-base);
+  color: var(--ink); background: var(--card-2);
+  cursor: pointer;
+}
+.btn:active { transform: scale(0.97); }
+.btn-outline { background: var(--card); border: 1.5px solid var(--accent); color: var(--accent-strong); }
+.btn-ghost { background: transparent; border: var(--line-w) solid var(--line); }
+.btn-sm { min-height: 40px; padding: 8px 12px; font-size: var(--fs-sm); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.icon-btn {
+  display: grid; place-items: center;
+  width: var(--tap); height: var(--tap);
+  border: none; background: transparent; color: var(--ink); cursor: pointer;
+}
+
+/* ---- job list ---------------------------------------------- */
+.job-list { flex: 1; overflow-y: auto; margin: 0; padding: 0 var(--sp-4); list-style: none; }
+.job-list li + li { margin-top: var(--tap-gap-glove); }
+
+.job-card {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-3);
+  width: 100%;
+  /* The WHOLE ROW is the target — a gloved thumb gets a 64px band the width
+     of the screen rather than hunting a chevron. */
+  min-height: var(--tap-glove);
+  padding: var(--sp-3) var(--sp-4);
+  border: var(--line-w) solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--card);
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.job-card:active { transform: scale(0.99); }
+.job-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.job-label {
+  font-weight: 700; font-size: var(--fs-md);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.job-contact { color: var(--muted); font-size: var(--fs-sm); }
+.job-meta { display: flex; align-items: center; gap: var(--sp-3); flex-shrink: 0; }
+.job-time { color: var(--muted); font-size: var(--fs-sm); font-weight: 700; }
+.job-progress { display: flex; align-items: center; gap: var(--sp-2); font-weight: 700; }
+.job-progress.is-ready { color: var(--status-here); }
+
+.ring {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--p) * 360deg), var(--line) 0);
+  mask: radial-gradient(circle, transparent 58%, #000 60%);
+}
+
+.empty {
+  flex: 1; display: grid; place-content: center; justify-items: center;
+  gap: var(--sp-2); padding: var(--sp-8); text-align: center; color: var(--muted);
+}
+.empty p { margin: 0; }
+
+/* ---- the scan screen --------------------------------------- */
+.scan-screen { background: var(--bg); }
+
+.scan-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-3);
+  min-height: 44px; padding: 0 var(--sp-4);
+}
+.scan-job { font-weight: 800; font-size: var(--fs-md); }
+.scan-mode { color: var(--muted); font-size: var(--fs-sm); font-weight: 700; }
+
+.camera-frame {
+  position: relative;
+  /* ~38% of the viewport: enough to aim a QR at 20cm, and no more. A
+     full-screen viewfinder maximises the thing the tech is NOT looking at. */
+  height: 38dvh;
+  margin: 0 var(--sp-4);
+  border: 2px solid var(--accent);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: #000;
+}
+.camera-frame video, .camera-frame canvas { width: 100%; height: 100%; object-fit: cover; }
+
+.torch-btn {
+  position: absolute; right: var(--sp-3); bottom: var(--sp-3);
+  display: grid; place-items: center;
+  width: var(--tap-glove); height: var(--tap-glove);
+  border: none; border-radius: 50%;
+  background: rgb(0 0 0 / 0.55); color: #fff; cursor: pointer;
+}
+.torch-btn.is-on { background: var(--accent); color: #fff; }
+
+.scan-progress { padding: var(--sp-3) var(--sp-4) var(--sp-2); }
+.progress-row { display: flex; align-items: center; gap: var(--sp-3); }
+.progress-bar {
+  flex: 1; height: 8px; border-radius: var(--r-pill);
+  background: var(--line); overflow: hidden;
+}
+.progress-fill {
+  display: block; height: 100%; width: calc(var(--p) * 100%);
+  background: var(--accent); border-radius: inherit;
+  transition: width var(--dur) var(--ease-out);
+}
+/* Read at arm's length, so this is the largest text on the screen. */
+.progress-count { font-size: var(--fs-scan); font-weight: 800; line-height: 1; }
+
+.shelf-line { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); font-weight: 700; color: var(--muted); }
+.snapshot-age {
+  margin: var(--sp-1) 0 0;
+  display: flex; align-items: center; gap: 6px;
+  font-size: var(--fs-xs); color: var(--accent-strong); font-weight: 700;
+}
+
+/* ---- the session list -------------------------------------- */
+.scan-list {
+  flex: 1; overflow-y: auto;
+  margin: 0; padding: 0 var(--sp-4) var(--sp-3);
+  list-style: none;
+  /* Newest at the top and appended there, so nothing below it shifts. */
+  display: flex; flex-direction: column;
+}
+
+.scan-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  min-height: var(--row-h-comfort);
+  padding: var(--sp-2) var(--sp-3);
+  /* Rows are not cards: 4px, no shadow, hairline separators. */
+  border-radius: var(--r-row);
+  border-bottom: var(--line-w) solid var(--line);
+  animation: row-in var(--dur-fast) var(--ease-out);
+}
+@keyframes row-in { from { opacity: 0; transform: translateY(-4px); } }
+
+.row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.row-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-note { font-size: var(--fs-xs); color: var(--muted); font-weight: 600; }
+.row-code { color: var(--muted); font-size: var(--fs-sm); font-weight: 700; }
+
+.row-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  /* Adjacent actions are separated deliberately: glove mis-taps are ADJACENCY
+     failures, not size failures — the contact patch is wide and lands on the
+     neighbour. */
+  gap: var(--tap-gap-glove);
+}
+
+/* Left border rather than a tinted background: it survives sun mode, and it
+   does not fight the row's own text contrast. */
+.scan-row.is-unexpected,
+.scan-row.is-unknown_tag { border-left: 3px solid var(--accent); }
+.scan-row.is-conflict { border-left: 3px solid var(--status-attention); }
+
+.scan-row.is-pulsing { animation: pulse 400ms var(--ease-out); }
+@keyframes pulse {
+  0%, 100% { background: transparent; }
+  40% { background: var(--accent-soft); }
+}
+
+.scan-foot {
+  display: flex; align-items: stretch; gap: var(--tap-gap-glove);
+  padding: var(--sp-3) var(--sp-4);
+  border-top: var(--line-w) solid var(--line);
+}
+.manual-btn { flex: 0 0 auto; }
+
+/* ---- hold to finish ---------------------------------------- */
+.hold-btn {
+  position: relative; flex: 1;
+  min-height: var(--row-h-glove);
+  border: none; border-radius: var(--r-sm);
+  background: var(--card-2); color: var(--ink);
+  font: inherit; font-weight: 800; font-size: var(--fs-md);
+  overflow: hidden; cursor: pointer;
+  /* Stop Android's long-press text/callout menu stealing the gesture. */
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+}
+.hold-fill {
+  position: absolute; inset: 0;
+  transform-origin: left center;
+  transform: scaleX(var(--hold-progress, 0));
+  background: var(--accent);
+  opacity: 0.9;
+}
+.hold-label { position: relative; }
+.hold-btn:active .hold-label { color: #fff; }
+
+/* ---- status ------------------------------------------------- */
+.status {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 8px; border-radius: var(--r-pill);
+  font-size: var(--fs-xs); font-weight: 800;
+  /* SOLID fill, not a tint. A tint sits at ~1.1:1 against the card and is a
+     rumour in sunlight. */
+  color: var(--status-ink);
+}
+.status-glyph { font-size: 10px; line-height: 1; }
+.status-here { background: var(--status-here); }
+.status-out { background: var(--status-out); }
+.status-attention { background: var(--status-attention); }
+.status-gone {
+  background: transparent; color: var(--status-gone-ink);
+  border: 2px dashed var(--status-gone-line);
+}
+
+/* ---- sync strip --------------------------------------------- */
+/* Absent when online and idle. A permanent "all good" indicator is noise
+   people stop seeing within a week. */
+.sync-strip {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px var(--sp-4);
+  font-size: var(--fs-xs); font-weight: 700;
+}
+.sync-calm { background: var(--card-2); color: var(--muted); }
+.sync-accent { background: var(--accent-soft); color: var(--accent-strong); }
+.sync-attention { background: var(--status-attention); color: var(--status-ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

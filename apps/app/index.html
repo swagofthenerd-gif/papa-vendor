@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- viewport-fit=cover so the scan screen can use the full height on a
+         notched phone; the shell pads with env(safe-area-inset-*). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Papa Vendor</title>
+    <script>
+      // Theme before first paint, or the warehouse gets a white flash in a
+      // dark van at 05:00. Three themes: indoor (default), dark (truck), sun.
+      try {
+        var saved = localStorage.getItem('papa-theme')
+        if (saved) document.documentElement.setAttribute('data-theme', saved)
+        else if (matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.setAttribute('data-theme', 'dark')
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
