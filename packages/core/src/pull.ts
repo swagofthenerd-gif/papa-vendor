@@ -1,4 +1,5 @@
 import type { SqlDriver, SqlValue } from './db/driver.ts'
+import { placeholders } from './db/driver.ts'
 import { metaGetNumber, metaSet } from './meta.ts'
 import { projectOp, type ProjectableOp } from './project.ts'
 
@@ -104,7 +105,7 @@ export class PullApplier {
           const values = columns.map((c) => normalise(row[c]))
           this.db.exec(
             `insert into ${table} (${columns.join(', ')})
-             values (${columns.map(() => '?').join(', ')})
+             values (${placeholders(columns.length)})
              on conflict (${key}) do update set
                ${columns.filter((c) => c !== key).map((c) => `${c} = excluded.${c}`).join(', ')}`,
             values,

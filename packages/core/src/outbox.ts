@@ -1,4 +1,5 @@
 import type { SqlDriver } from './db/driver.ts'
+import { placeholders } from './db/driver.ts'
 import { metaGetNumber, metaSet } from './meta.ts'
 
 /**
@@ -134,7 +135,7 @@ export class Outbox {
   markInflight(ids: string[]): void {
     if (ids.length === 0) return
     this.db.exec(
-      `update outbox set state = 'inflight' where id in (${ids.map(() => '?').join(',')})`,
+      `update outbox set state = 'inflight' where id in (${placeholders(ids.length)})`,
       ids,
     )
   }
@@ -147,7 +148,7 @@ export class Outbox {
    */
   ack(ids: string[]): void {
     if (ids.length === 0) return
-    this.db.exec(`delete from outbox where id in (${ids.map(() => '?').join(',')})`, ids)
+    this.db.exec(`delete from outbox where id in (${placeholders(ids.length)})`, ids)
   }
 
   /**

@@ -123,22 +123,13 @@ export class ScanSession {
       }
     }
 
-    const asset = this.db.get<AssetRow>(
-      `select a.id, a.asset_code, p.display_name, a.presence, a.current_job_id
-         from assets a left join products p on p.id = a.product_id
-        where a.id = ?`,
-      [tag.asset_id],
-    )
+    const asset = this.loadAsset(tag.asset_id)
     if (!asset) {
       const outboxId = this.enqueue({ tag_code: tagCode, event_type: eventType })
       return { outcome: 'unknown_tag', message: 'Unknown item', outboxId }
     }
 
-    const base = {
-      assetId: asset.id,
-      assetCode: asset.asset_code ?? undefined,
-      displayName: asset.display_name ?? undefined,
-    }
+    const base = this.baseResult(asset)
 
     // Duplicate. Suppress the WRITE, never the FEEDBACK. Silence is
     // indistinguishable from "the camera didn't see it" — the tech rescans,
@@ -208,11 +199,7 @@ export class ScanSession {
    * than pretending to be a scan.
    */
   addManually(assetId: string, eventType = 'check_out'): ScanResult {
-    const asset = this.db.get<AssetRow>(
-      `select a.id, a.asset_code, p.display_name, a.presence, a.current_job_id
-         from assets a left join products p on p.id = a.product_id where a.id = ?`,
-      [assetId],
-    )
+    const asset = this.loadAsset(assetId)
     if (!asset) return { outcome: 'unknown_tag', message: 'No such item' }
 
     if (this.seen.has(asset.id)) {
@@ -226,13 +213,7 @@ export class ScanSession {
     })
     this.seen.set(asset.id, outboxId)
 
-    return {
-      outcome: 'accepted',
-      assetId: asset.id,
-      assetCode: asset.asset_code ?? undefined,
-      displayName: asset.display_name ?? undefined,
-      outboxId,
-    }
+    return { ...this.baseResult(asset), outcome: 'accepted', outboxId }
   }
 
   /**
@@ -261,6 +242,32 @@ export class ScanSession {
       this.seen.set(assetId, outboxId)
       return { outcome: 'accepted' as const, assetId, outboxId }
     })
+  }
+
+  /**
+   * The asset behind an id, with its product name.
+   *
+   * One query, used by both the scan path and the manual path. They had two
+   * copies differing only in whitespace, which is two places to forget the
+   * left join the day an asset has no product — and an intake-by-scan asset
+   * legitimately has none until the desk enriches it.
+   */
+  private loadAsset(assetId: string): AssetRow | undefined {
+    return this.db.get<AssetRow>(
+      `select a.id, a.asset_code, p.display_name, a.presence, a.current_job_id
+         from assets a left join products p on p.id = a.product_id
+        where a.id = ?`,
+      [assetId],
+    )
+  }
+
+  /** The identity fields every ScanResult carries, in one place. */
+  private baseResult(asset: AssetRow): Pick<ScanResult, 'assetId' | 'assetCode' | 'displayName'> {
+    return {
+      assetId: asset.id,
+      assetCode: asset.asset_code ?? undefined,
+      displayName: asset.display_name ?? undefined,
+    }
   }
 
   private enqueue(payload: Record<string, unknown>): string {
