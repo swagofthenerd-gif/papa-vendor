@@ -71,7 +71,14 @@ ships** — unbounded retention is the real long-run risk.
    ordinary hardware. Previously listed here as a risk; it is not one.
 2. **`scan_events` growth.** Append-only and never pruned. At 10k orgs × 400
    scans/day that is ~1.5bn rows/year. It needs **monthly partitioning** before
-   real volume, and partitioning after the fact is painful. **Not done.**
+   real volume, and partitioning after the fact is painful. **Not done — and
+   it is not a mechanical change.** Partitioning forces the
+   `(device_id, client_seq)` idempotency constraint to admit the partition key,
+   which would let the same pair exist in two months and make a retry across a
+   month boundary double-apply a `check_out`. It also breaks the primary key
+   and both self-referencing FKs. Analysed in `docs/partitioning-decision.md`,
+   which recommends a separate receipts table and **needs one decision before
+   any migration is written**.
 3. **Connection pooling.** Not configured. At thousands of devices this is the
    first thing to fall over, before any query does.
 4. **`rate_limits` growth.** `prune_rate_limits()` exists; nothing calls it.
