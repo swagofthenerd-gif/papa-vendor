@@ -1,0 +1,11 @@
+{
+  "name": "@papa/core",
+  "version": "0.1.0",
+  "description": "Domain logic, local database and offline sync. No UI.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node-driver": "./src/db/node-driver.ts"
+  },
+  "scripts": { "test": "node --test \"test/**/*.test.mjs\"" }
+}
