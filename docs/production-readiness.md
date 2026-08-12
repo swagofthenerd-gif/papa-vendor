@@ -81,8 +81,13 @@ ships** — unbounded retention is the real long-run risk.
    any migration is written**.
 3. **Connection pooling.** Not configured. At thousands of devices this is the
    first thing to fall over, before any query does.
-4. **`rate_limits` growth.** `prune_rate_limits()` exists; nothing calls it.
-   Needs a cron.
+4. ~~**`rate_limits` growth.**~~ **Done 2026-08-12** (`0012`), along with
+   expired `device_sessions`. The missing cron was the smaller half of the
+   problem: **a cron that silently stops looks exactly like one that works**,
+   and the first symptom would be a bill months later. So `run_maintenance()`
+   is one entry point with per-task isolation, every run is recorded, and
+   `maintenance_health` reports what is overdue — a task that has NEVER run
+   reads as overdue rather than absent. Still needs a scheduler to call it.
 5. **Photo storage.** No bucket, no lifecycle policy, no egress budget.
 
 ### Measured, concurrent writes within one org — 2026-08-12
@@ -145,7 +150,7 @@ is unpartitioned and unpruned, and that is where 100k users actually breaks.
 ### Real, tested, enforced by the database
 
 - **Multi-tenant isolation via RLS**, forced on every table, proven from inside
-  the RPCs as a non-superuser. 277 SQL assertions, including explicit
+  the RPCs as a non-superuser. 288 SQL assertions, including explicit
   cross-org leak tests in both directions.
 - **`papa_app` is `NOSUPERUSER NOBYPASSRLS` with no DELETE grant** — hard
   deletes are impossible for the application role, not merely discouraged.
@@ -172,7 +177,7 @@ is unpartitioned and unpruned, and that is where 100k users actually breaks.
 | **No backups / PITR** | No project exists, so nothing is backed up | **Corrected: PITR on Supabase is $100/mo — 4× the infra budget, not "hours".** Pre-revenue substitute: Pro's 7-day daily backups + the append-only event log + a nightly cold export. Turn PITR on at first revenue. |
 | ~~**No cold export of `scan_events`**~~ | **Done 2026-08-12** (`0010`). NDJSON export past a cursor, with a **settle lag** because `server_seq` is handed out before commit and transactions commit out of order — the same hazard that produced the row-skipping cursor bug in `0005`. The lag is a probability argument, so it is backed by a batch ledger and `export_gap_check()`, which proves completeness below the cursor rather than assuming it. Still needs the nightly job and a bucket to write to. | ✅ schema |
 | **No secrets management** | No keys exist yet; needs doing before any do | Hours |
-| ~~No CI~~ | **Done 2026-08-12.** Typecheck + 127 JS tests + the real Vite build + all migrations + 277 pgTAP assertions, on every push, against stock Postgres. | ✅ |
+| ~~No CI~~ | **Done 2026-08-12.** Typecheck + 127 JS tests + the real Vite build + all migrations + 288 pgTAP assertions, on every push, against stock Postgres. | ✅ |
 | **No error tracking / monitoring** | ~~A device with 400 queued writes for three days is invisible~~ — **`sync_health` done 2026-08-12** (`0011`): per-device freshness plus `raise_stale_device_alerts()`, idempotent so the channel does not become noise, and self-resolving when the phone returns. Built on **silence**, not `queued_writes` — an offline device cannot report its own queue depth, and the server only ever writes that column as zero. Sentry and app-level error tracking are still missing. |
 | **No dependency scanning** | | Hours |
 | **No penetration test** | | External |
@@ -218,7 +223,7 @@ In order, because each depends on the last:
 ## What I would tell a prospective customer today
 
 The inventory model, the tenancy isolation and the offline sync are real,
-measured and defended by 277 database assertions plus 127 application tests.
+measured and defended by 288 database assertions plus 127 application tests.
 That is the hard, expensive part and it is done.
 
 It is not deployed, nobody can log in, and a lost phone is currently an
