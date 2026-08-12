@@ -61,12 +61,9 @@ ships** — unbounded retention is the real long-run risk.
 
 ### What has NOT been tested, and would break first
 
-1. **Concurrent write throughput.** Everything above is read-path. The
-   per-statement watermark upsert serialises writes *within an org*, so two
-   techs scanning fast in one warehouse is the case to measure. **Still
-   untested — but downgraded.** The lock is held for sub-millisecond
-   transaction duration, giving thousands/sec per org in theory against a real
-   org's <5/sec. Worth measuring; unlikely to be the wall.
+1. ~~**Concurrent write throughput.**~~ **Measured 2026-08-12** — see below.
+   It does serialise within an org, the earlier reasoning about *why* was
+   wrong, and the conclusion survives anyway.
 
    **`change_seq` is no longer a concern at all.** `nextval` is
    non-transactional and cacheable; aggregate write rate at 10,000 orgs is
@@ -81,10 +78,58 @@ ships** — unbounded retention is the real long-run risk.
    Needs a cron.
 5. **Photo storage.** No bucket, no lifecycle policy, no egress budget.
 
+### Measured, concurrent writes within one org — 2026-08-12
+
+Harness: `db/bench/concurrent-writes.sh`. Writers each flush batches of 25
+scans through the real `submit_scan_batch`, as `papa_app`, with RLS on, against
+20,000 assets per org. Durable settings (`fsync=on`, `synchronous_commit=on`).
+
+Throughput, one org, as concurrency rises:
+
+| Writers | SHARED (as shipped) | NOWM (watermark detached) |
+|---|---|---|
+| 1 | 1,150 scans/s | 1,654 scans/s |
+| 4 | 1,933 scans/s | 5,204 scans/s |
+| 8 | **1,736 scans/s** — plateaued, then declining | **5,631 scans/s** |
+
+Latency at 8 writers: mean **89ms vs 23ms**, p95 **218ms vs 36ms**.
+
+**It serialises, and the serialisation is attributed, not inferred.** `NOWM`
+detaches only the `assets` watermark triggers and holds everything else fixed —
+same policies, same projection trigger, same rows. It scales; the shipped
+configuration flattens at ~1,900 scans/s from two writers onward. That gap is
+`org_sync_watermark` and nothing else.
+
+**The mechanism is not what this document previously claimed.** The earlier
+entry reasoned that the lock is held for "sub-millisecond transaction
+duration". It is not. `submit_scan_batch` applies an entire batch in ONE
+transaction; the first scan's projection updates `assets`, which fires the
+per-statement watermark upsert, which takes the org's watermark row lock — and
+Postgres holds row locks until **COMMIT**. So the unit of serialisation within
+an org is the **batch** (~10-90ms here), not the statement. Writers in one org
+queue behind each other for whole batches.
+
+**The conclusion survives the correction.** ~1,900 scans/s per org against a
+real org's <5/sec is roughly 400× headroom, and the p95 of 218ms at eight
+simultaneous scanners is invisible in a scan UI. Eight concurrent writers is
+already well past what a Lahore rental house produces. **This is a documented
+ceiling, not a wall, and it needs no work now.**
+
+What would change that: raising `BATCH` (a 200-scan batch holds the lock ~8×
+longer), or a single org running many devices — the successful-customer case,
+the same shape that hid the RLS InitPlan cost until one org got large. If the
+watermark ever does need fixing, note that a stale-HIGH watermark is harmless
+(the device does a real query) while stale-LOW silently skips rows forever, so
+any lock-free replacement must err upward.
+
+**Caveat on the absolute numbers:** measured on a shared cloud container, not
+production hardware. The *ratios* between configurations are the robust result;
+treat the scans/s figures as an order of magnitude.
+
 **Honest read:** the read path holds at 200 orgs and the shape extends to
-thousands. The write path and the event-log growth are where 100k users breaks,
-and both are addressable — but they are unmeasured today, so treating the
-system as proven at that scale would be false.
+thousands. The write path now has a measured per-org ceiling with ~400×
+headroom over real demand. **Event-log growth is what is left** — `scan_events`
+is unpartitioned and unpruned, and that is where 100k users actually breaks.
 
 ---
 
@@ -152,7 +197,7 @@ In order, because each depends on the last:
    breaches if skipped.
 5. **`scan_events` partitioning** before real volume, plus the cold NDJSON
    export.
-6. **A concurrent-write load test** — the genuine unknown.
+6. ~~**A concurrent-write load test**~~ — ✅ done 2026-08-12. Measured, attributed, and cleared with ~400× headroom. `db/bench/concurrent-writes.sh`.
 7. **Monitoring**: Sentry, a `sync_health` view, and an alert when a device's
    queue ages past 24h.
 8. Only then: the pilot warehouse.
