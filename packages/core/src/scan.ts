@@ -1,5 +1,6 @@
 import type { SqlDriver } from './db/driver.ts'
 import { Outbox } from './outbox.ts'
+import { projectOp } from './project.ts'
 
 /**
  * The scan handler.
@@ -266,41 +267,26 @@ export class ScanSession {
     const id = this.newId()
     const deviceTime = new Date(this.now()).toISOString()
 
+    // Built once and used for both the queue row and the projection, so the
+    // two can never disagree about job_id or device_time — they are literally
+    // the same object.
+    const op = {
+      ...payload,
+      session_id: this.id,
+      job_id: this.opts.jobId ?? null,
+      device_time: deviceTime,
+      clock_offset_ms: this.opts.clockOffsetMs ?? 0,
+    }
+
     this.db.transaction(() => {
-      this.outbox.enqueue({
-        id,
-        op: 'submit_scan_batch',
-        payload: {
-          ...payload,
-          session_id: this.id,
-          job_id: this.opts.jobId ?? null,
-          device_time: deviceTime,
-          clock_offset_ms: this.opts.clockOffsetMs ?? 0,
-        },
-      })
+      this.outbox.enqueue({ id, op: 'submit_scan_batch', payload: op })
 
       // Optimistic local projection, in the SAME transaction as the queue row.
       // If these could separate, the UI would show a scan that will never be
       // sent — the tech believes the gear is accounted for and it is not.
-      if (typeof payload.asset_id === 'string') {
-        const presence =
-          payload.event_type === 'check_out'
-            ? 'out'
-            : payload.event_type === 'check_in'
-              ? 'here'
-              : null
-        if (presence) {
-          this.db.exec(
-            `update assets set presence = ?, current_job_id = ?, last_scanned_at = ? where id = ?`,
-            [
-              presence,
-              presence === 'out' ? (this.opts.jobId ?? null) : null,
-              deviceTime,
-              payload.asset_id,
-            ],
-          )
-        }
-      }
+      //
+      // Shared with the pull replay path; see project.ts for why that matters.
+      projectOp(this.db, op)
     })
 
     return id

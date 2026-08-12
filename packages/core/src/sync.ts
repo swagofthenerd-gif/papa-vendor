@@ -1,4 +1,5 @@
 import type { SqlDriver } from './db/driver.ts'
+import { metaGetNumber, metaSet } from './meta.ts'
 import { Outbox, type OutboxRow } from './outbox.ts'
 
 /**
@@ -147,19 +148,12 @@ export class SyncEngine {
     const roundTrip = responseAtMs - requestSentMs
     const offset = serverNowMs + roundTrip / 2 - responseAtMs
 
-    this.db.exec(
-      `insert into sync_meta (key, value) values ('clock_offset_ms', ?)
-       on conflict (key) do update set value = excluded.value`,
-      [String(Math.round(offset))],
-    )
+    metaSet(this.db, 'clock_offset_ms', Math.round(offset))
     return Math.round(offset)
   }
 
   clockOffsetMs(): number {
-    const row = this.db.get<{ value: string }>(
-      `select value from sync_meta where key = 'clock_offset_ms'`,
-    )
-    return row ? Number(row.value) : 0
+    return metaGetNumber(this.db, 'clock_offset_ms')
   }
 }
 

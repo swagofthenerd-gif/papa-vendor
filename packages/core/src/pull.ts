@@ -1,4 +1,6 @@
 import type { SqlDriver, SqlValue } from './db/driver.ts'
+import { metaGetNumber, metaSet } from './meta.ts'
+import { projectOp, type ProjectableOp } from './project.ts'
 
 /**
  * Applying a pull to the local mirrors.
@@ -64,10 +66,7 @@ export class PullApplier {
   }
 
   cursor(): number {
-    const row = this.db.get<{ value: string }>(
-      `select value from sync_meta where key = 'pull_cursor'`,
-    )
-    return row ? Number(row.value) : 0
+    return metaGetNumber(this.db, 'pull_cursor')
   }
 
   /**
@@ -116,13 +115,20 @@ export class PullApplier {
 
       const protectedAssets = this.replayPendingWrites()
 
-      this.db.exec(
-        `insert into sync_meta (key, value) values ('pull_cursor', ?)
-         on conflict (key) do update set value = excluded.value`,
-        [String(payload.cursor)],
-      )
+      // THE CURSOR ONLY EVER MOVES FORWARD.
+      //
+      // This used to write payload.cursor unconditionally, which meant a page
+      // that arrived out of order — or a retried older page, which this
+      // method's own header calls "a routine Tuesday" on a phone with an
+      // aggressive battery killer — REWOUND the watermark and re-pulled
+      // everything after it.
+      //
+      // Same rule the server holds in 0005: the cursor is the minimum safe
+      // advance, and it is never rolled back by a late arrival.
+      const cursor = Math.max(this.cursor(), payload.cursor)
+      metaSet(this.db, 'pull_cursor', cursor)
 
-      return { cursor: payload.cursor, upserted, deleted, protectedAssets }
+      return { cursor, upserted, deleted, protectedAssets }
     })
   }
 
@@ -143,25 +149,17 @@ export class PullApplier {
     const touched = new Set<string>()
 
     for (const { payload } of pending) {
-      let op: Record<string, unknown>
+      let op: ProjectableOp
       try {
         op = JSON.parse(payload)
       } catch {
         continue      // a malformed row must not stop the whole sync
       }
 
-      const assetId = op.asset_id
-      if (typeof assetId !== 'string') continue
-
-      const presence =
-        op.event_type === 'check_out' ? 'out' : op.event_type === 'check_in' ? 'here' : null
-      if (!presence) continue
-
-      this.db.exec(
-        `update assets set presence = ?, current_job_id = ? where id = ?`,
-        [presence, presence === 'out' ? ((op.job_id as SqlValue) ?? null) : null, assetId],
-      )
-      touched.add(assetId)
+      // The same projection the scan path uses, rather than a second copy of
+      // the rules. The second copy is what silently dropped last_scanned_at.
+      const assetId = projectOp(this.db, op)
+      if (assetId) touched.add(assetId)
     }
 
     return [...touched]

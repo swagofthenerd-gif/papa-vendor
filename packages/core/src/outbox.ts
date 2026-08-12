@@ -1,4 +1,5 @@
 import type { SqlDriver } from './db/driver.ts'
+import { metaGetNumber, metaSet } from './meta.ts'
 
 /**
  * The outbox.
@@ -76,15 +77,12 @@ export class Outbox {
    * silently dropped and the tech would never know.
    */
   nextSeq(): number {
-    const row = this.db.get<{ value: string | null }>(
-      `select value from sync_meta where key = 'outbox_seq'`,
-    )
-    const next = (row?.value ? Number(row.value) : 0) + 1
-    this.db.exec(
-      `insert into sync_meta (key, value) values ('outbox_seq', ?)
-       on conflict (key) do update set value = excluded.value`,
-      [String(next)],
-    )
+    // metaGetNumber, not a truthiness test. The hand-rolled version here read
+    // `row?.value ? Number(...) : 0`, which treats a stored "0" as absent
+    // because "0" is falsy. Harmless while the counter starts at 1, and a trap
+    // for anything that ever legitimately stores zero.
+    const next = metaGetNumber(this.db, 'outbox_seq') + 1
+    metaSet(this.db, 'outbox_seq', next)
     return next
   }
 
