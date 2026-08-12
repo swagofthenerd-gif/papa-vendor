@@ -10,14 +10,7 @@ select plan(27);
 
 set local role postgres;
 
-alter table orgs disable row level security;
-alter table users disable row level security;
-alter table memberships disable row level security;
-alter table locations disable row level security;
-alter table products disable row level security;
-alter table assets disable row level security;
-alter table asset_tags disable row level security;
-alter table jobs disable row level security;
+select fixture_rls_off();
 
 insert into orgs (id, name, slug) values
   ('11111111-1111-7111-8111-111111111111', 'Lumos', 'lumos'),
@@ -45,14 +38,7 @@ insert into assets (id, org_id, product_id, asset_code) values
 insert into jobs (id, org_id, label) values
   ('40000000-0000-7000-8000-000000000001', '11111111-1111-7111-8111-111111111111', 'Zindagi Films');
 
-alter table orgs enable row level security;
-alter table users enable row level security;
-alter table memberships enable row level security;
-alter table locations enable row level security;
-alter table products enable row level security;
-alter table assets enable row level security;
-alter table asset_tags enable row level security;
-alter table jobs enable row level security;
+select fixture_rls_on();
 
 select is(
   (select count(*)::int from pg_class
@@ -242,8 +228,7 @@ select pass('paging through the cursor in small pages visits every row');
 -- Reproduced here so it cannot come back.
 -- ---------------------------------------------------------------------------
 set local role postgres;
-alter table assets disable row level security;
-alter table products disable row level security;
+select fixture_rls_off();
 
 insert into assets (org_id, product_id, asset_code)
   select '11111111-1111-7111-8111-111111111111',
@@ -254,8 +239,7 @@ insert into assets (org_id, product_id, asset_code)
 insert into products (org_id, category, display_name)
   values ('11111111-1111-7111-8111-111111111111', 'audio', 'Late product');
 
-alter table assets enable row level security;
-alter table products enable row level security;
+select fixture_rls_on();
 set local role papa_app;
 set local papa.org_id  = '11111111-1111-7111-8111-111111111111';
 set local papa.user_id = 'aaaaaaaa-aaaa-7aaa-8aaa-aaaaaaaaaaaa';

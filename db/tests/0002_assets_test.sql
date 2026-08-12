@@ -14,16 +14,7 @@ select plan(40);
 -- ---------------------------------------------------------------------------
 set local role postgres;
 
-alter table orgs disable row level security;
-alter table users disable row level security;
-alter table memberships disable row level security;
-alter table locations disable row level security;
-alter table products disable row level security;
-alter table assets disable row level security;
-alter table asset_tags disable row level security;
-alter table asset_containment disable row level security;
-alter table stock_lots disable row level security;
-alter table jobs disable row level security;
+select fixture_rls_off();
 
 insert into orgs (id, name, slug) values
   ('11111111-1111-7111-8111-111111111111', 'Lumos Rentals',   'lumos'),
@@ -303,16 +294,7 @@ select throws_ok(
 -- file. The `rls_enabled` assertion exists so that mistake can never be silent
 -- again.
 -- ---------------------------------------------------------------------------
-alter table orgs               enable row level security;
-alter table users              enable row level security;
-alter table memberships        enable row level security;
-alter table locations          enable row level security;
-alter table products           enable row level security;
-alter table assets             enable row level security;
-alter table asset_tags         enable row level security;
-alter table asset_containment  enable row level security;
-alter table stock_lots         enable row level security;
-alter table jobs               enable row level security;
+select fixture_rls_on();
 
 select is(
   (select count(*)::int from pg_class

@@ -10,9 +10,7 @@ select plan(11);
 
 set local role postgres;
 
-alter table orgs        disable row level security;
-alter table users       disable row level security;
-alter table devices     disable row level security;
+select fixture_rls_off();
 
 insert into orgs (id, name, slug) values
   ('11111111-1111-7111-8111-111111111111', 'Lumos', 'lumos');
@@ -22,7 +20,7 @@ insert into devices (id, org_id, label, last_user_id, last_synced_at) values
   ('wh-01', '11111111-1111-7111-8111-111111111111', 'WH-01',
    'aaaaaaaa-aaaa-7aaa-8aaa-aaaaaaaaaaaa', now() - interval '4 days');
 
-alter table devices enable row level security;
+select fixture_rls_on();
 
 -- ---------------------------------------------------------------------------
 -- Absence reads as overdue, not as blank

@@ -11,10 +11,7 @@ select plan(13);
 
 set local role postgres;
 
-alter table orgs        disable row level security;
-alter table users       disable row level security;
-alter table memberships disable row level security;
-alter table devices     disable row level security;
+select fixture_rls_off();
 
 insert into orgs (id, name, slug) values
   ('11111111-1111-7111-8111-111111111111', 'Lumos',  'lumos'),
@@ -35,7 +32,7 @@ insert into devices (id, org_id, label, last_user_id, last_synced_at, queued_wri
   ('wh-04', '11111111-1111-7111-8111-111111111111', 'WH-04', null, null, 0),
   ('kam-01', '22222222-2222-7222-8222-222222222222', 'KAM-01', null, now() - interval '9 days', 3);
 
-alter table devices enable row level security;
+select fixture_rls_on();
 
 -- ---------------------------------------------------------------------------
 -- The view classifies silence by age
