@@ -1,6 +1,5 @@
 import type { SqlDriver } from './db/driver.ts'
 import { placeholders } from './db/driver.ts'
-import { metaGetNumber, metaSet } from './meta.ts'
 
 /**
  * The outbox.
@@ -78,24 +77,56 @@ export class Outbox {
    * silently dropped and the tech would never know.
    */
   nextSeq(): number {
-    // metaGetNumber, not a truthiness test. The hand-rolled version here read
-    // `row?.value ? Number(...) : 0`, which treats a stored "0" as absent
-    // because "0" is falsy. Harmless while the counter starts at 1, and a trap
-    // for anything that ever legitimately stores zero.
-    const next = metaGetNumber(this.db, 'outbox_seq') + 1
-    metaSet(this.db, 'outbox_seq', next)
-    return next
+    // ONE statement, not a read followed by a write. This runs on every scan,
+    // and on Capacitor SQLite each statement is a JS-to-native bridge crossing
+    // costing 1-3ms — so the pair was ~2-6ms of the sub-100ms feedback budget
+    // spent incrementing a counter.
+    //
+    // Also genuinely atomic, where read-then-write was not. Nothing today
+    // enqueues concurrently, but "correct only while single-threaded" is a
+    // property nobody will remember to preserve.
+    //
+    // The cast dance is deliberate: sync_meta.value is text, and the counter
+    // must keep its "never resets" guarantee (see above) across the upsert.
+    const row = this.db.get<{ value: string }>(
+      `insert into sync_meta (key, value) values ('outbox_seq', '1')
+       on conflict (key) do update
+         set value = cast(cast(sync_meta.value as integer) + 1 as text)
+       returning value`,
+    )
+    return Number(row!.value)
   }
 
   enqueue(input: EnqueueInput): OutboxRow {
     return this.db.transaction(() => {
       const seq = this.nextSeq()
+      const payload = JSON.stringify(input.payload)
+      const dependsOn = input.dependsOn ?? null
+      const createdAt = Date.now()
+
       this.db.exec(
         `insert into outbox (id, seq, op, payload, depends_on, state, created_at)
          values (?, ?, ?, ?, ?, 'pending', ?)`,
-        [input.id, seq, input.op, JSON.stringify(input.payload), input.dependsOn ?? null, Date.now()],
+        [input.id, seq, input.op, payload, dependsOn, createdAt],
       )
-      return this.byId(input.id)!
+
+      // Built from the values just written rather than re-read. The select
+      // this replaces returned a row we already knew every column of, and
+      // ScanSession discards the result entirely — so every scan paid a
+      // full-row read, payload JSON included, for nothing.
+      return {
+        id: input.id,
+        seq,
+        op: input.op,
+        payload,
+        depends_on: dependsOn,
+        state: 'pending',
+        attempts: 0,
+        next_retry_at: null,
+        error_code: null,
+        error_detail: null,
+        created_at: createdAt,
+      }
     })
   }
 
@@ -111,8 +142,17 @@ export class Outbox {
    * "checked in before it was checked out", and the throughput is not worth it.
    */
   nextBatch(limit = 50, now = Date.now()): OutboxRow[] {
+    // LIMIT is safe despite the early `break`s: the batch is always a PREFIX
+    // of the seq-ordered rows, and the loop itself stops at `limit`, so it can
+    // never need more than `limit` rows.
+    //
+    // Without it this read the ENTIRE live queue — 400 wide rows, each
+    // carrying its full JSON payload, plus a sort — to consume at most 50.
+    // Flush runs on every `online` and foreground event.
     const rows = this.db.all<OutboxRow>(
-      `select * from outbox where state in ('pending','inflight') order by seq`,
+      `select * from outbox where state in ('pending','inflight')
+        order by seq limit ?`,
+      [limit],
     )
     const batch: OutboxRow[] = []
 
@@ -129,7 +169,11 @@ export class Outbox {
     // A dependency is settled when it is gone (acked and deleted). A `failed`
     // dependency is NOT settled — it blocks, and the cascade below will have
     // failed this row too.
-    return this.byId(id) !== undefined
+    // `select 1`, not the whole row: this asks "does it exist", and byId
+    // dragged the payload JSON along to answer it.
+    return this.db.get<{ one: number }>(
+      `select 1 as one from outbox where id = ?`, [id],
+    ) !== undefined
   }
 
   markInflight(ids: string[]): void {
@@ -184,14 +228,17 @@ export class Outbox {
   fail(id: string, code: string, detail = ''): string[] {
     return this.db.transaction(() => {
       const failed: string[] = []
+      const seen = new Set<string>()
       const queue = [id]
 
       while (queue.length > 0) {
         const current = queue.shift()!
-        if (failed.includes(current)) continue
-        const row = this.byId(current)
-        if (!row) continue
+        if (seen.has(current)) continue
+        seen.add(current)
 
+        // No existence check first: the UPDATE below and the child query are
+        // both already no-ops for a row that is gone, so byId was a third
+        // statement per node answering a question the next two answer anyway.
         this.db.exec(
           `update outbox set state = 'failed', error_code = ?, error_detail = ?,
                   next_retry_at = null where id = ?`,

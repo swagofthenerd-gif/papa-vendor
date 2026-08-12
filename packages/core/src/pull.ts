@@ -92,6 +92,16 @@ export class PullApplier {
         // would stop sync entirely for an older client.
         if (!columns || !key) continue
 
+        // Built ONCE per table, not once per row. This lived inside the row
+        // loop, so a first sync of 2000 assets rebuilt the same string 2000
+        // times — five string allocations each, ~22,000 throwaway strings for
+        // a value that depends only on the table.
+        const upsertSql =
+          `insert into ${table} (${columns.join(', ')})
+           values (${placeholders(columns.length)})
+           on conflict (${key}) do update set
+             ${columns.filter((c) => c !== key).map((c) => `${c} = excluded.${c}`).join(', ')}`
+
         for (const row of rows) {
           // Soft deletes ARE the tombstones: a deleted row keeps syncing, and
           // the client removes it. That is what makes a delete impossible to
@@ -102,14 +112,7 @@ export class PullApplier {
             continue
           }
 
-          const values = columns.map((c) => normalise(row[c]))
-          this.db.exec(
-            `insert into ${table} (${columns.join(', ')})
-             values (${placeholders(columns.length)})
-             on conflict (${key}) do update set
-               ${columns.filter((c) => c !== key).map((c) => `${c} = excluded.${c}`).join(', ')}`,
-            values,
-          )
+          this.db.exec(upsertSql, columns.map((c) => normalise(row[c])))
           upserted++
         }
       }

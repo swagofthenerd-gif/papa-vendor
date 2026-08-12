@@ -58,6 +58,8 @@ interface AssetRow {
   display_name: string | null
   presence: string
   current_job_id: string | null
+  /** Label of the job it is currently out on, for the conflict message. */
+  job_label: string | null
 }
 
 /**
@@ -114,19 +116,21 @@ export class ScanSession {
     // An unknown tag is RECORDED, not rejected. It may be a label bound on
     // another device since this one last synced. A scan that silently vanishes
     // is how a tech learns the app cannot be trusted.
-    if (!tag?.asset_id) {
+    //
+    // Two ways to be unknown — no tag row, or a tag pointing at an asset this
+    // device has not synced — and they take the identical action. Only the
+    // wording differs, because the tech can act on the difference: an unknown
+    // TAG usually means a fresh label, an unknown ITEM means a stale mirror.
+    const asset = tag?.asset_id ? this.loadAsset(tag.asset_id) : undefined
+    if (!asset) {
       const outboxId = this.enqueue({ tag_code: tagCode, event_type: eventType })
       return {
         outcome: 'unknown_tag',
-        message: 'Unknown tag — will resolve when this phone syncs',
+        message: tag?.asset_id
+          ? 'Unknown item'
+          : 'Unknown tag — will resolve when this phone syncs',
         outboxId,
       }
-    }
-
-    const asset = this.loadAsset(tag.asset_id)
-    if (!asset) {
-      const outboxId = this.enqueue({ tag_code: tagCode, event_type: eventType })
-      return { outcome: 'unknown_tag', message: 'Unknown item', outboxId }
     }
 
     const base = this.baseResult(asset)
@@ -147,9 +151,6 @@ export class ScanSession {
       asset.current_job_id &&
       asset.current_job_id !== this.opts.jobId
     ) {
-      const job = this.db.get<{ label: string }>(`select label from jobs where id = ?`, [
-        asset.current_job_id,
-      ])
       const outboxId = this.enqueue({
         asset_id: asset.id,
         event_type: eventType,
@@ -163,7 +164,7 @@ export class ScanSession {
       return {
         ...base,
         outcome: 'conflict',
-        message: `Shows as OUT to ${job?.label ?? 'another job'}`,
+        message: `Shows as OUT to ${asset.job_label ?? 'another job'}`,
         requiresReason: true,
         outboxId,
       }
@@ -203,7 +204,10 @@ export class ScanSession {
     if (!asset) return { outcome: 'unknown_tag', message: 'No such item' }
 
     if (this.seen.has(asset.id)) {
-      return { outcome: 'duplicate', assetId: asset.id, message: 'Already in this session' }
+      // baseResult, matching scan(). This branch used to return only the id,
+      // so a duplicate added by hand lost its code and name and the row went
+      // blank in the UI — copy-paste drift between two paths that must agree.
+      return { ...this.baseResult(asset), outcome: 'duplicate', message: 'Already in this session' }
     }
 
     const outboxId = this.enqueue({
@@ -253,9 +257,16 @@ export class ScanSession {
    * legitimately has none until the desk enriches it.
    */
   private loadAsset(assetId: string): AssetRow | undefined {
+    // The jobs join costs nothing — it is an indexed lookup on a primary key
+    // alongside one this query already does — and it removes a whole separate
+    // round trip from the CONFLICT path, which is the slowest path in the
+    // scan loop and the one a tech hits when something is already wrong.
     return this.db.get<AssetRow>(
-      `select a.id, a.asset_code, p.display_name, a.presence, a.current_job_id
-         from assets a left join products p on p.id = a.product_id
+      `select a.id, a.asset_code, p.display_name, a.presence, a.current_job_id,
+              j.label as job_label
+         from assets a
+         left join products p on p.id = a.product_id
+         left join jobs     j on j.id = a.current_job_id
         where a.id = ?`,
       [assetId],
     )

@@ -89,32 +89,28 @@ export function buildPullList(
     expectedAssetIds,
   )
 
-  const items: PullListItem[] = rows.map((r) => ({
-    assetId: r.id,
-    assetCode: r.asset_code,
-    displayName: r.display_name,
-    locationId: r.location_id,
-    locationName: r.location_name,
-    locationPath: r.location_path,
-    scanned: scanned.has(r.id),
-  }))
-
-  // An expected asset the device has never synced still has to appear, or the
-  // count is wrong and the tech is hunting for something the list denies
-  // exists.
-  for (const id of expectedAssetIds) {
-    if (!items.some((i) => i.assetId === id)) {
-      items.push({
-        assetId: id,
-        assetCode: null,
-        displayName: null,
-        locationId: null,
-        locationName: null,
-        locationPath: null,
-        scanned: scanned.has(id),
-      })
+  // Indexed once, then driven from the expected list. The previous form built
+  // the found items and then scanned the WHOLE array per expected id looking
+  // for gaps — quadratic, on a list a big pull can push into the hundreds.
+  //
+  // Driving from expectedAssetIds also makes the guarantee structural rather
+  // than a second step that could be forgotten: an expected asset the device
+  // has never synced still appears, because it is the loop, not a patch to it.
+  // Without that the count is wrong and the tech hunts for something the list
+  // denies exists.
+  const byId = new Map(rows.map((r) => [r.id, r]))
+  const items: PullListItem[] = [...new Set(expectedAssetIds)].map((id) => {
+    const r = byId.get(id)
+    return {
+      assetId: id,
+      assetCode: r?.asset_code ?? null,
+      displayName: r?.display_name ?? null,
+      locationId: r?.location_id ?? null,
+      locationName: r?.location_name ?? null,
+      locationPath: r?.location_path ?? null,
+      scanned: scanned.has(id),
     }
-  }
+  })
 
   const byLocation = new Map<string, PullListItem[]>()
   for (const item of items) {

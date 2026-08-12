@@ -36,6 +36,23 @@ create table if not exists assets (
   notes               text,
   updated_at          text
 );
+-- ---------------------------------------------------------------------------
+-- SPECULATIVE INDEXES. No query in the codebase filters on asset_code,
+-- presence, current_job_id or asset_tags.asset_id today, so these are pure
+-- write cost on first sync — four extra b-tree writes per row across ~4000
+-- rows. A performance review flagged them for removal.
+--
+-- KEPT DELIBERATELY, because the asymmetry runs the other way. This schema is
+-- applied with create-if-not-exists and THERE IS NO DEVICE-SIDE MIGRATION
+-- MECHANISM: an installed phone never receives a schema change. So dropping an
+-- index costs nothing to new installs and is unrecoverable on existing ones,
+-- while keeping it costs a few milliseconds once. asset_code in particular is
+-- certain to be needed — manual search by code is phase 1, and its absence is
+-- what the research names as the single biggest abandonment trigger.
+--
+-- Revisit when a device migration path exists. That gap is the real finding
+-- here, and it is bigger than the indexes.
+-- ---------------------------------------------------------------------------
 create index if not exists assets_code_idx     on assets (asset_code);
 create index if not exists assets_presence_idx on assets (presence);
 create index if not exists assets_job_idx      on assets (current_job_id);
