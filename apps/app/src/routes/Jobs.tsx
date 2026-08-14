@@ -57,7 +57,7 @@ export function Jobs({
 
       {jobs.length === 0 ? (
         <div className="empty">
-          <Icon name="clipboard" size={40} />
+          <Icon name="clipboard-check" size={40} />
           <p>Nothing scheduled today.</p>
           <p className="muted">
             Start a job to scan gear out, or scan anything to see where it is.
@@ -98,7 +98,7 @@ export function Jobs({
                         />
                       </span>
                     ) : (
-                      <Icon name="scan" size={22} />
+                      <Icon name="camera" size={22} />
                     )}
                   </span>
                 </button>
@@ -110,7 +110,7 @@ export function Jobs({
 
       <div className="screen-foot">
         <button className="btn btn-ghost" onClick={onNewJob}>
-          <Icon name="clipboard" size={18} /> New job
+          <Icon name="clipboard-check" size={18} /> New job
         </button>
         {/* Scanning with no job attached is legitimate and common: someone
             wants to know where a thing is, or is putting stock away. It must
@@ -119,7 +119,7 @@ export function Jobs({
           className="btn btn-outline"
           onClick={() => go({ name: 'scan', jobId: 'lookup', mode: 'in' })}
         >
-          <Icon name="scan" size={18} /> Just scan
+          <Icon name="camera" size={18} /> Just scan
         </button>
       </div>
     </div>

@@ -156,7 +156,7 @@ export function Scan({
           aria-pressed={torchOn}
           aria-label={torchOn ? 'Turn torch off' : 'Turn torch on'}
         >
-          <Icon name="torch" size={24} />
+          <Icon name="bulb" size={24} />
         </button>
       </div>
 
