@@ -1,4 +1,5 @@
 import type { SqlDriver } from './db/driver.ts'
+import { metaGetNumber, metaSet } from './meta.ts'
 import { Outbox, type OutboxRow } from './outbox.ts'
 
 /**
@@ -78,7 +79,7 @@ export class SyncEngine {
    * the next morning's prep.
    */
   async flush(online: boolean, limit = 50, now = Date.now()): Promise<FlushReport> {
-    const empty: FlushReport = { sent: 0, acked: 0, duplicates: 0, failed: [], alerts: [] }
+    const empty = emptyReport()
     if (!online) return { ...empty, stopped: 'offline' }
 
     const batch = this.outbox.nextBatch(limit, now)
@@ -119,10 +120,7 @@ export class SyncEngine {
 
     if (retryable) {
       for (const row of batch) this.outbox.retryLater(row.id, code, detail, now)
-      return {
-        sent: batch.length, acked: 0, duplicates: 0,
-        failed: [], alerts: [], stopped: 'retry_later',
-      }
+      return { ...emptyReport(), sent: batch.length, stopped: 'retry_later' }
     }
 
     // Permanent. Park the FIRST op and, through it, everything that depends on
@@ -131,7 +129,7 @@ export class SyncEngine {
     // row must never freeze a warehouse's entire sync. That is the failure
     // mode that gets an app uninstalled.
     const failed = this.outbox.fail(batch[0].id, code, detail)
-    return { sent: batch.length, acked: 0, duplicates: 0, failed, alerts: [] }
+    return { ...emptyReport(), sent: batch.length, failed }
   }
 
   /**
@@ -147,20 +145,25 @@ export class SyncEngine {
     const roundTrip = responseAtMs - requestSentMs
     const offset = serverNowMs + roundTrip / 2 - responseAtMs
 
-    this.db.exec(
-      `insert into sync_meta (key, value) values ('clock_offset_ms', ?)
-       on conflict (key) do update set value = excluded.value`,
-      [String(Math.round(offset))],
-    )
+    metaSet(this.db, 'clock_offset_ms', Math.round(offset))
     return Math.round(offset)
   }
 
   clockOffsetMs(): number {
-    const row = this.db.get<{ value: string }>(
-      `select value from sync_meta where key = 'clock_offset_ms'`,
-    )
-    return row ? Number(row.value) : 0
+    return metaGetNumber(this.db, 'clock_offset_ms')
   }
+}
+
+/**
+ * A zero report.
+ *
+ * A FUNCTION, not a shared constant. A `const EMPTY` spread into `{...EMPTY}`
+ * copies the array REFERENCES, so every report would share one `failed` and
+ * one `alerts` array — and the first caller to push into either would silently
+ * corrupt every other report in the process.
+ */
+function emptyReport(): FlushReport {
+  return { sent: 0, acked: 0, duplicates: 0, failed: [], alerts: [] }
 }
 
 function toOp(row: OutboxRow): Record<string, unknown> {

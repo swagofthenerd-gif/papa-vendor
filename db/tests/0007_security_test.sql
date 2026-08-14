@@ -9,10 +9,7 @@ begin;
 select plan(21);
 
 set local role postgres;
-alter table orgs disable row level security;
-alter table users disable row level security;
-alter table memberships disable row level security;
-alter table devices disable row level security;
+select fixture_rls_off();
 
 insert into orgs (id, name, slug) values
   ('11111111-1111-7111-8111-111111111111', 'Lumos', 'lumos'),
@@ -28,10 +25,7 @@ insert into device_sessions (org_id, device_id, user_id, token_hash, expires_at)
   values ('11111111-1111-7111-8111-111111111111', 'WH-01',
           'aaaaaaaa-aaaa-7aaa-8aaa-aaaaaaaaaaaa', 'hash-abc', now() + interval '14 days');
 
-alter table orgs enable row level security;
-alter table users enable row level security;
-alter table memberships enable row level security;
-alter table devices enable row level security;
+select fixture_rls_on();
 
 select is(
   (select count(*)::int from pg_class

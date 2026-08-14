@@ -63,6 +63,12 @@ for f in "$HERE"/migrations/*.sql; do
   psql_ -v ON_ERROR_STOP=1 -f /tmp/m.sql >/dev/null
 done
 
+# Test-only helpers, applied AFTER the migrations and never as one of them —
+# test scaffolding in a migration is scaffolding you find in production.
+echo "==> installing fixture helpers"
+"$runtime" cp "$HERE/fixtures.sql" "$CONTAINER":/tmp/fixtures.sql
+psql_ -v ON_ERROR_STOP=1 -f /tmp/fixtures.sql >/dev/null
+
 echo "==> running tests"
 failed=0
 for f in "$HERE"/tests/*.sql; do

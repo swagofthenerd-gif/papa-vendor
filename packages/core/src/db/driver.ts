@@ -32,3 +32,15 @@ export interface SqlDriver {
 
 export type SqlValue = string | number | null
 export type Row = Record<string, SqlValue>
+
+/**
+ * `?, ?, ?` for an IN clause or a VALUES row.
+ *
+ * Hand-rolled as `xs.map(() => '?').join(', ')` in four places. Centralised
+ * mainly so the empty case has ONE answer: `in ()` is a syntax error in
+ * SQLite, and each of those four sites was one unguarded empty array away
+ * from it.
+ */
+export function placeholders(n: number): string {
+  return new Array(n).fill('?').join(', ')
+}

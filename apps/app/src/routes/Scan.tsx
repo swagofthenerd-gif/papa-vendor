@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from '@papa/icons'
-import type { ScanResult } from '@papa/core'
 import type { PullListView } from '@papa/core'
 import { progressSummary } from '@papa/core'
 import { HoldToFinish } from '../components/HoldToFinish.tsx'
 import type { ScanMode } from '../nav.ts'
+import { scanRowClass, scanRowChanged, type ScanRow } from '../scan-row.ts'
 
 /**
  * The scan screen. The product is this screen.
@@ -19,14 +19,66 @@ import type { ScanMode } from '../nav.ts'
  *   job name           44px, so they know what they are scanning against
  *   camera             ~38%, 2px accent frame, no chrome over it
  *   progress + shelves count in --ff-code at 32px; remaining GROUPED BY SHELF
- *   session list       newest at TOP, virtualised, no re-sort, no layout shift
+ *   session list       newest at TOP, no re-sort, no layout shift. Each row is
+ *                      memoised, so a scan re-renders ONE row, not all of them.
+ *                      NOT yet virtualised — see the note on ScanRowItem.
  *   hold to finish     64px, 500ms hold
  */
 
-export interface ScanRow extends ScanResult {
-  key: string
-  at: number
-}
+export type { ScanRow }
+
+/**
+ * One row of the session list.
+ *
+ * Memoised, because the list this lives in re-renders on EVERY scan and a
+ * tech does 300 in a morning. Without this, scan 300 reconciles 300 rows and
+ * their nested spans — inside the sub-100ms window the whole scan loop is
+ * built around. A duplicate makes it worse: it re-renders the list once to
+ * start the pulse and again 400ms later to clear it.
+ *
+ * The comparison lives in scan-row.ts so it can be tested. A memo whose
+ * comparison is wrong silently stops the screen updating, and the tech reads
+ * that as "the scanner missed one".
+ *
+ * STILL NOT VIRTUALISED. Memoising means we render 300 cheap no-ops instead of
+ * 300 real reconciliations, which is enough for a morning's work. Windowing to
+ * the visible ~40 is the next step if a real session ever gets long enough to
+ * feel it — measure before building it.
+ */
+const ScanRowItem = memo(function ScanRowItem({
+  row,
+  isPulsing,
+  onResolve,
+}: {
+  row: ScanRow
+  isPulsing: boolean
+  onResolve: (key: string, action: 'add' | 'not-this-job') => void
+}) {
+  return (
+    <li data-asset={row.assetId ?? ''} className={scanRowClass(row.outcome, isPulsing)}>
+      <span className="row-main">
+        <span className="row-name">{row.displayName ?? 'Unknown item'}</span>
+        {row.message ? <span className="row-note">{row.message}</span> : null}
+      </span>
+      <span className="row-code code">{row.assetCode ?? '—'}</span>
+
+      {/* Two inline actions, ON the row, NEITHER REQUIRED. Nothing in the scan
+          loop is a modal or a blocking toast: the line does not stop. An
+          unresolved row can sit here all morning and get dealt with once, at
+          the finish. */}
+      {row.outcome === 'unexpected' ? (
+        <span className="row-actions">
+          <button className="btn btn-sm" onClick={() => onResolve(row.key, 'add')}>
+            Add anyway
+          </button>
+          <button className="btn btn-sm btn-ghost" onClick={() => onResolve(row.key, 'not-this-job')}>
+            Not this job
+          </button>
+        </span>
+      ) : null}
+    </li>
+  )
+}, (prev, next) => !scanRowChanged(prev, next))
 
 export function Scan({
   jobLabel,
@@ -57,6 +109,17 @@ export function Scan({
 }) {
   const listRef = useRef<HTMLUListElement>(null)
   const [pulseKey, setPulseKey] = useState<string | null>(null)
+
+  // A permanently stable callback, whatever the parent does with its own.
+  // Passing onResolveRow straight through would defeat the row memo the moment
+  // a caller rebuilds it each render — which is the default way anyone writes
+  // it. Holding it in a ref means the memo cannot be broken from outside.
+  const resolveRef = useRef(onResolveRow)
+  resolveRef.current = onResolveRow
+  const handleResolve = useCallback(
+    (key: string, action: 'add' | 'not-this-job') => resolveRef.current(key, action),
+    [],
+  )
 
   // A duplicate scrolls the existing row into view and pulses it. Silence
   // would be indistinguishable from "the camera didn't see it", which is
@@ -93,7 +156,7 @@ export function Scan({
           aria-pressed={torchOn}
           aria-label={torchOn ? 'Turn torch off' : 'Turn torch on'}
         >
-          <Icon name="torch" size={24} />
+          <Icon name="bulb" size={24} />
         </button>
       </div>
 
@@ -126,39 +189,12 @@ export function Scan({
 
       <ul className="scan-list" ref={listRef}>
         {rows.map((row) => (
-          <li
+          <ScanRowItem
             key={row.key}
-            data-asset={row.assetId ?? ''}
-            className={[
-              'scan-row',
-              `is-${row.outcome}`,
-              pulseKey && row.assetId === pulseKey ? 'is-pulsing' : '',
-            ].filter(Boolean).join(' ')}
-          >
-            <span className="row-main">
-              <span className="row-name">{row.displayName ?? 'Unknown item'}</span>
-              {row.message ? <span className="row-note">{row.message}</span> : null}
-            </span>
-            <span className="row-code code">{row.assetCode ?? '—'}</span>
-
-            {/* Two inline actions, ON the row, NEITHER REQUIRED. Nothing in
-                the scan loop is a modal or a blocking toast: the line does not
-                stop. An unresolved row can sit here all morning and get dealt
-                with once, at the finish. */}
-            {row.outcome === 'unexpected' ? (
-              <span className="row-actions">
-                <button className="btn btn-sm" onClick={() => onResolveRow(row.key, 'add')}>
-                  Add anyway
-                </button>
-                <button
-                  className="btn btn-sm btn-ghost"
-                  onClick={() => onResolveRow(row.key, 'not-this-job')}
-                >
-                  Not this job
-                </button>
-              </span>
-            ) : null}
-          </li>
+            row={row}
+            isPulsing={pulseKey !== null && row.assetId === pulseKey}
+            onResolve={handleResolve}
+          />
         ))}
       </ul>
 

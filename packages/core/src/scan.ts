@@ -1,5 +1,6 @@
 import type { SqlDriver } from './db/driver.ts'
 import { Outbox } from './outbox.ts'
+import { projectOp } from './project.ts'
 
 /**
  * The scan handler.
@@ -57,6 +58,8 @@ interface AssetRow {
   display_name: string | null
   presence: string
   current_job_id: string | null
+  /** Label of the job it is currently out on, for the conflict message. */
+  job_label: string | null
 }
 
 /**
@@ -113,31 +116,24 @@ export class ScanSession {
     // An unknown tag is RECORDED, not rejected. It may be a label bound on
     // another device since this one last synced. A scan that silently vanishes
     // is how a tech learns the app cannot be trusted.
-    if (!tag?.asset_id) {
+    //
+    // Two ways to be unknown — no tag row, or a tag pointing at an asset this
+    // device has not synced — and they take the identical action. Only the
+    // wording differs, because the tech can act on the difference: an unknown
+    // TAG usually means a fresh label, an unknown ITEM means a stale mirror.
+    const asset = tag?.asset_id ? this.loadAsset(tag.asset_id) : undefined
+    if (!asset) {
       const outboxId = this.enqueue({ tag_code: tagCode, event_type: eventType })
       return {
         outcome: 'unknown_tag',
-        message: 'Unknown tag — will resolve when this phone syncs',
+        message: tag?.asset_id
+          ? 'Unknown item'
+          : 'Unknown tag — will resolve when this phone syncs',
         outboxId,
       }
     }
 
-    const asset = this.db.get<AssetRow>(
-      `select a.id, a.asset_code, p.display_name, a.presence, a.current_job_id
-         from assets a left join products p on p.id = a.product_id
-        where a.id = ?`,
-      [tag.asset_id],
-    )
-    if (!asset) {
-      const outboxId = this.enqueue({ tag_code: tagCode, event_type: eventType })
-      return { outcome: 'unknown_tag', message: 'Unknown item', outboxId }
-    }
-
-    const base = {
-      assetId: asset.id,
-      assetCode: asset.asset_code ?? undefined,
-      displayName: asset.display_name ?? undefined,
-    }
+    const base = this.baseResult(asset)
 
     // Duplicate. Suppress the WRITE, never the FEEDBACK. Silence is
     // indistinguishable from "the camera didn't see it" — the tech rescans,
@@ -155,9 +151,6 @@ export class ScanSession {
       asset.current_job_id &&
       asset.current_job_id !== this.opts.jobId
     ) {
-      const job = this.db.get<{ label: string }>(`select label from jobs where id = ?`, [
-        asset.current_job_id,
-      ])
       const outboxId = this.enqueue({
         asset_id: asset.id,
         event_type: eventType,
@@ -171,7 +164,7 @@ export class ScanSession {
       return {
         ...base,
         outcome: 'conflict',
-        message: `Shows as OUT to ${job?.label ?? 'another job'}`,
+        message: `Shows as OUT to ${asset.job_label ?? 'another job'}`,
         requiresReason: true,
         outboxId,
       }
@@ -207,15 +200,14 @@ export class ScanSession {
    * than pretending to be a scan.
    */
   addManually(assetId: string, eventType = 'check_out'): ScanResult {
-    const asset = this.db.get<AssetRow>(
-      `select a.id, a.asset_code, p.display_name, a.presence, a.current_job_id
-         from assets a left join products p on p.id = a.product_id where a.id = ?`,
-      [assetId],
-    )
+    const asset = this.loadAsset(assetId)
     if (!asset) return { outcome: 'unknown_tag', message: 'No such item' }
 
     if (this.seen.has(asset.id)) {
-      return { outcome: 'duplicate', assetId: asset.id, message: 'Already in this session' }
+      // baseResult, matching scan(). This branch used to return only the id,
+      // so a duplicate added by hand lost its code and name and the row went
+      // blank in the UI — copy-paste drift between two paths that must agree.
+      return { ...this.baseResult(asset), outcome: 'duplicate', message: 'Already in this session' }
     }
 
     const outboxId = this.enqueue({
@@ -225,13 +217,7 @@ export class ScanSession {
     })
     this.seen.set(asset.id, outboxId)
 
-    return {
-      outcome: 'accepted',
-      assetId: asset.id,
-      assetCode: asset.asset_code ?? undefined,
-      displayName: asset.display_name ?? undefined,
-      outboxId,
-    }
+    return { ...this.baseResult(asset), outcome: 'accepted', outboxId }
   }
 
   /**
@@ -262,45 +248,63 @@ export class ScanSession {
     })
   }
 
+  /**
+   * The asset behind an id, with its product name.
+   *
+   * One query, used by both the scan path and the manual path. They had two
+   * copies differing only in whitespace, which is two places to forget the
+   * left join the day an asset has no product — and an intake-by-scan asset
+   * legitimately has none until the desk enriches it.
+   */
+  private loadAsset(assetId: string): AssetRow | undefined {
+    // The jobs join costs nothing — it is an indexed lookup on a primary key
+    // alongside one this query already does — and it removes a whole separate
+    // round trip from the CONFLICT path, which is the slowest path in the
+    // scan loop and the one a tech hits when something is already wrong.
+    return this.db.get<AssetRow>(
+      `select a.id, a.asset_code, p.display_name, a.presence, a.current_job_id,
+              j.label as job_label
+         from assets a
+         left join products p on p.id = a.product_id
+         left join jobs     j on j.id = a.current_job_id
+        where a.id = ?`,
+      [assetId],
+    )
+  }
+
+  /** The identity fields every ScanResult carries, in one place. */
+  private baseResult(asset: AssetRow): Pick<ScanResult, 'assetId' | 'assetCode' | 'displayName'> {
+    return {
+      assetId: asset.id,
+      assetCode: asset.asset_code ?? undefined,
+      displayName: asset.display_name ?? undefined,
+    }
+  }
+
   private enqueue(payload: Record<string, unknown>): string {
     const id = this.newId()
     const deviceTime = new Date(this.now()).toISOString()
 
+    // Built once and used for both the queue row and the projection, so the
+    // two can never disagree about job_id or device_time — they are literally
+    // the same object.
+    const op = {
+      ...payload,
+      session_id: this.id,
+      job_id: this.opts.jobId ?? null,
+      device_time: deviceTime,
+      clock_offset_ms: this.opts.clockOffsetMs ?? 0,
+    }
+
     this.db.transaction(() => {
-      this.outbox.enqueue({
-        id,
-        op: 'submit_scan_batch',
-        payload: {
-          ...payload,
-          session_id: this.id,
-          job_id: this.opts.jobId ?? null,
-          device_time: deviceTime,
-          clock_offset_ms: this.opts.clockOffsetMs ?? 0,
-        },
-      })
+      this.outbox.enqueue({ id, op: 'submit_scan_batch', payload: op })
 
       // Optimistic local projection, in the SAME transaction as the queue row.
       // If these could separate, the UI would show a scan that will never be
       // sent — the tech believes the gear is accounted for and it is not.
-      if (typeof payload.asset_id === 'string') {
-        const presence =
-          payload.event_type === 'check_out'
-            ? 'out'
-            : payload.event_type === 'check_in'
-              ? 'here'
-              : null
-        if (presence) {
-          this.db.exec(
-            `update assets set presence = ?, current_job_id = ?, last_scanned_at = ? where id = ?`,
-            [
-              presence,
-              presence === 'out' ? (this.opts.jobId ?? null) : null,
-              deviceTime,
-              payload.asset_id,
-            ],
-          )
-        }
-      }
+      //
+      // Shared with the pull replay path; see project.ts for why that matters.
+      projectOp(this.db, op)
     })
 
     return id
