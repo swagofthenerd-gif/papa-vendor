@@ -91,11 +91,15 @@ select throws_ok(
 
 -- ---------------------------------------------------------------------------
 -- The tech confirms — normal strength
+--
+-- The destination is required by 0014: every dispatch says where the gear is
+-- going, booked or not.
 -- ---------------------------------------------------------------------------
 set local papa.user_id = 'aaaaaaaa-aaaa-7aaa-8aaa-aaaaaaaaaaaa';
 
 select is(
-  (select state from confirm_dispatch('50000000-0000-7000-8000-000000000001', 34, 4, 2)),
+  (select state from confirm_dispatch('50000000-0000-7000-8000-000000000001', 34, 4, 2,
+                                      'Rafi Peer studio, Gulberg')),
   'confirmed',
   'the TECH can confirm');
 
@@ -138,7 +142,7 @@ select open_dispatch('50000000-0000-7000-8000-000000000002',
   '30000000-0000-7000-8000-000000000001', 'out', 10);
 
 -- Mostly bulk-confirmed by case: belief, not observation.
-select confirm_dispatch('50000000-0000-7000-8000-000000000002', 2, 8, 0);
+select confirm_dispatch('50000000-0000-7000-8000-000000000002', 2, 8, 0, 'Model Town rooftop');
 
 select is(
   dispatch_evidence_strength('50000000-0000-7000-8000-000000000002'),
@@ -148,7 +152,7 @@ select is(
 set local papa.user_id = 'bbbbbbbb-bbbb-7bbb-8bbb-bbbbbbbbbbbb';   -- the owner
 select open_dispatch('50000000-0000-7000-8000-000000000003',
   '30000000-0000-7000-8000-000000000001', 'out', 10);
-select confirm_dispatch('50000000-0000-7000-8000-000000000003', 10, 0, 0);
+select confirm_dispatch('50000000-0000-7000-8000-000000000003', 10, 0, 0, 'Ferozepur Road set');
 
 select is(
   dispatch_evidence_strength('50000000-0000-7000-8000-000000000003'),
