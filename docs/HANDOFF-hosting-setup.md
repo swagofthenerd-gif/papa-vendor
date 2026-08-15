@@ -80,7 +80,9 @@ Things that may bite, in likelihood order:
 **Verify it took.** Run these and expect what is stated:
 
 ```sql
--- 23 tables with row-level security ON, 22 of them FORCED
+-- 24 tables with row-level security ON, 23 of them FORCED.
+-- (This previously said 23/22. That was wrong — building a clean database from
+-- migrations 0001-0014 gives 24/23. Verified both ways on 2026-08-15.)
 select count(*) filter (where relrowsecurity)      as rls_on,
        count(*) filter (where relforcerowsecurity) as forced
   from pg_class where relkind='r' and relnamespace='public'::regnamespace;
@@ -92,8 +94,10 @@ select * from sync_pii_violations();
 select rolbypassrls from pg_roles where rolname = 'papa_app';
 ```
 
-If `rls_on` is not 23, stop and find out why before going further. Everything
-about tenancy depends on it.
+If `rls_on` is not 24, stop and find out why before going further. Everything
+about tenancy depends on it. Rather than trusting this number, get it from a
+clean container — `KEEP=1 ./db/run-tests.sh`, then run the same query against
+it — so the check cannot go stale again when `0015` lands.
 
 ---
 

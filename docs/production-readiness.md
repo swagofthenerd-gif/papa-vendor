@@ -4,11 +4,46 @@ An honest ledger of what would have to be true to run this as a business, and
 where it actually stands. Written because "is it secure and does it scale" is
 not a yes/no question, and a confident yes would be the least useful answer.
 
-**Status date:** 2026-08-12 · **Verdict: not production-ready.**
+**Status date:** 2026-08-15 · **Verdict: not production-ready.**
 **Hosting decided:** Supabase Pro (~$25/mo), region **Singapore**, photos on
 **Cloudflare R2**. Reasoning and the ten-lens analysis: `docs/hosting-decision.md`. The data layer
-is genuinely solid and measured. Nothing is deployed, nobody can log in, and
+is genuinely solid and measured. Nobody can log in, and
 several controls exist as schema without the surrounding operations.
+
+### Deployment status — verified 2026-08-15
+
+**The schema IS deployed.** Supabase project `evknfbkcszjdasjjwstw` ("Papa
+Vendors"), org `swagofthenerd-gif's Org`, AWS **ap-southeast-1 (Singapore)** —
+the intended region. All 28 tables from migrations `0001`–`0014` are present.
+
+Verified against the live database, and cross-checked against a clean container
+built from the same migrations — both give identical numbers:
+
+| Check | Live | Clean local | Verdict |
+|---|---|---|---|
+| public tables | 28 | 28 | match |
+| RLS enabled | 24 | 24 | match |
+| RLS forced | 23 | 23 | match |
+| `sync_pii_violations()` | 0 rows | — | ✅ |
+| `papa_app` bypasses RLS | false | — | ✅ |
+| `papa_app` superuser | false | — | ✅ |
+| rows in `orgs` / `users` / `assets` / `scan_events` | 0 / 0 / 0 / 0 | — | `fixtures.sql` was **not** applied ✅ |
+
+**A correction to `docs/HANDOFF-hosting-setup.md`:** its step-2 verification
+says to expect **23 tables with RLS on, 22 forced**, and to *stop* if the number
+differs. Those figures are wrong — the migrations as they stand produce **24 and
+23**, confirmed by building a clean database from them. The handoff's numbers
+predate a later migration. Anyone following that document literally would halt
+on a correct database. Fixed in the handoff.
+
+**Still outstanding on hosting** (blocks the pilot, not the schema):
+
+- **Plan is Free, not Pro.** The ledger's decision was Pro (~$25/mo) because the
+  free tier pauses the project after inactivity, which looks to a user exactly
+  like the app being broken. Not yet upgraded.
+- **No Cloudflare R2 bucket** and no photo pipeline.
+- **No GitHub secrets and no `deploy.yml`** — the migrations were applied by
+  hand, so there is no repeatable path for `0015` onward.
 
 ---
 
