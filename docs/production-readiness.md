@@ -54,10 +54,14 @@ So steps 1–3 of the hosting handoff are complete. Steps 4–6 are not.
 - **No `deploy.yml`,** and **the one drafted in the handoff would not work.**
   See below.
 - **No photo pipeline** — a bucket and a key are not an upload path.
-- **No retention policy.** No Object Lifecycle Rule is set. The ledger's own
-  suggestion is 24 months. The bucket is empty *right now*, which is the
-  cheapest possible moment to set it; every photo taken before a rule exists is
-  a photo kept forever by default.
+- **Photo retention: 24 months — DECIDED by the user 2026-08-15, NOT YET
+  APPLIED.** Needs an R2 Object Lifecycle Rule on `papa-vendor-photos`:
+  *delete objects 730 days after upload*, applied to the whole bucket. Blocked
+  only on browser access; the decision itself is settled and should not be
+  reopened. The bucket is still empty, so applying it now costs nothing and
+  covers every photo ever taken. Every photo uploaded before the rule exists is
+  kept forever by default, so this should land before the first upload, not
+  before the pilot.
 
 ### ⚠ The drafted deploy workflow re-runs every migration and would fail
 
