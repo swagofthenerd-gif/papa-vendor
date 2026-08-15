@@ -170,8 +170,16 @@ jobs:
           psql "$DB" -tAc "select rolbypassrls from pg_roles where rolname='papa_app'" | grep -qx f
 ```
 
-The migrations are written to be re-runnable, but **they are not all
-idempotent** — check before assuming a re-run is safe.
+> **⚠ 2026-08-15: the workflow above does not work. Do not use it as written.**
+> It re-applies every migration on every push. **None of the migrations are
+> re-runnable** — 28 plain `create table` statements, zero `if not exists` — so
+> against the already-migrated database it fails on the first statement of
+> `0001` and, having no `break`, fails on all fourteen. Nothing is applied and
+> the pipeline is permanently red.
+>
+> What is needed instead: a table recording which migration files have been
+> applied, and a runner that applies only the missing ones. See
+> `docs/production-readiness.md`. Unbuilt.
 
 ---
 

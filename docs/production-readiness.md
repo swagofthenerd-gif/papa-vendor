@@ -36,14 +36,47 @@ differs. Those figures are wrong — the migrations as they stand produce **24 a
 predate a later migration. Anyone following that document literally would halt
 on a correct database. Fixed in the handoff.
 
+**Photo storage is done too — verified 2026-08-15.** R2 bucket
+`papa-vendor-photos`, location **Asia-Pacific (APAC)**, created 2026-08-14,
+0 objects. Public Development URL is **off**, which is correct — photos must not
+be world-readable. Account API token `papa-vendor-photos-rw` exists, scoped to
+that one bucket, *Object Read & Write*, active.
+
+So steps 1–3 of the hosting handoff are complete. Steps 4–6 are not.
+
 **Still outstanding on hosting** (blocks the pilot, not the schema):
 
 - **Plan is Free, not Pro.** The ledger's decision was Pro (~$25/mo) because the
   free tier pauses the project after inactivity, which looks to a user exactly
   like the app being broken. Not yet upgraded.
-- **No Cloudflare R2 bucket** and no photo pipeline.
-- **No GitHub secrets and no `deploy.yml`** — the migrations were applied by
-  hand, so there is no repeatable path for `0015` onward.
+- **No GitHub secrets at all** — `gh secret list` returns empty. None of
+  `SUPABASE_DB_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`.
+- **No `deploy.yml`,** and **the one drafted in the handoff would not work.**
+  See below.
+- **No photo pipeline** — a bucket and a key are not an upload path.
+- **No retention policy.** No Object Lifecycle Rule is set. The ledger's own
+  suggestion is 24 months. The bucket is empty *right now*, which is the
+  cheapest possible moment to set it; every photo taken before a rule exists is
+  a photo kept forever by default.
+
+### ⚠ The drafted deploy workflow re-runs every migration and would fail
+
+`docs/HANDOFF-hosting-setup.md` step 5 loops over `db/migrations/*.sql` on every
+push to `main`. It hedges that the migrations "are not all idempotent". That is
+too generous: **none of them are.** Across all 14 files there are **28 plain
+`create table`** statements and **zero** `create table if not exists`. Verified
+by grep, 2026-08-15.
+
+Against the live database — which already has all 28 tables — that workflow
+fails on the first statement of `0001`, and, having no `break`, goes on to fail
+on all fourteen. The result is a permanently red pipeline that applies nothing.
+Not destructive, but it does not do the job it exists for, and a red pipeline
+that is *expected* to be red is how a genuinely broken deploy gets ignored.
+
+**What is actually needed** before `0015` can ship: a record in the database of
+which migration files have already been applied, and a runner that applies only
+the ones missing. That is a small piece of design, not a copy-paste of the
+snippet in the handoff. **Not yet built.**
 
 ---
 
