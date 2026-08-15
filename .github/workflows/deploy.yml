@@ -1,0 +1,95 @@
+name: Deploy migrations
+
+# Separate from ci.yml on purpose: tests must be able to run on a pull request
+# without any path to the live database.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Two deploys applying the same migration at once is a way to find out whether
+# `create table` is idempotent. It is not.
+concurrency:
+  group: deploy-migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Until the secret exists this job would be red on every push, and a job
+      # that is always red is a job nobody looks at on the day it goes red for
+      # a real reason. So say plainly that it is not configured, and stop.
+      - name: Is there a database to deploy to?
+        id: check
+        env:
+          DB: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [[ -z "$DB" ]]; then
+            echo "SUPABASE_DB_URL is not set — nothing to deploy to." >> "$GITHUB_STEP_SUMMARY"
+            echo "Set it in Settings -> Secrets and variables -> Actions." >> "$GITHUB_STEP_SUMMARY"
+            echo "configured=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install psql
+        if: steps.check.outputs.configured == 'yes'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      # Applies only what this database has not had. NOT a loop over every
+      # migration — see the header of db/migrate.sh for why that cannot work.
+      #
+      # The live database was migrated by hand before this workflow existed. It
+      # must be adopted ONCE with `DB=... ./db/migrate.sh --baseline` before the
+      # first run here, or this step will try to re-apply 0001 and fail. That is
+      # the correct failure: it stops rather than guessing.
+      - name: Apply pending migrations
+        if: steps.check.outputs.configured == 'yes'
+        env:
+          DB: ${{ secrets.SUPABASE_DB_URL }}
+        run: ./db/migrate.sh
+
+      # Tenancy is the one property that fails silently. A migration that
+      # quietly drops a policy leaves an app that works perfectly and shows one
+      # rental house another's gear, so it is re-proven after every deploy
+      # rather than assumed to have survived.
+      - name: Tenancy must still hold
+        if: steps.check.outputs.configured == 'yes'
+        env:
+          DB: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          check() { # check <sql> <expected> <what>
+            got=$(psql "$DB" -X -tAq -v ON_ERROR_STOP=1 -c "$1")
+            if [[ "$got" != "$2" ]]; then
+              echo "TENANCY CHECK FAILED: $3 (got '$got', wanted '$2')" >&2
+              exit 1
+            fi
+            echo "  ok — $3"
+          }
+          check "select count(*) from sync_pii_violations()" "0" \
+                "no sensitive column is syncable to warehouse phones"
+          check "select rolbypassrls from pg_roles where rolname='papa_app'" "f" \
+                "the app role cannot see past row-level security"
+          check "select rolsuper from pg_roles where rolname='papa_app'" "f" \
+                "the app role is not a superuser"
+          # Not a count. A count goes stale the first time a table is added —
+          # the handoff's hardcoded "23 tables" had already gone stale before
+          # anyone ran it, and told the reader to STOP on a healthy database.
+          #
+          # This names the single deliberate exception instead. Enabling RLS
+          # without FORCING it leaves the table readable by its owner, so a new
+          # unforced table is a real hole; sync_sensitive_columns is exempt
+          # because it is org-independent reference data with no tenant
+          # dimension to scope by (0009). Adding a table changes nothing here.
+          # Forgetting to FORCE one fails it.
+          check "select coalesce(string_agg(relname, ',' order by relname), '') from pg_class
+                   where relkind='r' and relnamespace='public'::regnamespace
+                     and relrowsecurity and not relforcerowsecurity" \
+                "sync_sensitive_columns" \
+                "the only table with unforced row-level security is the known, argued exception"

@@ -40,3 +40,9 @@ jobs:
       # both places and cannot drift from what is tested locally.
       - name: Migrations and pgTAP
         run: ./db/run-tests.sh
+
+      # The deploy runner is the one script that touches the live database, so
+      # it is the last place to find out something is wrong. Same script CI
+      # deploys with, exercised on throwaway databases on every push.
+      - name: The migration runner
+        run: ./db/test-migrate.sh

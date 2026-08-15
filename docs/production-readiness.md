@@ -51,8 +51,8 @@ So steps 1–3 of the hosting handoff are complete. Steps 4–6 are not.
   like the app being broken. Not yet upgraded.
 - **No GitHub secrets at all** — `gh secret list` returns empty. None of
   `SUPABASE_DB_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`.
-- **No `deploy.yml`,** and **the one drafted in the handoff would not work.**
-  See below.
+- ~~**No `deploy.yml`**~~ — **Done 2026-08-15.** `db/migrate.sh` plus
+  `.github/workflows/deploy.yml`. See below.
 - **No photo pipeline** — a bucket and a key are not an upload path.
 - **Photo retention: 24 months — DECIDED by the user 2026-08-15, NOT YET
   APPLIED.** Needs an R2 Object Lifecycle Rule on `papa-vendor-photos`:
@@ -77,10 +77,39 @@ on all fourteen. The result is a permanently red pipeline that applies nothing.
 Not destructive, but it does not do the job it exists for, and a red pipeline
 that is *expected* to be red is how a genuinely broken deploy gets ignored.
 
-**What is actually needed** before `0015` can ship: a record in the database of
-which migration files have already been applied, and a runner that applies only
-the ones missing. That is a small piece of design, not a copy-paste of the
-snippet in the handoff. **Not yet built.**
+**Built 2026-08-15** — `db/migrate.sh`, 20 assertions in `db/test-migrate.sh`,
+run in CI on every push. The database keeps a `schema_migrations` ledger and
+only pending files are applied.
+
+Four decisions in it worth knowing:
+
+- **The ledger table belongs to the runner, not to a migration.** As `0015` it
+  would be applied last, on a database where the runner needs to read it first.
+  It is also granted to nobody — `papa_app` cannot see it.
+- **Each migration runs inside one transaction, together with the row recording
+  it.** Nothing here forbids a transaction (no `CREATE INDEX CONCURRENTLY`,
+  checked), so a failure rolls back completely. The alternative failure mode is
+  the worst one available: a migration marked done that never ran, then skipped
+  forever.
+- **Checksums.** "Never edit 0001–0014" appears in three documents, which is
+  the kind of rule someone breaks by fixing a typo. Editing an applied
+  migration is invisible to the test suite — the tests build a fresh database
+  from the files, so they pass either way while the live database diverges. The
+  runner refuses to continue and names the file.
+- **`--baseline`** adopts a hand-migrated database without re-running anything.
+  Needed exactly once, for this database. Refused a second time, because on a
+  managed database it would mark a real pending migration as done.
+
+**The tests were verified to be capable of failing**, by deleting each guard in
+turn: removing the checksum check turned 2 red, recording outside the
+transaction turned 3 red. Removing the baseline guard turned **none** red — the
+duplicate-key error happened to produce the same exit code, so that test was
+passing by luck. It now asserts the refusal message, and goes red when the
+guard is removed.
+
+**Still to do:** the live database must be adopted once, by hand, before the
+first deploy — `DB=<direct URI> ./db/migrate.sh --baseline`. Until then
+`deploy.yml` reports "not configured" and stops rather than failing.
 
 ---
 
