@@ -382,6 +382,16 @@ is missing, which shows honestly as scans that queue and never send.
   `npm run dev:https` serves over https with a self-signed certificate for
   testing on a phone — the phone warns about the certificate once.
 
+### Phase 1 screens, added 2026-08-18
+
+The shell (top bar + tab bar), Today, the search-first Gear list, the asset
+page, and the handover summary. Then condition photos with the out/in
+comparison, and the CSV catalogue import.
+
+What phase 1 still lacks: label PRINTING (the labels render on screen only),
+tag-by-rack onboarding, intake-by-scan, and the owner's daily digest.
+Phases 2-5 are untouched.
+
 ### What it does NOT prove
 
 Nothing about the real device. The performance budget (decode→feedback under
