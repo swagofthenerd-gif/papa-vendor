@@ -39,10 +39,10 @@ export function ScanScreen({
   const lastSeen = useRef(new Map<string, number>())
 
   const job = store.job(jobId)
-  const session = store.sessionFor(jobId)
+  const session = store.sessionFor(jobId, mode)
   const eventType = mode === 'out' ? 'check_out' : 'check_in'
 
-  const pullList = useMemo(() => store.pullList(jobId), [store, jobId, tick])
+  const pullList = useMemo(() => store.pullList(jobId, mode), [store, jobId, mode, tick])
 
   const record = useCallback(
     (result: ScanResult) => {

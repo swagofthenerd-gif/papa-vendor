@@ -108,15 +108,23 @@ export function shortfall(summary: SessionSummary): number {
 
 /** The message a tech pastes into WhatsApp. Plain text, no formatting tricks. */
 export function manifestText(summary: SessionSummary): string {
+  const coming = summary.mode === 'in'
   const lines: string[] = []
-  lines.push(summary.mode === 'out' ? `OUT — ${summary.jobLabel}` : `BACK — ${summary.jobLabel}`)
+  lines.push(coming ? `BACK — ${summary.jobLabel}` : `OUT — ${summary.jobLabel}`)
   lines.push('')
-  lines.push(`${summary.scanned} of ${summary.expected} items scanned`)
+  lines.push(
+    coming
+      ? `${summary.scanned} of ${summary.expected} items back`
+      : `${summary.scanned} of ${summary.expected} items scanned`,
+  )
   if (summary.assumed > 0) lines.push(`${summary.assumed} confirmed by case, not seen`)
 
   if (summary.missing.length > 0) {
     lines.push('')
-    lines.push('Still to come:')
+    // The heading a client reads decides what they do about it. "Still to
+    // come" invites a reply tomorrow; "not come back yet" invites them to go
+    // and look now, which is the only thing that finds gear.
+    lines.push(coming ? 'Not come back yet:' : 'Still to come:')
     for (const m of summary.missing) lines.push(`- ${m.name ?? 'item'} (${m.code ?? '—'})`)
   }
 

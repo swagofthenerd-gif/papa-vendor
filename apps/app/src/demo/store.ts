@@ -18,6 +18,7 @@ import {
 } from '@papa/core'
 import { SqlJsDriver } from './sqljs-driver.ts'
 import { demoCatalogue, seedDemo, type DemoSeed } from './seed.ts'
+import type { ScanMode } from '../nav.ts'
 import type { GearRow } from '../routes/Gear.tsx'
 import type { TodayStats } from '../routes/Today.tsx'
 import type { AssetHistoryRow, AssetView } from '../routes/Asset.tsx'
@@ -41,6 +42,19 @@ export class DemoStore {
 
   private session: ScanSession | null = null
   private sessionJobId: string | null = null
+  private sessionMode: ScanMode = 'out'
+  /**
+   * What the OPEN session is looking for, captured when it opened.
+   *
+   * A SNAPSHOT, not a live query. On a return the expected set is "what is
+   * physically out on this job", and checking an item in removes it from that
+   * query — so re-asking on every render shrank the denominator as the tech
+   * worked: four items to find became "0 of 1" after three scans. A total that
+   * melts while you look at it is the fastest way to lose someone's trust in
+   * the screen, and it hides the one number that matters, which is how many
+   * are still missing.
+   */
+  private sessionExpected: string[] = []
   readonly photos: PhotoStore
 
   private constructor(db: SqlDriver, seed: DemoSeed) {
@@ -76,28 +90,79 @@ export class DemoStore {
    * (scan.ts) — rebuilding it on a re-render would make every duplicate read
    * as a fresh scan and quietly double-count the morning.
    */
-  sessionFor(jobId: string): ScanSession {
-    if (this.session && this.sessionJobId === jobId) return this.session
-    const job = this.job(jobId)
+  sessionFor(jobId: string, mode: ScanMode = 'out'): ScanSession {
+    if (this.session && this.sessionJobId === jobId && this.sessionMode === mode) {
+      return this.session
+    }
+    const expected = this.expectedFor(jobId, mode)
     this.session = new ScanSession(this.db, {
       deviceId: 'demo-device',
       jobId,
-      expected: new Set(job?.expected ?? []),
+      expected: new Set(expected),
     })
     this.sessionJobId = jobId
+    this.sessionMode = mode
+    this.sessionExpected = expected
     return this.session
+  }
+
+  /**
+   * What a session is looking for.
+   *
+   * GOING OUT it is the job's list — what was promised. COMING BACK it is what
+   * is PHYSICALLY OUT on that job right now, which is a different set and the
+   * only one that can answer "did everything come home".
+   *
+   * Reconciling a return against the original list instead would report a
+   * shortfall for anything that never left in the first place — the four items
+   * that followed on the 2pm run and the one the desk swapped at the door —
+   * and a return screen that cries wolf on the normal case is one a tech stops
+   * reading by the second week.
+   */
+  expectedFor(jobId: string, mode: ScanMode): string[] {
+    const job = this.job(jobId)
+    if (mode === 'out') return job?.expected ?? []
+    return this.db
+      .all<{ id: string }>(
+        `select id from assets
+          where current_job_id = ? and presence in ('out', 'in_transit')
+          order by asset_code`,
+        [jobId],
+      )
+      .map((r) => r.id)
   }
 
   endSession(): void {
     this.session = null
     this.sessionJobId = null
+    this.sessionMode = 'out'
+    this.sessionExpected = []
   }
 
-  pullList(jobId: string): PullListView | null {
-    const job = this.job(jobId)
-    if (!job) return null
-    const session = this.sessionFor(jobId)
-    return buildPullList(this.db, job.expected, session.scannedIds)
+  /** Which direction the open session is running in. */
+  get openMode(): ScanMode {
+    return this.sessionMode
+  }
+
+  /** Jobs with gear physically out, for the "bring it back" list. */
+  jobsWithGearOut(): { id: string; label: string; out: number }[] {
+    return this.db
+      .all<{ job_id: string; n: number }>(
+        `select current_job_id as job_id, count(*) as n from assets
+          where current_job_id is not null and presence in ('out', 'in_transit')
+          group by current_job_id`,
+      )
+      .map((r) => ({
+        id: r.job_id,
+        label: this.job(r.job_id)?.label ?? 'Gear out with no job',
+        out: Number(r.n),
+      }))
+  }
+
+  pullList(jobId: string, mode: ScanMode = 'out'): PullListView | null {
+    if (!this.job(jobId)) return null
+    const session = this.sessionFor(jobId, mode)
+    return buildPullList(this.db, this.sessionExpected, session.scannedIds)
   }
 
   /**
@@ -409,6 +474,7 @@ export class DemoStore {
     const job = this.job(jobId)
     if (!job || this.sessionJobId !== jobId || !this.session) return null
     const sessionId = this.session.id
+    const mode = this.sessionMode
 
     // Read back from the QUEUE, not from the screen: the queue is what was
     // actually written, and on a real phone it is the only record that exists
@@ -432,8 +498,8 @@ export class DemoStore {
 
     return buildSummary({
       jobLabel: job.label,
-      mode: 'out',
-      expected: job.expected,
+      mode,
+      expected: this.sessionExpected,
       recorded,
       assumed,
       unknownTags,

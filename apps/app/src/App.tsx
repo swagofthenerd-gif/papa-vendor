@@ -128,6 +128,7 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
               scanned: store.scannedCount(j.id),
               departsAt: j.departsAt,
             }))}
+            outJobs={store.jobsWithGearOut()}
             stats={store.stats()}
             onOpenGear={(f) => go({ name: 'gear', query: f === 'all' ? undefined : f })}
           />

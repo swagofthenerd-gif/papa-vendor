@@ -33,13 +33,14 @@ export function Session({
   // Derived in session-summary.ts alongside the list it describes, so the
   // number above and the list below cannot drift apart again.
   const outstanding = shortfall(summary)
+  const coming = summary.mode === 'in'
 
   return (
     <>
       <div className="tally">
         <p className="tally-line code">
           <strong>{summary.expected}</strong> items ·{' '}
-          <strong>{summary.scanned}</strong> scanned
+          <strong>{summary.scanned}</strong> {coming ? 'back' : 'scanned'}
           {summary.assumed > 0 ? (
             <>
               {' '}· <strong>{summary.assumed}</strong> by case
@@ -47,14 +48,26 @@ export function Session({
           ) : null}
           {outstanding > 0 ? (
             <>
-              {' '}· <strong className="tally-short">{outstanding}</strong> not accounted for
+              {' '}· <strong className="tally-short">{outstanding}</strong>{' '}
+              {/* The tally must use the same words as the section heading
+                  below it. "Not accounted for" above a list headed "Did not
+                  come back" reads as two different facts. */}
+              {coming ? 'still out' : 'not accounted for'}
             </>
           ) : null}
         </p>
         <p className="tally-sub">
-          {outstanding > 0
-            ? 'The rest can follow on a second run. This is a tally, not a verdict.'
-            : 'Everything on the list is accounted for.'}
+          {outstanding === 0
+            ? coming
+              ? 'Everything that went out has come back.'
+              : 'Everything on the list is accounted for.'
+            : coming
+              // A gap on the way back is not the same fact as a gap on the way
+              // out. Out, the rest follows at 2pm. Back, something is at a
+              // client's site or gone, and that costs money — so it is said
+              // plainly rather than softened into "not accounted for".
+              ? 'Still with the client, or not found. Worth a call today.'
+              : 'The rest can follow on a second run. This is a tally, not a verdict.'}
         </p>
       </div>
 
@@ -89,9 +102,9 @@ export function Session({
       {summary.missing.length > 0 ? (
         <section className="section">
           <SectionHead
-            icon="hourglass"
-            title="Still on the shelf"
-            sub="On the list, not in the van"
+            icon={coming ? 'siren' : 'hourglass'}
+            title={coming ? 'Did not come back' : 'Still on the shelf'}
+            sub={coming ? 'Went out on this job, not scanned in' : 'On the list, not in the van'}
           />
           <ul className="line-list">
             {summary.missing.map((l) => (
@@ -108,7 +121,8 @@ export function Session({
         {/* WhatsApp first: in Lahore the client-facing interface IS WhatsApp,
             and the manifest is what stops the 9pm "did you send the wide?" */}
         <button className="btn btn-primary btn-block" onClick={onShareWhatsApp}>
-          <Icon name="send" size={18} /> Send the list on WhatsApp
+          <Icon name="send" size={18} />{' '}
+          {coming ? 'Send what is still out' : 'Send the list on WhatsApp'}
         </button>
         <button className="btn btn-ghost btn-block" onClick={onBackToScanning}>
           <Icon name="camera" size={18} /> Keep scanning
@@ -117,8 +131,9 @@ export function Session({
           Done for now
         </button>
         <p className="session-foot muted">
-          Nothing here confirms the dispatch. The desk does that later, with the
-          money attached — it never holds up the truck.
+          {coming
+            ? 'Nothing here closes the job or releases a deposit. That happens at the desk, after someone has looked at the gear.'
+            : 'Nothing here confirms the dispatch. The desk does that later, with the money attached — it never holds up the truck.'}
         </p>
       </div>
     </>

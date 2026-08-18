@@ -39,12 +39,21 @@ export interface TodayStats {
   onShelf: number
 }
 
+/** A job with gear physically out, whatever its list said. */
+export interface OutRow {
+  id: string
+  label: string
+  out: number
+}
+
 export function Today({
   jobs,
+  outJobs,
   stats,
   onOpenGear,
 }: {
   jobs: JobRow[]
+  outJobs: OutRow[]
   stats: TodayStats
   onOpenGear: (filter: 'out' | 'attention' | 'all') => void
 }) {
@@ -157,6 +166,36 @@ export function Today({
           </ul>
         )}
       </section>
+
+      {outJobs.length > 0 ? (
+        <section className="section">
+          <SectionHead
+            icon="undo"
+            title="Out there now"
+            sub="Tap one to book its gear back in"
+          />
+          <ul className="job-list">
+            {outJobs.map((j, i) => (
+              <li key={j.id} className="stagger" style={{ ['--i' as string]: i }}>
+                <button
+                  className="job-card pressable"
+                  onClick={() => go({ name: 'scan', jobId: j.id, mode: 'in' })}
+                >
+                  <span className="job-main">
+                    <span className="job-label">{j.label}</span>
+                    <span className="job-contact">
+                      {j.out} item{j.out === 1 ? '' : 's'} still out
+                    </span>
+                  </span>
+                  <span className="job-meta">
+                    <Icon name="undo" size={22} />
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="section">
         <SectionHead icon="bolt" title="Quick" />
