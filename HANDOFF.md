@@ -391,9 +391,12 @@ comparison, and the CSV catalogue import.
 Then check-in (a return reconciled against what is physically out, not against
 the job's list), attaching a printed label to gear, and printing the labels.
 
+Then the case manifest (override #1 - a case scan records the case, never its
+packed contents), and an end-to-end check that drives a real Chromium with a
+QR code faked as its camera.
+
 What phase 1 still lacks: intake-by-scan (adding gear the catalogue has never
-heard of, from the rack), the owner's daily digest, and the case manifest for
-bulk-confirming a packed case. Phases 2-5 are untouched.
+heard of, from the rack) and the owner's daily digest. Phases 2-5 untouched.
 
 ### What it does NOT prove
 
