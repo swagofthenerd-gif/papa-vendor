@@ -388,9 +388,12 @@ The shell (top bar + tab bar), Today, the search-first Gear list, the asset
 page, and the handover summary. Then condition photos with the out/in
 comparison, and the CSV catalogue import.
 
-What phase 1 still lacks: label PRINTING (the labels render on screen only),
-tag-by-rack onboarding, intake-by-scan, and the owner's daily digest.
-Phases 2-5 are untouched.
+Then check-in (a return reconciled against what is physically out, not against
+the job's list), attaching a printed label to gear, and printing the labels.
+
+What phase 1 still lacks: intake-by-scan (adding gear the catalogue has never
+heard of, from the rack), the owner's daily digest, and the case manifest for
+bulk-confirming a packed case. Phases 2-5 are untouched.
 
 ### What it does NOT prove
 
