@@ -46,6 +46,7 @@ describe('routing', () => {
       // a different screen than the one they linked to.
       { name: 'gear', query: 'FX9 / 01' },
       { name: 'enquiry' },
+      { name: 'import' },
       { name: 'settings' },
     ]
     for (const v of views) {
@@ -58,7 +59,7 @@ describe('routing', () => {
     // rename broke routing: the switch simply fell through and the caller
     // navigated to "undefined". Any new route added to the View union without
     // a case here fails this rather than at runtime in a warehouse.
-    const names = ['jobs', 'scan', 'session', 'asset', 'gear', 'enquiry', 'settings']
+    const names = ['jobs', 'scan', 'session', 'asset', 'gear', 'enquiry', 'import', 'settings']
     const sample = {
       jobs: { name: 'jobs' },
       scan: { name: 'scan', jobId: 'j', mode: 'out' },
@@ -66,6 +67,7 @@ describe('routing', () => {
       asset: { name: 'asset', assetId: 'a' },
       gear: { name: 'gear' },
       enquiry: { name: 'enquiry' },
+      import: { name: 'import' },
       settings: { name: 'settings' },
     }
     for (const n of names) {

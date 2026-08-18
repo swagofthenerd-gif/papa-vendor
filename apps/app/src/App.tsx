@@ -11,6 +11,7 @@ import { ScanScreen } from './demo/ScanScreen.tsx'
 import { SessionScreen } from './demo/SessionScreen.tsx'
 import { EnquiryScreen } from './demo/EnquiryScreen.tsx'
 import { Tags } from './demo/Tags.tsx'
+import { ImportScreen } from './demo/ImportScreen.tsx'
 
 /**
  * The app shell.
@@ -174,6 +175,13 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
       return (
         <Shell view={view} title="Kit list" subtitle="Paste what the client sent">
           <EnquiryScreen store={store} />
+        </Shell>
+      )
+
+    case 'import':
+      return (
+        <Shell view={view} title="Load your gear" subtitle="Paste a list, check it, then add it">
+          <ImportScreen store={store} />
         </Shell>
       )
 

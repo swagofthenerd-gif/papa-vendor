@@ -24,6 +24,10 @@ export { checkAvailability, replySummary } from './availability.ts'
 export type { AvailabilityLine, AvailabilitySummary, AvailabilityState } from './availability.ts'
 export type { ParsedLine, MatchedLine, CatalogueItem, MatchConfidence } from './kit-list.ts'
 export type { PullListItem, PullListView, ShelfGroup } from './pull-list.ts'
+export { parseCsv, guessMapping, readRows, planImport } from './csv-import.ts'
+export type {
+  CsvTable, ColumnMapping, FieldName, ImportRow, ImportPlan, ReviewedRow, RowVerdict,
+} from './csv-import.ts'
 export { PhotoStore, pairBySide, DEFAULT_BUDGET_BYTES } from './photos.ts'
 export type { PhotoRow, PhotoSide, PhotoPair, CaptureInput, CaptureResult } from './photos.ts'
 export { FEEDBACK, ERROR_FEEDBACK, firstBuzzMs, hapticDurationMs } from './feedback.ts'

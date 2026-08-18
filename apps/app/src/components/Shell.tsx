@@ -27,7 +27,7 @@ const TABS: Tab[] = [
   { view: { name: 'jobs' }, label: 'Today', icon: 'home', matches: ['jobs', 'session'] },
   { view: { name: 'gear' }, label: 'Gear', icon: 'box', matches: ['gear', 'asset'] },
   { view: { name: 'enquiry' }, label: 'Kit list', icon: 'chat', matches: ['enquiry'] },
-  { view: { name: 'settings' }, label: 'Labels', icon: 'ticket', matches: ['settings'] },
+  { view: { name: 'settings' }, label: 'Labels', icon: 'ticket', matches: ['settings', 'import'] },
 ]
 
 export function Shell({

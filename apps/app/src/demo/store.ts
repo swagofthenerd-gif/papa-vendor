@@ -10,6 +10,7 @@ import {
   type AvailabilitySummary,
   type CatalogueItem,
   type CaptureResult,
+  type ImportPlan,
   type PhotoPair,
   type MatchedLine,
   type PullListView,
@@ -36,7 +37,7 @@ import { buildSummary, type SessionSummary } from '../session-summary.ts'
 export class DemoStore {
   readonly db: SqlDriver
   readonly seed: DemoSeed
-  readonly catalogue: CatalogueItem[]
+  catalogue: CatalogueItem[]
 
   private session: ScanSession | null = null
   private sessionJobId: string | null = null
@@ -147,6 +148,104 @@ export class DemoStore {
         [q, q],
       )
       .map((r) => ({ id: r.id, code: r.asset_code ?? '—', name: r.display_name ?? 'Unnamed' }))
+  }
+
+  /**
+   * Apply an import plan.
+   *
+   * Everything lands in ONE transaction. A half-applied catalogue is the worst
+   * outcome available here: the person has no way to tell which half went in,
+   * and running the file again would double whatever did.
+   *
+   * Rows the planner could not decide are created as their OWN product, never
+   * merged into the thing they resemble. That is the same refusal the kit-list
+   * reader makes between C300 and C500, for the same reason.
+   */
+  applyImport(plan: ImportPlan): { products: number; units: number } {
+    let products = 0
+    let units = 0
+
+    this.db.transaction(() => {
+      const idFor = new Map<string, string>()
+
+      for (const { row, verdict } of plan.rows) {
+        if (verdict.kind === 'rejected') continue
+
+        let productId: string
+        if (verdict.kind === 'existing' && !verdict.productId.startsWith('file:')) {
+          productId = verdict.productId
+        } else {
+          const key = row.name.toLowerCase().trim()
+          const already = idFor.get(key)
+          if (already) {
+            productId = already
+          } else {
+            productId = `prod-imported-${slug(row.name)}-${products}`
+            this.db.exec(
+              `insert into products (id, org_id, display_name, category) values (?, ?, ?, ?)`,
+              [productId, this.seed.orgId, row.name, row.category ?? 'other'],
+            )
+            idFor.set(key, productId)
+            products++
+          }
+        }
+
+        const locationId = row.location ? this.locationIdFor(row.location) : null
+        for (let i = 1; i <= row.quantity; i++) {
+          const assetId = `asset-imported-${slug(row.name)}-${row.line}-${i}`
+          const code = row.code ? `${row.code}-${String(i).padStart(2, '0')}` : assetId
+          this.db.exec(
+            `insert into assets
+               (id, org_id, product_id, asset_code, serial_number, display_name,
+                presence, health, ownership, current_location_id, current_job_id, updated_at)
+             values (?, ?, ?, ?, ?, ?, 'here', 'ok', 'owned', ?, null, ?)`,
+            [
+              assetId, this.seed.orgId, productId, code,
+              // A serial belongs to ONE physical unit. Copying it onto every
+              // unit of a multi-quantity row would put the same serial on
+              // twelve batteries, which is worse than having none.
+              row.quantity === 1 ? row.serial : null,
+              row.name, locationId, new Date().toISOString(),
+            ],
+          )
+          units++
+        }
+      }
+    })
+
+    this.refreshCatalogue()
+    return { products, units }
+  }
+
+  /** A shelf by name, created on first sight so an import cannot lose one. */
+  private locationIdFor(name: string): string {
+    const existing = this.db.get<{ id: string }>(
+      `select id from locations where lower(name) = lower(?)`,
+      [name],
+    )
+    if (existing) return existing.id
+    const id = `loc-imported-${slug(name)}`
+    this.db.exec(
+      `insert into locations (id, org_id, name, kind, path, code) values (?, ?, ?, 'shelf', ?, ?)`,
+      [id, this.seed.orgId, name, name, name],
+    )
+    return id
+  }
+
+  /**
+   * Re-read the catalogue the kit-list matcher uses.
+   *
+   * Load-bearing: the whole point of the import is that a client's message is
+   * matched against the house's OWN names, and the matcher holds its list in
+   * memory. Without this the app would import four hundred products and go on
+   * answering enquiries from the demo's twenty-one.
+   */
+  private refreshCatalogue(): void {
+    this.catalogue = this.db
+      .all<{ id: string; display_name: string | null }>(
+        `select id, display_name from products order by display_name`,
+      )
+      .map((r) => ({ id: r.id, name: r.display_name ?? 'Unnamed' }))
   }
 
   /** Answer a pasted WhatsApp kit list against the demo catalogue. */
@@ -354,4 +453,9 @@ export class DemoStore {
     if (this.sessionJobId !== jobId || !this.session) return 0
     return this.session.scannedIds.length
   }
+}
+
+/** A safe, stable id fragment from a product name. */
+function slug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
 }

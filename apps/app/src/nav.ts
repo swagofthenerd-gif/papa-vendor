@@ -17,6 +17,7 @@ export type View =
   | { name: 'asset'; assetId: string }
   | { name: 'gear'; query?: string }             // search-first inventory
   | { name: 'enquiry' }                          // the pasted kit list
+  | { name: 'import' }                           // load the house's catalogue
   | { name: 'settings' }
 
 export type ScanMode = 'out' | 'in'
@@ -52,6 +53,8 @@ export function parseHash(hash: string): View {
     }
     case 'enquiry':
       return { name: 'enquiry' }
+    case 'import':
+      return { name: 'import' }
     case 'settings':
       return { name: 'settings' }
     default:
@@ -73,6 +76,8 @@ export function viewToHash(view: View): string {
       return view.query ? `#/gear?q=${encodeURIComponent(view.query)}` : '#/gear'
     case 'enquiry':
       return '#/enquiry'
+    case 'import':
+      return '#/import'
     case 'settings':
       return '#/settings'
   }

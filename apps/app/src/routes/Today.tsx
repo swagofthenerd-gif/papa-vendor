@@ -166,10 +166,10 @@ export function Today({
             <span className="quick-t">Just scan</span>
             <span className="quick-s">Where is this thing?</span>
           </button>
-          <button className="quick pressable" onClick={() => go({ name: 'scan', jobId: 'lookup', mode: 'in' })}>
-            <Icon name="undo" size={20} />
-            <span className="quick-t">Book something back in</span>
-            <span className="quick-s">Coming off a truck</span>
+          <button className="quick pressable" onClick={() => go({ name: 'import' })}>
+            <Icon name="scroll" size={20} />
+            <span className="quick-t">Load your gear</span>
+            <span className="quick-s">Paste a list from Excel</span>
           </button>
           <button className="quick pressable" onClick={() => go({ name: 'enquiry' })}>
             <Icon name="chat" size={20} />

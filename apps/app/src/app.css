@@ -820,3 +820,18 @@ body {
   margin: var(--sp-2) 0 0;
   color: var(--status-attention); font-size: var(--fs-xs); font-weight: 700;
 }
+
+/* ---- catalogue import -------------------------------------- */
+.import-lead { margin: 0; color: var(--muted); font-size: var(--fs-sm); font-weight: 600; line-height: 1.5; }
+.map-grid { display: flex; flex-direction: column; gap: var(--sp-2); }
+.map-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.map-label { font-size: var(--fs-sm); font-weight: 700; }
+.map-req { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; }
+.map-select {
+  flex: 1; max-width: 60%; min-height: var(--tap);
+  padding: 0 var(--sp-3);
+  border: var(--line-w) solid var(--line); border-radius: var(--r-sm);
+  background: var(--card-2); color: var(--ink);
+  font: inherit; font-size: var(--fs-sm); font-weight: 600;
+}
+.import-problems { margin-top: var(--sp-3); }
