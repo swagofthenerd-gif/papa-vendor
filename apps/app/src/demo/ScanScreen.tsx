@@ -89,10 +89,12 @@ export function ScanScreen({
     )
   }, [])
 
+  // Finishing opens the handover summary rather than dropping the tech back on
+  // the board. The session stays open behind it: "keep scanning" has to be one
+  // tap, because a case turning up late is the normal case, not the exception.
   const onFinish = useCallback(() => {
-    store.endSession()
-    go({ name: 'jobs' })
-  }, [store])
+    go({ name: 'session', sessionId: jobId })
+  }, [jobId])
 
   useEffect(() => {
     document.title = job ? `${job.label} — Papa Vendor` : 'Papa Vendor'

@@ -15,7 +15,8 @@ export type View =
   | { name: 'scan'; jobId: string; mode: ScanMode }
   | { name: 'session'; sessionId: string }       // the reconciliation card
   | { name: 'asset'; assetId: string }
-  | { name: 'search' }
+  | { name: 'gear'; query?: string }             // search-first inventory
+  | { name: 'enquiry' }                          // the pasted kit list
   | { name: 'settings' }
 
 export type ScanMode = 'out' | 'in'
@@ -41,8 +42,16 @@ export function parseHash(hash: string): View {
       return parts[1] ? { name: 'session', sessionId: parts[1] } : { name: 'jobs' }
     case 'asset':
       return parts[1] ? { name: 'asset', assetId: parts[1] } : { name: 'jobs' }
-    case 'search':
-      return { name: 'search' }
+    case 'gear': {
+      // The key is omitted rather than set to undefined when there is no
+      // query, so a parsed view compares equal to the literal that produced
+      // it. `{query: undefined}` and `{}` behave the same everywhere except
+      // in a comparison, which is exactly where a routing bug hides.
+      const q = params.get('q')
+      return q ? { name: 'gear', query: q } : { name: 'gear' }
+    }
+    case 'enquiry':
+      return { name: 'enquiry' }
     case 'settings':
       return { name: 'settings' }
     default:
@@ -60,8 +69,10 @@ export function viewToHash(view: View): string {
       return `#/session/${view.sessionId}`
     case 'asset':
       return `#/asset/${view.assetId}`
-    case 'search':
-      return '#/search'
+    case 'gear':
+      return view.query ? `#/gear?q=${encodeURIComponent(view.query)}` : '#/gear'
+    case 'enquiry':
+      return '#/enquiry'
     case 'settings':
       return '#/settings'
   }

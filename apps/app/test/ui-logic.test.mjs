@@ -39,11 +39,39 @@ describe('routing', () => {
       { name: 'scan', jobId: 'j1', mode: 'in' },
       { name: 'session', sessionId: 's1' },
       { name: 'asset', assetId: 'a1' },
-      { name: 'search' },
+      { name: 'gear' },
+      { name: 'gear', query: 'attention' },
+      // A code with a space and a slash in it. The gear query goes into the
+      // hash, so anything that does not survive encoding lands the person on
+      // a different screen than the one they linked to.
+      { name: 'gear', query: 'FX9 / 01' },
+      { name: 'enquiry' },
       { name: 'settings' },
     ]
     for (const v of views) {
       assert.deepEqual(parseHash(viewToHash(v)), v, `round-trip failed for ${v.name}`)
+    }
+  })
+
+  test('every view name has a hash, and every hash has a view', () => {
+    // viewToHash returning undefined for a view it forgot is how the last
+    // rename broke routing: the switch simply fell through and the caller
+    // navigated to "undefined". Any new route added to the View union without
+    // a case here fails this rather than at runtime in a warehouse.
+    const names = ['jobs', 'scan', 'session', 'asset', 'gear', 'enquiry', 'settings']
+    const sample = {
+      jobs: { name: 'jobs' },
+      scan: { name: 'scan', jobId: 'j', mode: 'out' },
+      session: { name: 'session', sessionId: 's' },
+      asset: { name: 'asset', assetId: 'a' },
+      gear: { name: 'gear' },
+      enquiry: { name: 'enquiry' },
+      settings: { name: 'settings' },
+    }
+    for (const n of names) {
+      const hash = viewToHash(sample[n])
+      assert.equal(typeof hash, 'string', `${n} has no hash`)
+      assert.equal(parseHash(hash).name, n, `${n} does not parse back`)
     }
   })
 

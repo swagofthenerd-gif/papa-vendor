@@ -66,11 +66,7 @@ export function Enquiry({
 
   if (!summary) {
     return (
-      <div className="screen enquiry-screen">
-        <header className="screen-head">
-          <span className="screen-title">Check a kit list</span>
-        </header>
-
+      <div className="enquiry-screen">
         <div className="paste-zone">
           <textarea
             className="paste-box"
@@ -104,13 +100,14 @@ export function Enquiry({
   const available = summary.lines.length - summary.needsAttention
 
   return (
-    <div className="screen enquiry-screen">
-      <header className="screen-head">
-        <span className="screen-title">Kit list</span>
+    <div className="enquiry-screen">
+      {/* The Shell owns the title; this keeps only the control that belongs
+          to the list itself. */}
+      <div className="enquiry-bar">
         <button className="btn btn-ghost btn-sm" onClick={() => onPaste('')}>
           New list
         </button>
-      </header>
+      </div>
 
       {/* The answer before the detail. The owner is deciding whether to say
           yes, not auditing rows. */}

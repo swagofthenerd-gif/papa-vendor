@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
-import { Icon } from '@papa/icons'
-import { go } from '../nav.ts'
 import type { DemoStore } from './store.ts'
 
 /**
@@ -43,17 +41,7 @@ export function Tags({ store }: { store: DemoStore }) {
   }
 
   return (
-    <div className="screen tags-screen">
-      <header className="screen-head">
-        <div>
-          <h1>Labels</h1>
-          <p className="who">{store.seed.tags.length} tags · print or open on another screen</p>
-        </div>
-        <button className="icon-btn" onClick={() => go({ name: 'jobs' })} aria-label="Back to today">
-          <Icon name="x" size={22} />
-        </button>
-      </header>
-
+    <div className="tags-screen">
       {[...byShelf.entries()].map(([shelf, items]) => (
         <section key={shelf} className="tag-shelf">
           <h2 className="tag-shelf-name">{shelf}</h2>

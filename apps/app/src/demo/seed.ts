@@ -139,7 +139,14 @@ export interface DemoSeed {
   orgId: string
   userName: string
   tags: DemoTag[]
-  jobs: { id: string; label: string; contact: string; departsAt: string; expected: string[] }[]
+  jobs: {
+    id: string
+    label: string
+    contact: string
+    departsAt: string
+    expectedBack: string
+    expected: string[]
+  }[]
 }
 
 /**
@@ -243,6 +250,7 @@ export function seedDemo(db: SqlDriver): DemoSeed {
       label: j.label,
       contact: j.contact,
       departsAt: j.departsAt,
+      expectedBack: j.expectedBack,
       expected: expectedFor(j),
     })),
   }

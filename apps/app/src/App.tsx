@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react'
-import { IconSketchFilter } from '@papa/icons'
+import { Icon, IconSketchFilter } from '@papa/icons'
 import { parseHash, go, type View } from './nav.ts'
-import { Jobs, type JobRow } from './routes/Jobs.tsx'
+import { Shell } from './components/Shell.tsx'
 import { SyncStrip } from './components/SyncStrip.tsx'
+import { Today } from './routes/Today.tsx'
+import { Gear, type GearFilter } from './routes/Gear.tsx'
+import { Asset } from './routes/Asset.tsx'
 import { DemoStore } from './demo/store.ts'
 import { ScanScreen } from './demo/ScanScreen.tsx'
+import { SessionScreen } from './demo/SessionScreen.tsx'
 import { EnquiryScreen } from './demo/EnquiryScreen.tsx'
 import { Tags } from './demo/Tags.tsx'
 
@@ -16,6 +20,10 @@ import { Tags } from './demo/Tags.tsx'
  * open-uncertainty list says to revisit at the end of phase 2. Route-level
  * code splitting gives most of the benefit at none of the cost, and the split
  * can happen when the duplication is MEASURED rather than predicted.
+ *
+ * THE SCAN SCREEN IS THE ONE ROUTE WITH NO CHROME. It takes the whole
+ * viewport: a tab bar there would eat the camera's share of the height and put
+ * a navigation target under a thumb that is holding a case.
  *
  * DEMO DATA, NO SERVER. There is no login yet, so the shell opens a local
  * database seeded with a plausible rental house instead of syncing one. The
@@ -49,94 +57,135 @@ export function App() {
       {/* Mounted ONCE at the root. Without it every glyph renders unfiltered —
           which looks fine alone and obviously wrong beside one that is not. */}
       <IconSketchFilter />
-      {failed ? <LoadFailed detail={failed} /> : store ? <Routed view={view} store={store} /> : <Booting />}
+      {failed ? (
+        <Boot title="The local database would not start." detail={failed} />
+      ) : store ? (
+        <Routed view={view} store={store} />
+      ) : (
+        <Boot title="Opening the warehouse…" />
+      )}
     </>
   )
 }
 
-function Booting() {
+function Boot({ title, detail }: { title: string; detail?: string }) {
   return (
     <div className="screen">
       <div className="empty">
-        <p>Loading the demo warehouse…</p>
-      </div>
-    </div>
-  )
-}
-
-function LoadFailed({ detail }: { detail: string }) {
-  return (
-    <div className="screen">
-      <div className="empty">
-        <p>The local database would not start.</p>
-        <p className="muted">{detail}</p>
+        <Icon name="warehouse" size={40} />
+        <p>{title}</p>
+        {detail ? <p className="muted">{detail}</p> : null}
       </div>
     </div>
   )
 }
 
 function Routed({ view, store }: { view: View; store: DemoStore }) {
+  // The scanner owns the whole viewport — no top bar, no tab bar.
+  if (view.name === 'scan') {
+    return <ScanScreen store={store} jobId={view.jobId} mode={view.mode} />
+  }
+
   switch (view.name) {
-    case 'jobs':
-      return <Today store={store} />
-    case 'scan':
-      return <ScanScreen store={store} jobId={view.jobId} mode={view.mode} />
-    case 'search':
-      return <EnquiryScreen store={store} />
-    case 'settings':
-      return <Tags store={store} />
-    default:
-      // Every other route is wired in the next phase. Failing soft here rather
-      // than throwing keeps a stale deep link from white-screening a phone.
+    case 'jobs': {
+      const counts = store.outboxCounts()
       return (
-        <div className="screen">
-          <div className="empty">
-            <p>Not built yet.</p>
-            <p className="muted">{view.name}</p>
-          </div>
-        </div>
+        <Shell
+          view={view}
+          title="Today"
+          subtitle={
+            <>
+              <Icon name="user" size={13} /> {store.seed.userName}
+            </>
+          }
+          action={
+            <button
+              className="icon-btn"
+              onClick={() => go({ name: 'gear' })}
+              aria-label="Search the gear"
+            >
+              <Icon name="search" size={22} />
+            </button>
+          }
+        >
+          <SyncStrip
+            // Always "offline": there is no server in the demo, so pretending
+            // to be connected would hide the one thing the strip exists for.
+            online={false}
+            pending={counts.pending}
+            oldestAgeMs={counts.oldestAgeMs}
+            failures={counts.failures}
+            onOpenFailures={() => {}}
+          />
+          <Today
+            jobs={store.jobs().map((j) => ({
+              id: j.id,
+              label: j.label,
+              contact: j.contact,
+              expectedBack: j.expectedBack,
+              expected: j.expected.length,
+              scanned: store.scannedCount(j.id),
+              departsAt: j.departsAt,
+            }))}
+            stats={store.stats()}
+            onOpenGear={(f) => go({ name: 'gear', query: f === 'all' ? undefined : f })}
+          />
+        </Shell>
+      )
+    }
+
+    case 'gear': {
+      // The Today counters deep-link here by filter rather than by text, so
+      // "4 need a look" lands on those four instead of searching for the word.
+      const asFilter = (['here', 'out', 'attention'] as const).find((f) => f === view.query)
+      return (
+        <Shell view={view} title="Gear" subtitle="Everything the house owns">
+          <Gear
+            rows={store.gearRows()}
+            initialQuery={asFilter ? '' : (view.query ?? '')}
+            initialFilter={(asFilter ?? 'all') as GearFilter}
+          />
+        </Shell>
+      )
+    }
+
+    case 'asset': {
+      const asset = store.assetView(view.assetId)
+      return (
+        <Shell
+          view={view}
+          title={asset?.name ?? 'Item'}
+          subtitle={asset?.code}
+          action={
+            <button className="icon-btn" onClick={() => go({ name: 'gear' })} aria-label="Back to the gear">
+              <Icon name="chevron-left" size={22} />
+            </button>
+          }
+        >
+          <Asset asset={asset} />
+        </Shell>
+      )
+    }
+
+    case 'session':
+      return <SessionScreen store={store} jobId={view.sessionId} />
+
+    case 'enquiry':
+      return (
+        <Shell view={view} title="Kit list" subtitle="Paste what the client sent">
+          <EnquiryScreen store={store} />
+        </Shell>
+      )
+
+    case 'settings':
+      return (
+        <Shell
+          view={view}
+          title="Labels"
+          subtitle={`${store.seed.tags.length} tags · print, or open on another screen`}
+        >
+          <Tags store={store} />
+        </Shell>
       )
   }
-}
-
-/**
- * Today's jobs, plus the two demo entry points that have no home in the real
- * navigation yet — the kit-list reader and the labels to scan.
- */
-function Today({ store }: { store: DemoStore }) {
-  const counts = store.outboxCounts()
-  const jobs: JobRow[] = store.jobs().map((j) => ({
-    id: j.id,
-    label: j.label,
-    contact: j.contact,
-    expectedBack: null,
-    expected: j.expected.length,
-    scanned: store.scannedCount(j.id),
-    departsAt: j.departsAt,
-  }))
-
-  return (
-    <>
-      <SyncStrip
-        // Always "offline": there is no server in the demo, so pretending to
-        // be connected would hide the one thing the strip exists to show.
-        online={false}
-        pending={counts.pending}
-        oldestAgeMs={counts.oldestAgeMs}
-        failures={counts.failures}
-        onOpenFailures={() => {}}
-      />
-      {/* A job here starts the way it starts in real life: a client pastes a
-          kit list into WhatsApp. The search icon in the header reaches the
-          same screen. */}
-      <Jobs jobs={jobs} userName={store.seed.userName} onNewJob={() => go({ name: 'search' })} />
-      <nav className="demo-bar">
-        {/* Demo-only. The real product prints these onto labels and sticks
-            them on the gear, so there is nothing to reach in the app. */}
-        <button className="btn btn-ghost" onClick={() => go({ name: 'settings' })}>
-          Labels to scan
-        </button>
-      </nav>
-    </>
-  )
 }
