@@ -3,6 +3,8 @@ import { go } from '../nav.ts'
 import { SectionHead } from '../components/Shell.tsx'
 import { StatusBadge } from '../components/StatusBadge.tsx'
 import { statusSentence, type Health, type Presence } from '../status.ts'
+import { PhotoCompare } from '../components/PhotoCompare.tsx'
+import type { PhotoPair } from '@papa/core'
 
 /**
  * One item.
@@ -57,7 +59,7 @@ const EVENT_LABEL: Record<string, string> = {
   move: 'Moved',
 }
 
-export function Asset({ asset }: { asset: AssetView | null }) {
+export function Asset({ asset, photoPairs }: { asset: AssetView | null; photoPairs: PhotoPair[] }) {
   if (!asset) {
     return (
       <div className="empty">
@@ -107,6 +109,19 @@ export function Asset({ asset }: { asset: AssetView | null }) {
           <dd className="code">{asset.tagCode ? `${asset.tagCode.slice(0, 8)}…` : 'no tag'}</dd>
         </div>
       </dl>
+
+      <section className="section">
+        <SectionHead
+          icon="camera"
+          title="Condition"
+          sub={
+            photoPairs.length === 0
+              ? 'Nothing photographed'
+              : 'What it looked like going out, beside how it came back'
+          }
+        />
+        <PhotoCompare pairs={photoPairs} />
+      </section>
 
       <section className="section">
         <SectionHead

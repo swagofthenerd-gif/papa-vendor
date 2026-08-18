@@ -747,3 +747,76 @@ body {
 
 .enquiry-foot { display: flex; gap: var(--sp-2); margin-top: var(--sp-5); }
 .enquiry-foot .btn { flex: 1; }
+
+/* ---- condition photos -------------------------------------- */
+/* The camera lives ON the row, so photographing is a separate act on one item
+   rather than a step inside the scan loop. */
+.row-photo {
+  display: inline-flex; align-items: center; gap: 4px;
+  min-width: 40px; min-height: 40px; padding: 0 8px;
+  border: var(--line-w) solid var(--line); border-radius: var(--r-sm);
+  background: transparent; color: var(--muted); cursor: pointer;
+}
+.row-photo.has-photo { border-color: var(--accent); color: var(--accent); }
+.row-photo-n { font-size: var(--fs-xs); font-weight: 800; }
+
+.photo-sheet {
+  display: flex; flex-direction: column; gap: var(--sp-3);
+  width: 100%; max-height: 92dvh;
+  padding: var(--sp-4) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom));
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  background: var(--card); color: var(--ink);
+}
+.photo-side { margin: 2px 0 0; color: var(--muted); font-size: var(--fs-sm); font-weight: 600; }
+.photo-view {
+  position: relative; overflow: hidden;
+  height: 46dvh;
+  border: 2px solid var(--accent); border-radius: var(--r-md);
+  background: #000;
+}
+.photo-foot { margin: 0; font-size: var(--fs-xs); font-weight: 600; text-align: center; }
+
+/* A refusal, not a failure. It stays until dismissed, because the person has
+   to do something about it and a toast that vanishes is not telling them. */
+.blocker {
+  position: fixed; left: var(--sp-4); right: var(--sp-4);
+  bottom: calc(var(--sp-4) + env(safe-area-inset-bottom));
+  z-index: 30;
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3);
+  border-radius: var(--r-sm);
+  background: var(--status-attention); color: var(--status-ink);
+  box-shadow: var(--shadow-lg);
+}
+.blocker p { margin: 0; font-size: var(--fs-sm); font-weight: 700; }
+.blocker .btn { flex: none; background: rgb(0 0 0 / 0.18); border-color: transparent; color: inherit; }
+
+/* Side by side, same size, no effects. Anything that changes what is on
+   screen invites "you're showing me a trick" from the person being asked
+   to pay. */
+.compare-list { list-style: none; margin: 0; padding: 0; }
+.compare { margin-top: var(--sp-3); }
+.compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.compare-half { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.compare-label {
+  color: var(--muted); font-size: var(--fs-xs); font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.compare-img {
+  width: 100%; aspect-ratio: 4 / 3; object-fit: cover;
+  border: var(--line-w) solid var(--line); border-radius: var(--r-sm);
+  background: var(--card-2);
+}
+.compare-meta { margin: 0; color: var(--muted); font-size: var(--fs-xs); font-weight: 600; }
+.compare-clock { opacity: 0.8; }
+.compare-pending { display: inline-flex; align-items: center; gap: 4px; color: var(--status-attention); }
+.compare-gap {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  aspect-ratio: 4 / 3; padding: var(--sp-3);
+  border: var(--line-w) dashed var(--line-strong); border-radius: var(--r-sm);
+  color: var(--muted); font-size: var(--fs-xs); font-weight: 700; text-align: center;
+}
+.compare-note {
+  margin: var(--sp-2) 0 0;
+  color: var(--status-attention); font-size: var(--fs-xs); font-weight: 700;
+}

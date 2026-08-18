@@ -127,6 +127,31 @@ const JOBS: JobSpec[] = [
   },
 ]
 
+/**
+ * Two stand-in condition photos, so the out/in comparison is visible before
+ * anyone has a working camera in front of them.
+ *
+ * Drawn as SVG rather than shipped as a JPEG for two reasons: the seed module
+ * is imported by the test suite under plain Node, where there is no canvas and
+ * no image decoding, and a few hundred bytes of markup keeps the bundle honest
+ * where a pair of real photographs would add half a megabyte.
+ *
+ * They are deliberately, visibly diagrams. A demo that ships fake PHOTOGRAPHS
+ * of gear invites someone to mistake them for a real record.
+ */
+function conditionPlate(caption: string, mark: boolean): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480">
+<rect width="640" height="480" fill="#2b2724"/>
+<rect x="90" y="130" width="460" height="230" rx="18" fill="#3d3733" stroke="#5a524c" stroke-width="3"/>
+<circle cx="250" cy="245" r="72" fill="#232020" stroke="#6b625b" stroke-width="6"/>
+<circle cx="250" cy="245" r="42" fill="#15130f"/>
+<rect x="360" y="190" width="150" height="110" rx="8" fill="#332e2a" stroke="#5a524c" stroke-width="2"/>
+${mark ? '<path d="M372 205 L498 292" stroke="#e2725b" stroke-width="7" stroke-linecap="round"/>' : ''}
+<text x="320" y="424" font-family="monospace" font-size="26" fill="#8a807a" text-anchor="middle">${caption}</text>
+</svg>`
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+}
+
 export interface DemoTag {
   tagCode: string
   assetId: string
@@ -229,6 +254,22 @@ export function seedDemo(db: SqlDriver): DemoSeed {
 
     // One light in for repair, so 'available' is not trivially everything.
     db.exec(`update assets set health = 'faulty' where id = ?`, ['asset-aputure600-4'])
+
+    // A finished dispute, waiting on the asset page: one camera photographed
+    // going out clean and coming back marked. Without this the best feature in
+    // the product is an empty state until someone finds a working camera.
+    const photos: [string, 'out' | 'in', number, boolean, string][] = [
+      ['demo-photo-out', 'out', Date.parse('2026-08-14T06:20:00Z'), false, 'DEMO PLATE - leaving the warehouse'],
+      ['demo-photo-in', 'in', Date.parse('2026-08-17T19:05:00Z'), true, 'DEMO PLATE - back from the shoot'],
+    ]
+    for (const [id, side, at, mark, caption] of photos) {
+      db.exec(
+        `insert into condition_photos
+           (id, asset_id, job_id, session_id, side, captured_at, sha256, bytes, local_uri, note, uploaded)
+         values (?, 'asset-fx9-1', 'job-shan', null, ?, ?, null, 0, ?, null, 1)`,
+        [id, side, at, conditionPlate(caption, mark)],
+      )
+    }
   })
 
   const expectedFor = (j: JobSpec): string[] => {

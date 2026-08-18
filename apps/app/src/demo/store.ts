@@ -1,12 +1,16 @@
 import {
   LOCAL_SCHEMA,
+  PhotoStore,
   ScanSession,
+  pairBySide,
   buildPullList,
   checkAvailability,
   matchKitList,
   parseKitList,
   type AvailabilitySummary,
   type CatalogueItem,
+  type CaptureResult,
+  type PhotoPair,
   type MatchedLine,
   type PullListView,
   type SqlDriver,
@@ -36,11 +40,16 @@ export class DemoStore {
 
   private session: ScanSession | null = null
   private sessionJobId: string | null = null
+  readonly photos: PhotoStore
 
   private constructor(db: SqlDriver, seed: DemoSeed) {
     this.db = db
     this.seed = seed
     this.catalogue = demoCatalogue()
+    // A deliberately small budget in the demo — a few megabytes rather than
+    // 512 — so the "device full" refusal is reachable by a person trying the
+    // app for ten minutes, instead of being a branch nobody ever sees.
+    this.photos = new PhotoStore(db, { budgetBytes: 6 * 1024 * 1024 })
   }
 
   static async open(): Promise<DemoStore> {
@@ -88,6 +97,40 @@ export class DemoStore {
     if (!job) return null
     const session = this.sessionFor(jobId)
     return buildPullList(this.db, job.expected, session.scannedIds)
+  }
+
+  /**
+   * Photograph an item's condition.
+   *
+   * Returns the engine's own result, refusal included, so the screen can say
+   * how many photos are waiting rather than just failing.
+   */
+  capturePhoto(input: {
+    assetId: string
+    side: 'out' | 'in'
+    dataUri: string
+    bytes: number
+    sha256: string
+  }): CaptureResult {
+    return this.photos.capture({
+      assetId: input.assetId,
+      jobId: this.sessionJobId,
+      sessionId: this.session?.id ?? null,
+      side: input.side,
+      localUri: input.dataUri,
+      bytes: input.bytes,
+      sha256: input.sha256,
+    })
+  }
+
+  /** The out/in comparison for one item. */
+  photoPairs(assetId: string): PhotoPair[] {
+    return pairBySide(this.photos.forAsset(assetId))
+  }
+
+  /** How much evidence exists only on this device. */
+  photoBacklog(): { count: number; bytes: number } {
+    return this.photos.pendingStats()
   }
 
   /** Everything on the shelf, for the manual "can't scan it" path. */

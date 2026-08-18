@@ -3,6 +3,7 @@ import { FEEDBACK, type ScanResult } from '@papa/core'
 import { Scan } from '../routes/Scan.tsx'
 import { QrCamera } from '../camera/QrCamera.tsx'
 import { ManualAdd } from './ManualAdd.tsx'
+import { PhotoCapture, type CapturedPhoto } from '../camera/PhotoCapture.tsx'
 import { go, type ScanMode } from '../nav.ts'
 import type { ScanRow } from '../scan-row.ts'
 import type { DemoStore } from './store.ts'
@@ -31,6 +32,9 @@ export function ScanScreen({
   const [rows, setRows] = useState<ScanRow[]>([])
   const [torchOn, setTorchOn] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
+  const [photoFor, setPhotoFor] = useState<{ assetId: string; name: string } | null>(null)
+  const [photoCounts, setPhotoCounts] = useState<Record<string, number>>({})
+  const [blocked, setBlocked] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
   const lastSeen = useRef(new Map<string, number>())
 
@@ -92,6 +96,38 @@ export function ScanScreen({
   // Finishing opens the handover summary rather than dropping the tech back on
   // the board. The session stays open behind it: "keep scanning" has to be one
   // tap, because a case turning up late is the normal case, not the exception.
+  const onPhotoTaken = useCallback(
+    (shot: CapturedPhoto) => {
+      const target = photoFor
+      if (!target) return
+      const result = store.capturePhoto({
+        assetId: target.assetId,
+        side: mode === 'out' ? 'out' : 'in',
+        dataUri: shot.dataUri,
+        bytes: shot.bytes,
+        sha256: shot.sha256,
+      })
+
+      if (!result.ok) {
+        // Refused, not failed. Nothing was deleted to make room, and the
+        // message says what to do about it rather than just that it broke.
+        setBlocked(
+          `Device full — ${result.waiting} photo${result.waiting === 1 ? '' : 's'} still waiting to send. ` +
+            'Nothing has been deleted. Get this phone online, then try again.',
+        )
+        setPhotoFor(null)
+        return
+      }
+
+      setPhotoCounts((prev) => ({
+        ...prev,
+        [target.assetId]: (prev[target.assetId] ?? 0) + 1,
+      }))
+      setPhotoFor(null)
+    },
+    [photoFor, store, mode],
+  )
+
   const onFinish = useCallback(() => {
     go({ name: 'session', sessionId: jobId })
   }, [jobId])
@@ -112,9 +148,33 @@ export function ScanScreen({
         onFinish={onFinish}
         onManualAdd={() => setManualOpen(true)}
         onResolveRow={onResolveRow}
+        onPhoto={(assetId, name) => setPhotoFor({ assetId, name })}
+        photoCounts={photoCounts}
         snapshotAge={null}
-        cameraSlot={<QrCamera torchOn={torchOn} onDecode={onDecode} paused={manualOpen} />}
+        cameraSlot={
+          <QrCamera
+            torchOn={torchOn}
+            onDecode={onDecode}
+            paused={manualOpen || photoFor !== null}
+          />
+        }
       />
+      {blocked ? (
+        <div className="blocker" role="alert">
+          <p>{blocked}</p>
+          <button className="btn btn-ghost btn-sm" onClick={() => setBlocked(null)}>
+            Got it
+          </button>
+        </div>
+      ) : null}
+      {photoFor ? (
+        <PhotoCapture
+          itemName={photoFor.name}
+          side={mode === 'out' ? 'out' : 'in'}
+          onCaptured={onPhotoTaken}
+          onClose={() => setPhotoFor(null)}
+        />
+      ) : null}
       {manualOpen ? (
         <ManualAdd
           store={store}

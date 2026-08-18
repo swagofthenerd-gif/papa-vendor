@@ -49,10 +49,14 @@ const ScanRowItem = memo(function ScanRowItem({
   row,
   isPulsing,
   onResolve,
+  onPhoto,
+  photoCount,
 }: {
   row: ScanRow
   isPulsing: boolean
   onResolve: (key: string, action: 'add' | 'not-this-job') => void
+  onPhoto: (assetId: string, name: string) => void
+  photoCount: number
 }) {
   return (
     <li data-asset={row.assetId ?? ''} className={scanRowClass(row.outcome, isPulsing)}>
@@ -61,6 +65,21 @@ const ScanRowItem = memo(function ScanRowItem({
         {row.message ? <span className="row-note">{row.message}</span> : null}
       </span>
       <span className="row-code code">{row.assetCode ?? '—'}</span>
+
+      {/* The camera on the row, never in the scan path. Photographing is a
+          separate act on the one item that looked wrong — a tech doing 300
+          scans who has to dismiss a prompt 300 times stops scanning by
+          Thursday. */}
+      {row.assetId ? (
+        <button
+          className={`row-photo${photoCount > 0 ? ' has-photo' : ''}`}
+          onClick={() => onPhoto(row.assetId as string, row.displayName ?? 'this item')}
+          aria-label={`Photograph ${row.displayName ?? 'this item'}`}
+        >
+          <Icon name="camera" size={18} />
+          {photoCount > 0 ? <span className="row-photo-n code">{photoCount}</span> : null}
+        </button>
+      ) : null}
 
       {/* Two inline actions, ON the row, NEITHER REQUIRED. Nothing in the scan
           loop is a modal or a blocking toast: the line does not stop. An
@@ -78,7 +97,7 @@ const ScanRowItem = memo(function ScanRowItem({
       ) : null}
     </li>
   )
-}, (prev, next) => !scanRowChanged(prev, next))
+}, (prev, next) => !scanRowChanged(prev, next) && prev.photoCount === next.photoCount)
 
 export function Scan({
   jobLabel,
@@ -90,6 +109,8 @@ export function Scan({
   onFinish,
   onManualAdd,
   onResolveRow,
+  onPhoto,
+  photoCounts,
   snapshotAge,
   cameraSlot,
 }: {
@@ -102,6 +123,10 @@ export function Scan({
   onFinish: () => void
   onManualAdd: () => void
   onResolveRow: (key: string, action: 'add' | 'not-this-job') => void
+  /** Open the camera for one item's condition photo. */
+  onPhoto: (assetId: string, name: string) => void
+  /** How many condition photos each asset already has this session. */
+  photoCounts: Record<string, number>
   /** Human age of the pull list, e.g. "04:12". Null when live. */
   snapshotAge: string | null
   /** The camera preview, injected so this component stays testable. */
@@ -118,6 +143,16 @@ export function Scan({
   resolveRef.current = onResolveRow
   const handleResolve = useCallback(
     (key: string, action: 'add' | 'not-this-job') => resolveRef.current(key, action),
+    [],
+  )
+
+  // Held in a ref for the same reason as onResolveRow: a caller that rebuilds
+  // this callback each render would defeat the row memo, and the memo is what
+  // keeps scan 300 from reconciling 300 rows inside the sub-100ms budget.
+  const photoRef = useRef(onPhoto)
+  photoRef.current = onPhoto
+  const handlePhoto = useCallback(
+    (assetId: string, name: string) => photoRef.current(assetId, name),
     [],
   )
 
@@ -194,6 +229,8 @@ export function Scan({
             row={row}
             isPulsing={pulseKey !== null && row.assetId === pulseKey}
             onResolve={handleResolve}
+            onPhoto={handlePhoto}
+            photoCount={row.assetId ? (photoCounts[row.assetId] ?? 0) : 0}
           />
         ))}
       </ul>

@@ -162,7 +162,7 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
             </button>
           }
         >
-          <Asset asset={asset} />
+          <Asset asset={asset} photoPairs={store.photoPairs(view.assetId)} />
         </Shell>
       )
     }

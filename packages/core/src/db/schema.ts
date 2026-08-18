@@ -135,6 +135,37 @@ create table if not exists pending_uploads (
   created_at  integer not null
 );
 
+/*
+ * Condition photos — the evidence.
+ *
+ * The row is written the moment the shutter fires and is NEVER deleted by the
+ * app. Bytes are queued separately in pending_uploads, because base64 in the
+ * JSON outbox would OOM a 2GB Android inside twenty photos.
+ *
+ * side is what makes the pair: the same asset photographed on the way out and
+ * on the way back is the entire commercial argument of this product, and it
+ * only works if the two halves can find each other without a server.
+ *
+ * captured_at is the DEVICE's clock and is labelled as such wherever it is
+ * shown. The server stamps its own received_at on arrival; until then there is
+ * exactly one timestamp here and it is the untrusted one.
+ */
+create table if not exists condition_photos (
+  id          text primary key,
+  asset_id    text not null,
+  job_id      text,
+  session_id  text,
+  side        text not null,          -- 'out' | 'in'
+  captured_at integer not null,       -- device clock, epoch ms
+  sha256      text,
+  bytes       integer not null default 0,
+  local_uri   text not null,
+  note        text,
+  uploaded    integer not null default 0
+);
+create index if not exists condition_photos_asset_idx on condition_photos (asset_id, side);
+create index if not exists condition_photos_session_idx on condition_photos (session_id);
+
 create table if not exists sync_meta (
   key   text primary key,
   value text
@@ -142,7 +173,15 @@ create table if not exists sync_meta (
 `
 
 /** Device-only tables, i.e. what a wipe would destroy irrecoverably. */
-export const DEVICE_ONLY_TABLES = ['outbox', 'pending_uploads', 'sync_meta'] as const
+export const DEVICE_ONLY_TABLES = [
+  'outbox',
+  'pending_uploads',
+  // Photos belong here, not with the mirrors: the row and its bytes exist
+  // ONLY on the device until an upload succeeds. A wipe destroys the one copy
+  // of the evidence, which is why nothing in the app ever deletes one.
+  'condition_photos',
+  'sync_meta',
+] as const
 
 /** Tables sync replaces wholesale. Safe to drop and re-seed at any time. */
 export const MIRROR_TABLES = ['assets', 'asset_tags', 'locations', 'jobs', 'products'] as const
