@@ -67,6 +67,29 @@ create table if not exists asset_tags (
 );
 create index if not exists asset_tags_asset_idx on asset_tags (asset_id);
 
+/*
+ * What is inside what.
+ *
+ * permanent - welded to its parent. An FX9 handle genuinely cannot leave
+ *             without the body, so scanning the body may record it too.
+ * packed    - currently living in this case, expected back in it.
+ *
+ * THAT DISTINCTION IS NOT COSMETIC. A case scan may emit implied events for
+ * permanent children ONLY. For packed children it must open a MANIFEST of
+ * unconfirmed rows, because "packed" means "we believe this is in there", and
+ * turning that belief into a recorded fact with a timestamp and an actor
+ * fabricates evidence against a client who is right: a plate pulled on Tuesday
+ * and never scanned back would be recorded as checked out to today's job, by
+ * name, with a time.
+ */
+create table if not exists asset_containment (
+  parent_asset_id text not null,
+  child_asset_id  text not null,
+  kind            text not null,
+  primary key (parent_asset_id, child_asset_id)
+);
+create index if not exists containment_child_idx on asset_containment (child_asset_id);
+
 create table if not exists locations (
   id text primary key, org_id text, name text, kind text, path text, code text
 );
@@ -184,4 +207,6 @@ export const DEVICE_ONLY_TABLES = [
 ] as const
 
 /** Tables sync replaces wholesale. Safe to drop and re-seed at any time. */
-export const MIRROR_TABLES = ['assets', 'asset_tags', 'locations', 'jobs', 'products'] as const
+export const MIRROR_TABLES = [
+  'assets', 'asset_tags', 'asset_containment', 'locations', 'jobs', 'products',
+] as const

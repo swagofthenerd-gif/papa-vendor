@@ -4,6 +4,7 @@ import { Scan } from '../routes/Scan.tsx'
 import { QrCamera } from '../camera/QrCamera.tsx'
 import { ManualAdd } from './ManualAdd.tsx'
 import { PhotoCapture, type CapturedPhoto } from '../camera/PhotoCapture.tsx'
+import { CaseManifestSheet } from './CaseManifest.tsx'
 import { go, type ScanMode } from '../nav.ts'
 import type { ScanRow } from '../scan-row.ts'
 import type { DemoStore } from './store.ts'
@@ -34,6 +35,7 @@ export function ScanScreen({
   const [manualOpen, setManualOpen] = useState(false)
   const [photoFor, setPhotoFor] = useState<{ assetId: string; name: string } | null>(null)
   const [bindingTag, setBindingTag] = useState<string | null>(null)
+  const [openCase, setOpenCase] = useState<string | null>(null)
   const [photoCounts, setPhotoCounts] = useState<Record<string, number>>({})
   const [blocked, setBlocked] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
@@ -73,7 +75,13 @@ export function ScanScreen({
       const last = lastSeen.current.get(tagCode)
       if (last !== undefined && now - last < SAME_TAG_QUIET_MS) return
       lastSeen.current.set(tagCode, now)
-      record(session.scan(tagCode, eventType), tagCode)
+      const result = session.scan(tagCode, eventType)
+      record(result, tagCode)
+
+      // A case opens its manifest. The case itself is already recorded by the
+      // scan above; nothing inside it is, and nothing inside it will be until
+      // a person acts on this sheet.
+      if (result.assetId && store.manifestFor(result.assetId)) setOpenCase(result.assetId)
     },
     [session, eventType, record],
   )
@@ -143,6 +151,14 @@ export function ScanScreen({
     [photoFor, store, mode],
   )
 
+  const onConfirmCase = useCallback(
+    (assetIds: string[]) => {
+      for (const r of session.confirmContents(assetIds, eventType)) record(r)
+      setOpenCase(null)
+    },
+    [session, eventType, record],
+  )
+
   const onFinish = useCallback(() => {
     go({ name: 'session', sessionId: jobId })
   }, [jobId])
@@ -171,7 +187,7 @@ export function ScanScreen({
           <QrCamera
             torchOn={torchOn}
             onDecode={onDecode}
-            paused={manualOpen || photoFor !== null}
+            paused={manualOpen || photoFor !== null || openCase !== null}
           />
         }
       />
@@ -182,6 +198,21 @@ export function ScanScreen({
             Got it
           </button>
         </div>
+      ) : null}
+      {openCase ? (
+        (() => {
+          const manifest = store.manifestFor(openCase)
+          if (!manifest) return null
+          return (
+            <CaseManifestSheet
+              manifest={manifest}
+              alreadyRecorded={new Set(session.scannedIds)}
+              onConfirmAll={onConfirmCase}
+              onScanIndividually={() => setOpenCase(null)}
+              onClose={() => setOpenCase(null)}
+            />
+          )
+        })()
       ) : null}
       {photoFor ? (
         <PhotoCapture

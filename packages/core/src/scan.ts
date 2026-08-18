@@ -291,8 +291,16 @@ export class ScanSession {
    */
   confirmContents(assetIds: string[], eventType = 'check_out'): ScanResult[] {
     return assetIds.map((assetId) => {
+      // THE SAME DRIFT AS addManually HAD, in a third place: this used to
+      // return the bare id, so every bulk-confirmed row rendered as "Unknown
+      // item" with no code — on the one screen where the whole point is
+      // reading what you have taken on trust. All three paths now go through
+      // baseResult, so a row cannot come back nameless again.
+      const asset = this.loadAsset(assetId)
+      const base = asset ? this.baseResult(asset) : { assetId }
+
       if (this.seen.has(assetId)) {
-        return { outcome: 'duplicate' as const, assetId }
+        return { ...base, outcome: 'duplicate' as const, message: 'Already in this session' }
       }
       const outboxId = this.enqueue({
         asset_id: assetId,
@@ -300,7 +308,7 @@ export class ScanSession {
         entry_method: 'assumed',
       })
       this.seen.set(assetId, outboxId)
-      return { outcome: 'accepted' as const, assetId, outboxId }
+      return { ...base, outcome: 'accepted' as const, message: 'Taken on trust', outboxId }
     })
   }
 

@@ -2,6 +2,8 @@ import {
   LOCAL_SCHEMA,
   PhotoStore,
   ScanSession,
+  caseManifest,
+  hasContents,
   pairBySide,
   buildPullList,
   checkAvailability,
@@ -11,6 +13,7 @@ import {
   type CatalogueItem,
   type CaptureResult,
   type ImportPlan,
+  type CaseManifest,
   type PhotoPair,
   type MatchedLine,
   type PullListView,
@@ -197,6 +200,12 @@ export class DemoStore {
   /** How much evidence exists only on this device. */
   photoBacklog(): { count: number; bytes: number } {
     return this.photos.pendingStats()
+  }
+
+  /** What a case claims to contain, or null if it contains nothing. */
+  manifestFor(assetId: string): CaseManifest | null {
+    if (!hasContents(this.db, assetId)) return null
+    return caseManifest(this.db, assetId)
   }
 
   /** Everything on the shelf, for the manual "can't scan it" path. */

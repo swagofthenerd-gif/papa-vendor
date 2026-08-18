@@ -24,6 +24,8 @@ export { checkAvailability, replySummary } from './availability.ts'
 export type { AvailabilityLine, AvailabilitySummary, AvailabilityState } from './availability.ts'
 export type { ParsedLine, MatchedLine, CatalogueItem, MatchConfidence } from './kit-list.ts'
 export type { PullListItem, PullListView, ShelfGroup } from './pull-list.ts'
+export { caseManifest, hasContents } from './containment.ts'
+export type { CaseManifest, ContainedChild, ContainmentKind } from './containment.ts'
 export { parseCsv, guessMapping, readRows, planImport } from './csv-import.ts'
 export type {
   CsvTable, ColumnMapping, FieldName, ImportRow, ImportPlan, ReviewedRow, RowVerdict,

@@ -854,3 +854,22 @@ body {
   .tag-shelf-name { color: #000; }
   body { background: #fff; color: #000; }
 }
+
+/* ---- the case manifest ------------------------------------- */
+.manifest-fixed { display: flex; flex-direction: column; gap: 4px; }
+.manifest-list { list-style: none; margin: 0 0 var(--sp-2); padding: 0; overflow-y: auto; }
+.manifest-row {
+  display: grid; grid-template-columns: auto 1fr auto;
+  align-items: center; gap: var(--sp-3);
+  min-height: 44px; padding: 0 2px;
+  border-bottom: var(--line-w) solid var(--line);
+  font-size: var(--fs-sm); font-weight: 600;
+}
+/* Unconfirmed reads as a QUESTION, not as a problem. It is the normal state of
+   a case that nobody has opened, and colouring it red would train people to
+   clear it rather than to look. */
+.manifest-row.is-unconfirmed > svg { color: var(--muted); }
+.manifest-row.is-scanned > svg { color: var(--green); }
+.manifest-row.is-fixed > svg { color: var(--accent); }
+.manifest-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.manifest-code { color: var(--muted); font-size: var(--fs-xs); }

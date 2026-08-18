@@ -255,6 +255,48 @@ export function seedDemo(db: SqlDriver): DemoSeed {
     // One light in for repair, so 'available' is not trivially everything.
     db.exec(`update assets set health = 'faulty' where id = ?`, ['asset-aputure600-4'])
 
+    // A packed camera case: the A-cam kit as it actually travels. One
+    // PERMANENT child (the handle cannot leave without the body) and four
+    // PACKED ones, so scanning the case opens a manifest rather than
+    // recording five things nobody looked at.
+    db.exec(
+      `insert into products (id, org_id, display_name, category)
+       values ('prod-case', ?, 'A-Cam Case', 'case')`,
+      [ORG],
+    )
+    db.exec(
+      `insert into assets
+         (id, org_id, product_id, asset_code, display_name, is_container,
+          presence, health, ownership, current_location_id, updated_at)
+       values ('asset-case-1', ?, 'prod-case', 'CASE-01', 'A-Cam Case', 1,
+               'here', 'ok', 'owned', 'loc-rack-a', ?)`,
+      [ORG, new Date().toISOString()],
+    )
+    {
+      const caseTag = tagCode(rng)
+      db.exec(`insert into asset_tags (tag_code, asset_id, status) values (?, 'asset-case-1', 'active')`, [caseTag])
+      tags.push({
+        tagCode: caseTag,
+        assetId: 'asset-case-1',
+        assetCode: 'CASE-01',
+        displayName: 'A-Cam Case',
+        shelf: 'Rack A',
+      })
+    }
+    const contents: [string, 'permanent' | 'packed'][] = [
+      ['asset-fx9-1', 'permanent'],
+      ['asset-sigma1835-1', 'packed'],
+      ['asset-sigma1835-2', 'packed'],
+      ['asset-vmount-1', 'packed'],
+      ['asset-vmount-2', 'packed'],
+    ]
+    for (const [child, kind] of contents) {
+      db.exec(
+        `insert into asset_containment (parent_asset_id, child_asset_id, kind) values ('asset-case-1', ?, ?)`,
+        [child, kind],
+      )
+    }
+
     // A finished dispute, waiting on the asset page: one camera photographed
     // going out clean and coming back marked. Without this the best feature in
     // the product is an empty state until someone finds a working camera.
