@@ -19,8 +19,15 @@ export default defineConfig({
   // reason.
   base: './',
   server: { host: true },
-  // sql.js ships as CommonJS, so it MUST go through Vite's dependency
-  // pre-bundling to get an ESM default export. Excluding it here produces a
-  // blank page and "does not provide an export named 'default'".
+  // NOTE: sql.js ships as CommonJS and MUST go through Vite's dependency
+  // pre-bundling to get an ESM default export. Putting it in
+  // optimizeDeps.exclude produces a blank page.
+  //
+  // ASCII-only output. The single-file demo inlines this bundle into a page
+  // whose charset the host controls, and a literal \u0300 inside the
+  // accent-folding regex becomes an invalid character class the moment the
+  // bytes are read as anything but UTF-8 — a blank page with one cryptic
+  // SyntaxError.
+  esbuild: { charset: 'ascii' },
   build: { target: 'es2020', sourcemap: true },
 })
