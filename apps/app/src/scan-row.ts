@@ -12,6 +12,16 @@ import type { ScanResult } from '@papa/core'
 export interface ScanRow extends ScanResult {
   key: string
   at: number
+  /**
+   * The code that produced this row, kept ONLY for unknown labels.
+   *
+   * ScanResult deliberately carries no tag code — the tag is an opaque
+   * identifier nobody reads, and putting it on every row invites it onto the
+   * screen. But an unknown label cannot be attached to anything without it,
+   * and re-deriving it from the camera later means guessing which of the last
+   * few decodes the person meant.
+   */
+  tagCode?: string
 }
 
 /**

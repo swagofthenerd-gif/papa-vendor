@@ -835,3 +835,22 @@ body {
   font: inherit; font-size: var(--fs-sm); font-weight: 600;
 }
 .import-problems { margin-top: var(--sp-3); }
+
+/* ---- labels ------------------------------------------------ */
+.tags-bar {
+  display: flex; flex-direction: column; gap: var(--sp-3);
+  margin-top: var(--sp-4);
+}
+.tags-hint { margin: 0; color: var(--muted); font-size: var(--fs-sm); font-weight: 600; line-height: 1.5; }
+.tags-hint strong { color: var(--ink); }
+
+@media print {
+  /* Paper is white whatever theme the screen is in, and a QR inverted by dark
+     mode is unreadable to every decoder. */
+  .app-shell { display: block; height: auto; }
+  .app-main { overflow: visible; padding: 0; }
+  .topbar, .bottom-nav, .tags-bar, .sync-strip { display: none !important; }
+  .tag-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .tag-shelf-name { color: #000; }
+  body { background: #fff; color: #000; }
+}

@@ -49,12 +49,14 @@ const ScanRowItem = memo(function ScanRowItem({
   row,
   isPulsing,
   onResolve,
+  onBind,
   onPhoto,
   photoCount,
 }: {
   row: ScanRow
   isPulsing: boolean
   onResolve: (key: string, action: 'add' | 'not-this-job') => void
+  onBind: (tagCode: string) => void
   onPhoto: (assetId: string, name: string) => void
   photoCount: number
 }) {
@@ -95,6 +97,17 @@ const ScanRowItem = memo(function ScanRowItem({
           </button>
         </span>
       ) : null}
+
+      {/* A fresh label off the printer. Offering to attach it HERE is what
+          makes tagging a rack possible at all — the alternative is a desk
+          chore later that nobody does, and a sheet of stickers on nothing. */}
+      {row.outcome === 'unknown_tag' && row.tagCode ? (
+        <span className="row-actions">
+          <button className="btn btn-sm" onClick={() => onBind(row.tagCode as string)}>
+            Attach this label
+          </button>
+        </span>
+      ) : null}
     </li>
   )
 }, (prev, next) => !scanRowChanged(prev, next) && prev.photoCount === next.photoCount)
@@ -109,6 +122,7 @@ export function Scan({
   onFinish,
   onManualAdd,
   onResolveRow,
+  onBind,
   onPhoto,
   photoCounts,
   snapshotAge,
@@ -123,6 +137,8 @@ export function Scan({
   onFinish: () => void
   onManualAdd: () => void
   onResolveRow: (key: string, action: 'add' | 'not-this-job') => void
+  /** Attach a freshly printed label to an item. */
+  onBind: (tagCode: string) => void
   /** Open the camera for one item's condition photo. */
   onPhoto: (assetId: string, name: string) => void
   /** How many condition photos each asset already has this session. */
@@ -149,6 +165,10 @@ export function Scan({
   // Held in a ref for the same reason as onResolveRow: a caller that rebuilds
   // this callback each render would defeat the row memo, and the memo is what
   // keeps scan 300 from reconciling 300 rows inside the sub-100ms budget.
+  const bindRef = useRef(onBind)
+  bindRef.current = onBind
+  const handleBind = useCallback((tagCode: string) => bindRef.current(tagCode), [])
+
   const photoRef = useRef(onPhoto)
   photoRef.current = onPhoto
   const handlePhoto = useCallback(
@@ -229,6 +249,7 @@ export function Scan({
             row={row}
             isPulsing={pulseKey !== null && row.assetId === pulseKey}
             onResolve={handleResolve}
+            onBind={handleBind}
             onPhoto={handlePhoto}
             photoCount={row.assetId ? (photoCounts[row.assetId] ?? 0) : 0}
           />

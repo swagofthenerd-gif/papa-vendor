@@ -221,6 +221,62 @@ export class ScanSession {
   }
 
   /**
+   * Attach a label to an item.
+   *
+   * This is how a house gets tagged in the first place: print a sheet, walk a
+   * rack, scan a label, pick what it is stuck to. Without it the labels are
+   * decoration and the whole fleet has to be entered some other way.
+   *
+   * IT REFUSES TO MOVE A LABEL THAT IS ALREADY IN USE. Rebinding silently is
+   * the worst outcome available here: the tag's entire history quietly
+   * transfers to a different camera, and every past scan of the old one now
+   * reads as the new one. Two items would also answer to the same label, so
+   * scanning either produces the wrong answer with total confidence. Moving a
+   * label is a real operation and it belongs at the desk, with a reason
+   * attached — not on a phone at 6am.
+   */
+  bindTag(tagCode: string, assetId: string): ScanResult {
+    const existing = this.db.get<{ asset_id: string | null }>(
+      `select asset_id from asset_tags where tag_code = ?`,
+      [tagCode],
+    )
+
+    if (existing?.asset_id && existing.asset_id !== assetId) {
+      const other = this.loadAsset(existing.asset_id)
+      return {
+        outcome: 'conflict',
+        message: `That label is already on ${other?.display_name ?? 'another item'}`,
+        assetId: existing.asset_id,
+        assetCode: other?.asset_code ?? undefined,
+        displayName: other?.display_name ?? undefined,
+      }
+    }
+
+    const asset = this.loadAsset(assetId)
+    if (!asset) return { outcome: 'unknown_tag', message: 'No such item' }
+
+    const id = this.newId()
+    this.db.transaction(() => {
+      this.outbox.enqueue({
+        id,
+        op: 'bind_tag',
+        payload: { tag_code: tagCode, asset_id: assetId, device_time: new Date(this.now()).toISOString() },
+      })
+      // The local mapping is written straight away so the very next scan of
+      // this label resolves. The server is the authority, but a tech who
+      // rescans what they just tagged and gets "unknown" concludes it did not
+      // work and does it again.
+      this.db.exec(
+        `insert into asset_tags (tag_code, asset_id, status) values (?, ?, 'active')
+         on conflict (tag_code) do update set asset_id = excluded.asset_id, status = 'active'`,
+        [tagCode, assetId],
+      )
+    })
+
+    return { ...this.baseResult(asset), outcome: 'accepted', message: 'Label attached', outboxId: id }
+  }
+
+  /**
    * Bulk-confirm a case's contents WITHOUT scanning each child.
    *
    * Recorded as entry_method='assumed', which is the whole point: it is

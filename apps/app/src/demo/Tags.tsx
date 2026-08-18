@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
+import { Icon } from '@papa/icons'
 import type { DemoStore } from './store.ts'
 
 /**
@@ -40,8 +41,23 @@ export function Tags({ store }: { store: DemoStore }) {
     byShelf.set(t.shelf, list)
   }
 
+  const ready = images.size === store.seed.tags.length
+
   return (
     <div className="tags-screen">
+      <div className="tags-bar">
+        <p className="tags-hint">
+          Print these onto sticker paper and put one on each item. Then scan a
+          label and tap <strong>Attach this label</strong> to say what it is on.
+        </p>
+        <button
+          className="btn btn-primary"
+          disabled={!ready}
+          onClick={() => window.print()}
+        >
+          <Icon name="scroll" size={18} /> {ready ? 'Print the labels' : 'Drawing labels…'}
+        </button>
+      </div>
       {[...byShelf.entries()].map(([shelf, items]) => (
         <section key={shelf} className="tag-shelf">
           <h2 className="tag-shelf-name">{shelf}</h2>

@@ -15,10 +15,12 @@ import type { DemoStore } from './store.ts'
  */
 export function ManualAdd({
   store,
+  title = 'Can’t scan it',
   onPick,
   onClose,
 }: {
   store: DemoStore
+  title?: string
   onPick: (assetId: string) => void
   onClose: () => void
 }) {
@@ -29,10 +31,10 @@ export function ManualAdd({
   )
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label="Add without scanning">
+    <div className="sheet-backdrop" role="dialog" aria-label={title}>
       <div className="sheet">
         <header className="sheet-head">
-          <span className="sheet-title">Can’t scan it</span>
+          <span className="sheet-title">{title}</span>
           <button className="icon-btn" onClick={onClose} aria-label="Close">
             <Icon name="x" size={22} />
           </button>

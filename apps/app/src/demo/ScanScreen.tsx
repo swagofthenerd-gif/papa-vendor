@@ -33,6 +33,7 @@ export function ScanScreen({
   const [torchOn, setTorchOn] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
   const [photoFor, setPhotoFor] = useState<{ assetId: string; name: string } | null>(null)
+  const [bindingTag, setBindingTag] = useState<string | null>(null)
   const [photoCounts, setPhotoCounts] = useState<Record<string, number>>({})
   const [blocked, setBlocked] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
@@ -45,9 +46,14 @@ export function ScanScreen({
   const pullList = useMemo(() => store.pullList(jobId, mode), [store, jobId, mode, tick])
 
   const record = useCallback(
-    (result: ScanResult) => {
+    (result: ScanResult, tagCode?: string) => {
       setRows((prev) => [
-        { ...result, key: result.outboxId ?? `${result.outcome}-${Date.now()}`, at: Date.now() },
+        {
+          ...result,
+          key: result.outboxId ?? `${result.outcome}-${Date.now()}`,
+          at: Date.now(),
+          tagCode,
+        },
         ...prev,
       ])
       setTick((t) => t + 1)
@@ -67,17 +73,26 @@ export function ScanScreen({
       const last = lastSeen.current.get(tagCode)
       if (last !== undefined && now - last < SAME_TAG_QUIET_MS) return
       lastSeen.current.set(tagCode, now)
-      record(session.scan(tagCode, eventType))
+      record(session.scan(tagCode, eventType), tagCode)
     },
     [session, eventType, record],
   )
 
   const onManualPick = useCallback(
     (assetId: string) => {
+      // One sheet, two jobs. Opened from "can't scan it" it adds the item;
+      // opened from an unknown label it attaches that label instead.
+      if (bindingTag) {
+        const result = session.bindTag(bindingTag, assetId)
+        record(result)
+        setBindingTag(null)
+        setTick((t) => t + 1)
+        return
+      }
       record(session.addManually(assetId, eventType))
       setManualOpen(false)
     },
-    [session, eventType, record],
+    [session, eventType, record, bindingTag],
   )
 
   const onResolveRow = useCallback((key: string, action: 'add' | 'not-this-job') => {
@@ -147,6 +162,7 @@ export function ScanScreen({
         onToggleTorch={() => setTorchOn((t) => !t)}
         onFinish={onFinish}
         onManualAdd={() => setManualOpen(true)}
+        onBind={(tagCode) => { setBindingTag(tagCode); setManualOpen(true) }}
         onResolveRow={onResolveRow}
         onPhoto={(assetId, name) => setPhotoFor({ assetId, name })}
         photoCounts={photoCounts}
@@ -178,8 +194,9 @@ export function ScanScreen({
       {manualOpen ? (
         <ManualAdd
           store={store}
+          title={bindingTag ? 'What is this label on?' : 'Can’t scan it'}
           onPick={onManualPick}
-          onClose={() => setManualOpen(false)}
+          onClose={() => { setManualOpen(false); setBindingTag(null) }}
         />
       ) : null}
     </>
