@@ -18,7 +18,8 @@
     "test:all": "npm run typecheck && npm test && npm run build:app && npm run test:sql && npm run test:migrate",
     "build:app": "npm run build -w @papa/app",
     "dev": "npm run dev -w @papa/app",
-    "dev:https": "npm run dev:https -w @papa/app"
+    "dev:https": "npm run dev:https -w @papa/app",
+    "test:e2e": "node --test \"apps/app/test/e2e/*.e2e.mjs\""
   },
   "engines": {
     "node": ">=20"

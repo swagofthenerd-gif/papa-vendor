@@ -84,7 +84,19 @@ function Boot({ title, detail }: { title: string; detail?: string }) {
 function Routed({ view, store }: { view: View; store: DemoStore }) {
   // The scanner owns the whole viewport — no top bar, no tab bar.
   if (view.name === 'scan') {
-    return <ScanScreen store={store} jobId={view.jobId} mode={view.mode} />
+    // KEYED, so moving to another job or turning the session around gives a
+    // fresh component. React reuses an instance when only props change, and
+    // the scan list, the photo counts and the "device full" banner all live in
+    // that instance's state — so without this, opening the wedding job showed
+    // the rows scanned for the TVC under the wedding's name.
+    return (
+      <ScanScreen
+        key={`${view.jobId}:${view.mode}`}
+        store={store}
+        jobId={view.jobId}
+        mode={view.mode}
+      />
+    )
   }
 
   switch (view.name) {

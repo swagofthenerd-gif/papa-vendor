@@ -92,3 +92,20 @@ Where you build to a guess, mark it in code:
 ```
 
 …and add a row to `docs/assumptions.md`. The vendor review at the end should be a checklist, not a scavenger hunt.
+
+## The end-to-end check
+
+`npm run build:app && npm run test:e2e` drives a real Chromium with a **fake
+camera**: a QR code rendered into a Y4M file and handed to the browser with
+`--use-file-for-fake-video-capture`. It runs on a machine with no webcam, which
+is every CI runner and most development machines.
+
+It exists because every other check in this repo stops at the edge of the
+camera. The engine is tested against real SQLite and the row logic is tested as
+pure functions, but "a label appears in front of the lens and the right thing
+happens on screen" was verified by reading the code — and that seam is where
+the UI bugs have actually been.
+
+**It is deliberately not part of `npm test`.** It needs a browser and a built
+bundle, and a unit suite that quietly depends on either is one that stops being
+run.
