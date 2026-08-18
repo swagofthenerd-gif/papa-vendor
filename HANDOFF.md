@@ -344,3 +344,48 @@ Full narrative in the vault's `07-History/Session-Log.md`. The short version:
 **The pattern behind most of those bugs:** a rule lived in two places and the
 copies drifted, or a value was written without comparing it to what was already
 there. Worth hunting for more of both.
+
+---
+
+## 14. The demo (added 2026-08-18)
+
+**`npm run dev`, open http://localhost:5173** — a working scanner with no
+login, no server, and nothing to pay for.
+
+It exists because ten weeks of correctness work had landed with no surface on
+top of it, so nobody — including the owner — had ever used the scan loop. It
+is not a mock of the engine: `ScanSession`, the outbox, the pull list, the
+local double-checkout check and the kit-list reader are the real ones from
+`packages/core`, running against real SQLite in the browser. Only the SERVER
+is missing, which shows honestly as scans that queue and never send.
+
+| Where | What |
+|---|---|
+| `apps/app/src/demo/seed.ts` | The demo house — 77 tagged items, 3 jobs, 6 shelves |
+| `apps/app/src/demo/sqljs-driver.ts` | `SqlDriver` over sql.js |
+| `apps/app/src/demo/store.ts` | Holds the database and the open scan session |
+| `apps/app/src/camera/QrCamera.tsx` | Camera + QR decode |
+| `apps/app/src/demo/Tags.tsx` | The labels, as QR codes (`#/settings`) |
+
+### Four things worth knowing
+
+- **The demo database is in memory and is lost on refresh.** Tag codes are
+  therefore generated from a FIXED SEED, so a label printed today still scans
+  tomorrow. Do not make them random.
+- **`BarcodeDetector` does not exist in Chrome on Linux or Windows** — only on
+  Android, ChromeOS and macOS. The camera falls back to jsQR there and labels
+  the viewfinder "Desk decoder". Without that fallback the demo shows a live
+  picture and decodes nothing on the machine it is being shown from.
+- **sql.js is CommonJS and must go through Vite's pre-bundling.** Putting it in
+  `optimizeDeps.exclude` produces a blank page.
+- **The camera needs a secure page.** localhost counts; a LAN address does not.
+  `npm run dev:https` serves over https with a self-signed certificate for
+  testing on a phone — the phone warns about the certificate once.
+
+### What it does NOT prove
+
+Nothing about the real device. The performance budget (decode→feedback under
+100ms, ≥2 scans/sec sustained, battery and thermals at minute 25) is measured
+on a cheap Android through Capacitor and ML Kit, neither of which exists yet.
+A laptop webcam through jsQR is not that measurement and must never be quoted
+as it.

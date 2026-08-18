@@ -16,7 +16,9 @@
     "test:sql": "./db/run-tests.sh",
     "test:migrate": "./db/test-migrate.sh",
     "test:all": "npm run typecheck && npm test && npm run build:app && npm run test:sql && npm run test:migrate",
-    "build:app": "npm run build -w @papa/app"
+    "build:app": "npm run build -w @papa/app",
+    "dev": "npm run dev -w @papa/app",
+    "dev:https": "npm run dev:https -w @papa/app"
   },
   "engines": {
     "node": ">=20"
