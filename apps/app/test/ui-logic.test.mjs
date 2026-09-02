@@ -25,6 +25,15 @@ describe('routing', () => {
     })
   })
 
+  test('lookup is a scan mode of its own', () => {
+    // The asking mode. Routing "Just scan" as a check-in was the defect where
+    // scanning an item to SEE where it was quietly marked it returned — so
+    // the mode must survive the round trip, not collapse into in/out.
+    assert.deepEqual(parseHash('#/scan/lookup?mode=lookup'), {
+      name: 'scan', jobId: 'lookup', mode: 'lookup',
+    })
+  })
+
   test('mode defaults to going out', () => {
     // The overwhelmingly common case at 6am, and the one a mistyped link
     // should land on rather than silently recording returns.
@@ -37,6 +46,7 @@ describe('routing', () => {
       { name: 'jobs' },
       { name: 'scan', jobId: 'j1', mode: 'out' },
       { name: 'scan', jobId: 'j1', mode: 'in' },
+      { name: 'scan', jobId: 'lookup', mode: 'lookup' },
       { name: 'session', sessionId: 's1' },
       { name: 'asset', assetId: 'a1' },
       { name: 'gear' },

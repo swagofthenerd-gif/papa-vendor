@@ -105,7 +105,7 @@ export function Today({
             <p className="muted">
               Start a job to scan gear out, or scan anything to see where it is.
             </p>
-            <button className="btn btn-outline" onClick={() => go({ name: 'scan', jobId: 'lookup', mode: 'in' })}>
+            <button className="btn btn-outline" onClick={() => go({ name: 'scan', jobId: 'lookup', mode: 'lookup' })}>
               <Icon name="camera" size={18} /> Just scan
             </button>
           </div>
@@ -200,7 +200,7 @@ export function Today({
       <section className="section">
         <SectionHead icon="bolt" title="Quick" />
         <div className="quick-grid">
-          <button className="quick pressable" onClick={() => go({ name: 'scan', jobId: 'lookup', mode: 'in' })}>
+          <button className="quick pressable" onClick={() => go({ name: 'scan', jobId: 'lookup', mode: 'lookup' })}>
             <Icon name="camera" size={20} />
             <span className="quick-t">Just scan</span>
             <span className="quick-s">Where is this thing?</span>

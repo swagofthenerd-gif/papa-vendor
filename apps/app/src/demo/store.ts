@@ -2,6 +2,7 @@ import {
   LOCAL_SCHEMA,
   PhotoStore,
   ScanSession,
+  lookupTag,
   caseManifest,
   hasContents,
   pairBySide,
@@ -18,10 +19,11 @@ import {
   type MatchedLine,
   type PullListView,
   type SqlDriver,
+  type TagLookup,
 } from '@papa/core'
 import { SqlJsDriver } from './sqljs-driver.ts'
 import { demoCatalogue, seedDemo, type DemoSeed } from './seed.ts'
-import type { ScanMode } from '../nav.ts'
+import { SessionRegistry, type SessionMode } from './sessions.ts'
 import type { GearRow } from '../routes/Gear.tsx'
 import type { TodayStats } from '../routes/Today.tsx'
 import type { AssetHistoryRow, AssetView } from '../routes/Asset.tsx'
@@ -29,7 +31,7 @@ import { buildSummary, type SessionSummary } from '../session-summary.ts'
 
 /**
  * The demo's one piece of state: a real local database with the demo house in
- * it, plus whichever scan session is open.
+ * it, plus whichever scan sessions are open.
  *
  * WHAT IS AND IS NOT PRETENDED HERE. The scan engine, the outbox, the pull
  * list, the kit-list reader and the local double-checkout check are the real
@@ -43,27 +45,22 @@ export class DemoStore {
   readonly seed: DemoSeed
   catalogue: CatalogueItem[]
 
-  private session: ScanSession | null = null
-  private sessionJobId: string | null = null
-  private sessionMode: ScanMode = 'out'
   /**
-   * What the OPEN session is looking for, captured when it opened.
-   *
-   * A SNAPSHOT, not a live query. On a return the expected set is "what is
-   * physically out on this job", and checking an item in removes it from that
-   * query — so re-asking on every render shrank the denominator as the tech
-   * worked: four items to find became "0 of 1" after three scans. A total that
-   * melts while you look at it is the fastest way to lose someone's trust in
-   * the screen, and it hides the one number that matters, which is how many
-   * are still missing.
+   * Sessions keyed by (job, direction) — see sessions.ts for why there are
+   * several and what each entry snapshots. One live session here was the bug:
+   * opening a return mid-prep destroyed the prep's dedupe set, and every
+   * rescan on resuming wrote a duplicate op.
    */
-  private sessionExpected: string[] = []
+  private readonly sessions: SessionRegistry
   readonly photos: PhotoStore
 
   private constructor(db: SqlDriver, seed: DemoSeed) {
     this.db = db
     this.seed = seed
     this.catalogue = demoCatalogue()
+    this.sessions = new SessionRegistry(db, 'demo-device', (jobId, mode) =>
+      this.expectedFor(jobId, mode),
+    )
     // A deliberately small budget in the demo — a few megabytes rather than
     // 512 — so the "device full" refusal is reachable by a person trying the
     // app for ten minutes, instead of being a branch nobody ever sees.
@@ -86,27 +83,15 @@ export class DemoStore {
   }
 
   /**
-   * The session for a job, created on first use and then kept.
+   * The session for a job and direction, created on first use and then kept.
    *
-   * Kept rather than rebuilt because the session owns the "already scanned in
-   * this session" set, and that suppression lasts the whole session by design
-   * (scan.ts) — rebuilding it on a re-render would make every duplicate read
-   * as a fresh scan and quietly double-count the morning.
+   * Kept — with its dedupe set and expected snapshot — even while OTHER
+   * sessions run: the registry resumes it when the tech comes back, so a
+   * return opened mid-prep no longer resets the prep's progress. The
+   * lifecycle lives in sessions.ts.
    */
-  sessionFor(jobId: string, mode: ScanMode = 'out'): ScanSession {
-    if (this.session && this.sessionJobId === jobId && this.sessionMode === mode) {
-      return this.session
-    }
-    const expected = this.expectedFor(jobId, mode)
-    this.session = new ScanSession(this.db, {
-      deviceId: 'demo-device',
-      jobId,
-      expected: new Set(expected),
-    })
-    this.sessionJobId = jobId
-    this.sessionMode = mode
-    this.sessionExpected = expected
-    return this.session
+  sessionFor(jobId: string, mode: SessionMode = 'out'): ScanSession {
+    return this.sessions.open(jobId, mode).session
   }
 
   /**
@@ -122,7 +107,7 @@ export class DemoStore {
    * and a return screen that cries wolf on the normal case is one a tech stops
    * reading by the second week.
    */
-  expectedFor(jobId: string, mode: ScanMode): string[] {
+  expectedFor(jobId: string, mode: SessionMode): string[] {
     const job = this.job(jobId)
     if (mode === 'out') return job?.expected ?? []
     return this.db
@@ -135,16 +120,19 @@ export class DemoStore {
       .map((r) => r.id)
   }
 
+  /** Complete the session the tech just finished — and only that one. Any
+   *  other job's half-scanned session stays open behind it. */
   endSession(): void {
-    this.session = null
-    this.sessionJobId = null
-    this.sessionMode = 'out'
-    this.sessionExpected = []
+    this.sessions.endCurrent()
   }
 
-  /** Which direction the open session is running in. */
-  get openMode(): ScanMode {
-    return this.sessionMode
+  /**
+   * Resolve a label WITHOUT recording anything — the "where is this thing?"
+   * question. Answered entirely from the local mirror: no session, no outbox
+   * op, no projection change. See lookupTag in @papa/core for the rules.
+   */
+  lookup(tagCode: string): TagLookup {
+    return lookupTag(this.db, tagCode)
   }
 
   /** Jobs with gear physically out, for the "bring it back" list. */
@@ -162,10 +150,10 @@ export class DemoStore {
       }))
   }
 
-  pullList(jobId: string, mode: ScanMode = 'out'): PullListView | null {
+  pullList(jobId: string, mode: SessionMode = 'out'): PullListView | null {
     if (!this.job(jobId)) return null
-    const session = this.sessionFor(jobId, mode)
-    return buildPullList(this.db, this.sessionExpected, session.scannedIds)
+    const entry = this.sessions.open(jobId, mode)
+    return buildPullList(this.db, entry.expected, entry.session.scannedIds)
   }
 
   /**
@@ -181,10 +169,11 @@ export class DemoStore {
     bytes: number
     sha256: string
   }): CaptureResult {
+    const current = this.sessions.current()
     return this.photos.capture({
       assetId: input.assetId,
-      jobId: this.sessionJobId,
-      sessionId: this.session?.id ?? null,
+      jobId: current?.jobId ?? null,
+      sessionId: current?.session.id ?? null,
       side: input.side,
       localUri: input.dataUri,
       bytes: input.bytes,
@@ -481,9 +470,12 @@ export class DemoStore {
    */
   sessionSummary(jobId: string): SessionSummary | null {
     const job = this.job(jobId)
-    if (!job || this.sessionJobId !== jobId || !this.session) return null
-    const sessionId = this.session.id
-    const mode = this.sessionMode
+    // The job's most recently opened session — the one the tech just held
+    // "finish" on. Another job's session running in parallel is not consulted.
+    const entry = this.sessions.peek(jobId)
+    if (!job || !entry) return null
+    const sessionId = entry.session.id
+    const mode = entry.mode
 
     // Read back from the QUEUE, not from the screen: the queue is what was
     // actually written, and on a real phone it is the only record that exists
@@ -508,7 +500,7 @@ export class DemoStore {
     return buildSummary({
       jobLabel: job.label,
       mode,
-      expected: this.sessionExpected,
+      expected: entry.expected,
       recorded,
       assumed,
       unknownTags,
@@ -523,10 +515,14 @@ export class DemoStore {
     })
   }
 
-  /** How many of a job's expected items are already recorded, for the Today list. */
+  /**
+   * How many of a job's expected items are already recorded, for the Today
+   * list. Reads the job's own OUT session — the "going out" board's number —
+   * so several half-packed jobs each show their progress at once, instead of
+   * only whichever one was touched last.
+   */
   scannedCount(jobId: string): number {
-    if (this.sessionJobId !== jobId || !this.session) return 0
-    return this.session.scannedIds.length
+    return this.sessions.peek(jobId, 'out')?.session.scannedIds.length ?? 0
   }
 }
 

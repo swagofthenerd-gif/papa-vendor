@@ -12,7 +12,7 @@ import assert from 'node:assert/strict'
 import { NodeSqliteDriver } from '../src/db/node-driver.ts'
 import { LOCAL_SCHEMA } from '../src/db/schema.ts'
 import { parseKitList, matchKitList } from '../src/kit-list.ts'
-import { checkAvailability, replySummary } from '../src/availability.ts'
+import { checkAvailability, replySummary, availabilityNote } from '../src/availability.ts'
 
 const ORG = 'org-1'
 const CATALOGUE = [
@@ -134,6 +134,117 @@ describe('the reply that gets pasted back into WhatsApp', () => {
     addAsset('p1')
     const summary = answer('2x Sony FX9\n4 batteries\nsmoke machine')
     assert.equal(replySummary(summary).split('\n').length, summary.lines.length)
+  })
+})
+
+describe('what the owner already knows is promised', () => {
+  // Tuesday 15 September 2026, local time — fixed so labels are golden.
+  const NOW = new Date(2026, 8, 15, 10, 0).getTime()
+
+  const commitment = (over = {}) => ({
+    jobId: 'j1',
+    jobLabel: 'Shan Foods TVC',
+    expectedBack: '2026-09-17',
+    productIds: ['p1'],
+    out: true,
+    ...over,
+  })
+
+  const ask = (text, commitments) =>
+    checkAvailability(db, matchKitList(parseKitList(text), CATALOGUE), commitments, NOW)
+
+  test('without commitments the answer is unchanged, with empty notes', () => {
+    addAsset('p1')
+    const [line] = ask('Sony FX9').lines
+    assert.deepEqual(line.committed, [])
+  })
+
+  test('a commitment on the product is reported with job, count and back label', () => {
+    addAsset('p1'); addAsset('p1')
+    addAsset('p1', { presence: 'out' })
+    const [line] = ask('2x Sony FX9', [commitment()]).lines
+
+    assert.equal(line.onHand, 2, 'the here-now count stays the honest shelf count')
+    assert.deepEqual(line.committed, [{
+      jobId: 'j1',
+      jobLabel: 'Shan Foods TVC',
+      count: 1,
+      expectedBack: '2026-09-17',
+      backLabel: 'back Thu 17 Sep',
+      out: true,
+    }])
+  })
+
+  test('commitments on other products do not leak onto this line', () => {
+    addAsset('p1')
+    const [line] = ask('Sony FX9', [commitment({ productIds: ['p3', 'p3'] })]).lines
+    assert.deepEqual(line.committed, [])
+  })
+
+  test('two units on one job is one note with count 2', () => {
+    addAsset('p1')
+    const [line] = ask('Sony FX9', [commitment({ productIds: ['p1', 'p1'] })]).lines
+    assert.equal(line.committed.length, 1)
+    assert.equal(line.committed[0].count, 2)
+  })
+
+  test('notes are ordered soonest-back first, no-date last', () => {
+    addAsset('p1')
+    const [line] = ask('Sony FX9', [
+      commitment({ jobId: 'j3', jobLabel: 'Mehndi shoot', expectedBack: null }),
+      commitment({ jobId: 'j2', jobLabel: 'Wedding', expectedBack: '2026-09-21' }),
+      commitment({ jobId: 'j1', expectedBack: '2026-09-17' }),
+    ]).lines
+    assert.deepEqual(line.committed.map((c) => c.jobId), ['j1', 'j2', 'j3'])
+  })
+
+  test('an unparseable expected_back is reported as "no date", never invented', () => {
+    addAsset('p1')
+    const [line] = ask('Sony FX9', [commitment({ expectedBack: 'after eid' })]).lines
+    assert.equal(line.committed[0].backLabel, 'no date')
+    assert.equal(line.committed[0].expectedBack, 'after eid', 'raw value kept for the caller')
+  })
+
+  test('an overdue commitment says how late, computed locally at answer time', () => {
+    addAsset('p1')
+    const [line] = ask('Sony FX9', [commitment({ expectedBack: '2026-09-12' })]).lines
+    assert.equal(line.committed[0].backLabel, '3 days late')
+  })
+
+  test('an unresolved line gets no commitment notes, for the same reason it gets no count', () => {
+    const [line] = ask('4 batteries', [commitment({ productIds: ['p5'] })]).lines
+    assert.equal(line.state, 'unknown')
+    assert.deepEqual(line.committed, [])
+  })
+
+  describe('the one-line story the UI renders', () => {
+    test('golden: here-now plus an out commitment', () => {
+      addAsset('p1'); addAsset('p1')
+      const [line] = ask('2x Sony FX9', [commitment()]).lines
+      assert.equal(
+        availabilityNote(line),
+        '2 here now · 1 out on Shan Foods TVC, back Thu 17 Sep',
+      )
+    })
+
+    test('golden: not yet departed reads "going to", and no date stays honest', () => {
+      addAsset('p1')
+      const [line] = ask('Sony FX9', [
+        commitment({ out: false, expectedBack: null, jobLabel: 'Wedding' }),
+      ]).lines
+      assert.equal(availabilityNote(line), '1 here now · 1 going to Wedding, no date')
+    })
+
+    test('golden: nothing promised is just the shelf count', () => {
+      addAsset('p1'); addAsset('p1'); addAsset('p1')
+      const [line] = ask('Sony FX9', []).lines
+      assert.equal(availabilityNote(line), '3 here now')
+    })
+
+    test('an unconfirmed line never gets a stock story', () => {
+      const [line] = ask('smoke machine', [commitment()]).lines
+      assert.equal(availabilityNote(line), 'unconfirmed item — no count')
+    })
   })
 })
 

@@ -827,7 +827,9 @@ body {
 .manifest-fixed { display: flex; flex-direction: column; gap: 4px; }
 .manifest-list { list-style: none; margin: 0 0 var(--sp-2); padding: 0; overflow-y: auto; }
 .manifest-row {
-  display: grid; grid-template-columns: auto 1fr auto;
+  /* Four columns: icon, name, code, and the "not in here" toggle. Rows
+     without a toggle simply leave the last track empty. */
+  display: grid; grid-template-columns: auto 1fr auto auto;
   align-items: center; gap: var(--sp-3);
   min-height: 44px; padding: 0 2px;
   border-bottom: var(--line-w) solid var(--line);
@@ -839,5 +841,11 @@ body {
 .manifest-row.is-unconfirmed > svg { color: var(--muted); }
 .manifest-row.is-scanned > svg { color: var(--green); }
 .manifest-row.is-fixed > svg { color: var(--accent); }
+/* "Not in here" is a stated disbelief, not an emergency: the row dims and its
+   mark goes to the attention colour. The consequence — it will read as
+   missing on the handover — is spelled out under the confirm button, where
+   the decision is actually taken. */
+.manifest-row.is-excluded > svg { color: var(--status-attention); }
+.manifest-row.is-excluded .manifest-name { color: var(--muted); text-decoration: line-through; }
 .manifest-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .manifest-code { color: var(--muted); font-size: var(--fs-xs); }
