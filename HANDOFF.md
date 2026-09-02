@@ -13,8 +13,8 @@ git clone https://github.com/swagofthenerd-gif/papa-vendor
 cd papa-vendor
 npm ci
 npm run typecheck   # tsc, must be silent
-npm test            # 180 assertions, must all pass
-npm run test:sql    # 321 pgTAP assertions — needs docker or podman
+npm test            # 270 tests, must all pass
+npm run test:sql    # 395 pgTAP assertions — needs docker or podman
 ```
 
 **If you are a Claude session:** read `.claude/skills/be-straight-up/SKILL.md`
@@ -71,7 +71,7 @@ apps/app/          the UI — ONE app, role decides the screen
 packages/core/     the offline engine: scan, outbox, sync, kit list
 packages/icons/    vendor glyphs on top of @papa/design
 db/migrations/     0001–0014, plain PostgreSQL 16
-db/tests/          321 pgTAP assertions
+db/tests/          395 pgTAP assertions
 db/fixtures.sql    ⚠ TEST ONLY — see §7
 db/bench/          the concurrent-write measurement
 docs/              plan, architecture, readiness ledger, decisions
@@ -95,7 +95,7 @@ docs/              plan, architecture, readiness ledger, decisions
 - **WhatsApp kit-list reader** — see §6.
 - **Guards** — PII sync guard, view/RLS assertion, icon names, maintenance
   health. See §4.
-- **CI** — typecheck + 180 JS + real Vite build + all migrations + 321 pgTAP,
+- **CI** — typecheck + 270 JS + real Vite build + all migrations + 395 pgTAP,
   on every push, against stock Postgres.
 
 ### NOT built

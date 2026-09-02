@@ -4,7 +4,7 @@ An honest ledger of what would have to be true to run this as a business, and
 where it actually stands. Written because "is it secure and does it scale" is
 not a yes/no question, and a confident yes would be the least useful answer.
 
-**Status date:** 2026-08-15 · **Verdict: not production-ready.**
+**Status date:** 2026-09-02 · **Verdict: not production-ready.**
 **Hosting decided:** Supabase Pro (~$25/mo), region **Singapore**, photos on
 **Cloudflare R2**. Reasoning and the ten-lens analysis: `docs/hosting-decision.md`. The data layer
 is genuinely solid and measured. Nobody can log in, and
@@ -324,9 +324,59 @@ In order, because each depends on the last:
 ## What I would tell a prospective customer today
 
 The inventory model, the tenancy isolation and the offline sync are real,
-measured and defended by 288 database assertions plus 127 application tests.
+measured and defended by 395 database assertions plus 270 application tests.
 That is the hard, expensive part and it is done.
 
 It is not deployed, nobody can log in, and a lost phone is currently an
 unencrypted copy of a fleet. Those are days of work, not months — but they are
 work that has not happened, and until it has, this runs a pilot at most.
+
+---
+
+## 2026-09-02 — four-lens review: what it found and what was fixed
+
+Four independent review passes (security, data-correctness, code
+cleanliness, product strategy) ran over the whole repo. Full record:
+`docs/review-2026-09-02.md`. The five principles they produced:
+`docs/principles.md`.
+
+**Fixed the same day** (migration `0015_hardening.sql` + `packages/core` +
+`apps/app`; every fix carries a test that fails without it):
+
+- **Projection forgery closed.** `apply_scan_event` / `rebuild_asset_projection`
+  were callable by any app user — state could change with no event row.
+  Revoked; the scan pipeline is now SECURITY DEFINER with pinned search_path
+  and row locks (also fixing the older-event-clobbers-newer race).
+- **PIN hashes are no longer org-readable.** Column-level revoke plus a
+  rate-limited `verify_pin()`. Attribution claims hold again.
+- **Role gates are now database-enforced.** readonly/driver can no longer
+  write around the RPCs; dispatch confirmation state cannot be forged by
+  direct UPDATE.
+- **The pull cursor can no longer permanently skip a row** committed out of
+  sequence order (snapshot-xmin horizon + 3s settle lag, dblink-tested).
+- **Unresolved-tag scans now project once the tag is bound**, and raise the
+  `unresolved_tag` alert until then.
+- **`jobs.contact` (a phone number) no longer syncs to devices**; the PII
+  guard is pattern-based now and every pull block is an explicit projection
+  (`select *` in pull paths fails the build).
+- **All-assumed dispatches can no longer grade `strong`** just because an
+  owner pressed the button.
+- **Transient network failures can no longer park good scans**, and a poison
+  op in a batch is isolated exactly (server-named seq or bisection) instead
+  of parking an innocent one.
+- Retired tags stop resolving locally; case manifests respect `removed_at`;
+  check_out→check_in in one session both record; torch defaults on in low
+  light; the status-bucket rule has one home.
+
+Counts after: **270 application tests, 395 database assertions, all green**;
+typecheck silent; real build passes.
+
+**Known and deliberately open** (see the review doc for detail): device_id on
+*direct* scan_events insert is not org-checked (submit_scan_batch is);
+`has_more` can read true against the dispatches watermark; a long-open write
+transaction stalls cursor advancement org-wide (bounded to re-delivery,
+never loss); CI actions pinned to tags not SHAs.
+
+**⚠ Deployment note:** the live Supabase database has `0001`–`0014` applied.
+`0015_hardening.sql` closes real holes — deploy it before any real data
+exists, and before anyone is given credentials.
