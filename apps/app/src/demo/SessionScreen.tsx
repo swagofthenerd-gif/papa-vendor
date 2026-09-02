@@ -7,12 +7,15 @@ import { go, type View } from '../nav.ts'
 import type { DemoStore } from './store.ts'
 
 /**
- * The handover summary for the session just finished.
+ * The handover summary — live session or long finished.
  *
- * If the session is gone — a refresh, or arriving on this URL cold — this says
- * so rather than rendering an empty tally. A summary that reports zeros looks
- * exactly like a session where nothing was scanned, and that is the one thing
- * a tech must never be shown after a morning's work.
+ * Finished sessions are rebuilt from the outbox plus the scan_sessions row
+ * written when they opened, so "done" on this card no longer destroys the
+ * only record of the morning. The empty state below is therefore reachable
+ * only when NO session was ever recorded on this job — arriving on the URL
+ * cold — and it says that, rather than rendering an empty tally: a summary
+ * of zeros looks exactly like a session where nothing was scanned, which is
+ * the one thing a tech must never be shown after a morning's work.
  */
 export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: string }) {
   const summary = store.sessionSummary(jobId)
@@ -33,9 +36,10 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
       <Shell view={view} title="Handover" subtitle="Nothing open">
         <div className="empty">
           <Icon name="clipboard-check" size={36} />
-          <p>That scan session has finished.</p>
+          <p>Nothing has been scanned on this job yet.</p>
           <p className="muted">
-            Summaries live only while the session is open — nothing is uploaded yet.
+            Scan gear out or back in and the handover summary will be here —
+            finished sessions stay reviewable from the job card.
           </p>
           <button className="btn btn-outline" onClick={() => go({ name: 'jobs' })}>
             Back to today

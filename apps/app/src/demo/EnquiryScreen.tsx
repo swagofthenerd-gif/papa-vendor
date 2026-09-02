@@ -1,6 +1,8 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { replySummary, type AvailabilitySummary, type CatalogueItem } from '@papa/core'
 import { Enquiry } from '../routes/Enquiry.tsx'
+import { NewJobSheet } from './NewJobSheet.tsx'
+import { go } from '../nav.ts'
 import type { DemoStore } from './store.ts'
 
 /**
@@ -9,9 +11,14 @@ import type { DemoStore } from './store.ts'
  * Paste a client's message, get back what is on the shelf and a reply to send.
  * No AI anywhere in it — matching runs on the device against the house's own
  * product names, offline, instantly, free.
+ *
+ * "Make a job from this" closes the loop the enquiry opens: the resolved
+ * lines become the job's promised set, so the yes typed back into WhatsApp
+ * and the pull list the tech scans against are the same fact.
  */
 export function EnquiryScreen({ store }: { store: DemoStore }) {
   const [summary, setSummary] = useState<AvailabilitySummary | null>(null)
+  const [creating, setCreating] = useState(false)
 
   const onPaste = useCallback(
     (text: string) => {
@@ -45,14 +52,42 @@ export function EnquiryScreen({ store }: { store: DemoStore }) {
     void navigator.clipboard?.writeText(replySummary(summary)).catch(() => {})
   }, [summary])
 
+  // What the sheet will actually promise: resolved lines only. Said out loud
+  // on the sheet, because a job that silently drops the two unresolved lines
+  // is a truck missing gear nobody decided to leave behind.
+  const linesNote = useMemo(() => {
+    if (!summary) return undefined
+    const resolved = summary.lines.filter((l) => l.productId)
+    const units = resolved.reduce((n, l) => n + l.quantity, 0)
+    const unresolved = summary.lines.length - resolved.length
+    const base = `${units} item${units === 1 ? '' : 's'} from ${resolved.length} line${resolved.length === 1 ? '' : 's'} go on the job.`
+    return unresolved > 0
+      ? `${base} ${unresolved} unconfirmed line${unresolved === 1 ? '' : 's'} left out — resolve them first if they belong.`
+      : base
+  }, [summary])
+
   return (
-    <Enquiry
-      summary={summary}
-      reply={summary ? replySummary(summary) : ''}
-      onPaste={onPaste}
-      onResolve={onResolve}
-      onCopyReply={onCopyReply}
-      onCreateJob={() => {}}
-    />
+    <>
+      <Enquiry
+        summary={summary}
+        reply={summary ? replySummary(summary) : ''}
+        onPaste={onPaste}
+        onResolve={onResolve}
+        onCopyReply={onCopyReply}
+        onCreateJob={() => setCreating(true)}
+      />
+      {creating && summary ? (
+        <NewJobSheet
+          linesNote={linesNote}
+          onCreate={(input) => {
+            store.createJobFromLines(summary.lines, input)
+            setCreating(false)
+            // The new job's home is the board — land on it ready to scan.
+            go({ name: 'jobs' })
+          }}
+          onClose={() => setCreating(false)}
+        />
+      ) : null}
+    </>
   )
 }

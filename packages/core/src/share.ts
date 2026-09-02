@@ -68,6 +68,16 @@ export function whatsAppNudgeUrl(number: string, message: string): string {
   return `https://wa.me/${number}?text=${encodeURIComponent(message)}`
 }
 
+/**
+ * Chat link with NO pre-filled text — "open this client's thread". Used where
+ * the contact line on a job card is a tap target: the vendor is going to talk,
+ * not to send our sentence. Kept beside the other wa.me builders so the URL
+ * shape lives in exactly one module.
+ */
+export function whatsAppChatUrl(number: string): string {
+  return `https://wa.me/${number}`
+}
+
 /** Dialer link for the same number. tel: wants the + back. */
 export function telUrl(number: string): string {
   return `tel:+${number}`

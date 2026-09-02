@@ -1,4 +1,5 @@
 import { ScanSession, type SqlDriver } from '@papa/core'
+import { recordSessionStart } from './read-model.ts'
 
 /**
  * The open scan sessions — the pure part.
@@ -92,6 +93,17 @@ export class SessionRegistry {
         }),
       }
       this.entries.set(key, entry)
+      // Written NOW, not at finish: the summary's inputs (mode, the expected
+      // snapshot) must survive whatever happens to this in-memory entry — a
+      // refresh mid-scan included. The scans themselves are already durable
+      // in the outbox; this row is the rest of the story.
+      recordSessionStart(this.db, {
+        id: entry.session.id,
+        jobId,
+        mode,
+        startedAt: Date.now(),
+        expected,
+      })
     }
     this.currentKey = key
     this.lastMode.set(jobId, mode)

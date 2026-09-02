@@ -10,6 +10,9 @@ import {
   checkAvailability,
   matchKitList,
   parseKitList,
+  overdueNudgeMessage,
+  parsePhoneNumber,
+  whatsAppNudgeUrl,
   type AvailabilitySummary,
   type CatalogueItem,
   type CaptureResult,
@@ -24,8 +27,23 @@ import {
 import { SqlJsDriver } from './sqljs-driver.ts'
 import { demoCatalogue, seedDemo, type DemoSeed } from './seed.ts'
 import { SessionRegistry, type SessionMode } from './sessions.ts'
+import {
+  createJob,
+  decodeScanOps,
+  dueBoard,
+  itemsSummary,
+  lastSessionRecord,
+  openJob,
+  openJobCommitments,
+  openJobs,
+  outItemNames,
+  packedProgress,
+  sessionScanFacts,
+  setExpectedBack,
+  type OpenJobRow,
+} from './read-model.ts'
 import type { GearRow } from '../routes/Gear.tsx'
-import type { TodayStats } from '../routes/Today.tsx'
+import type { OutRow, TodayStats } from '../routes/Today.tsx'
 import type { AssetHistoryRow, AssetView } from '../routes/Asset.tsx'
 import { buildSummary, type SessionSummary } from '../session-summary.ts'
 
@@ -74,12 +92,17 @@ export class DemoStore {
     return new DemoStore(db, seed)
   }
 
-  jobs(): DemoSeed['jobs'] {
-    return this.seed.jobs
+  /**
+   * The open jobs, FROM THE DATABASE, sorted by departure. The seed keeps a
+   * copy for the tests, but the board reads the tables — that is what lets a
+   * job created at the desk appear here indistinguishable from a seeded one.
+   */
+  jobs(): OpenJobRow[] {
+    return openJobs(this.db)
   }
 
-  job(jobId: string): DemoSeed['jobs'][number] | undefined {
-    return this.seed.jobs.find((j) => j.id === jobId)
+  job(jobId: string): OpenJobRow | undefined {
+    return openJob(this.db, jobId) ?? undefined
   }
 
   /**
@@ -135,19 +158,38 @@ export class DemoStore {
     return lookupTag(this.db, tagCode)
   }
 
-  /** Jobs with gear physically out, for the "bring it back" list. */
-  jobsWithGearOut(): { id: string; label: string; out: number }[] {
-    return this.db
-      .all<{ job_id: string; n: number }>(
-        `select current_job_id as job_id, count(*) as n from assets
-          where current_job_id is not null and presence in ('out', 'in_transit')
-          group by current_job_id`,
-      )
-      .map((r) => ({
-        id: r.job_id,
-        label: this.job(r.job_id)?.label ?? 'Gear out with no job',
-        out: Number(r.n),
-      }))
+  /**
+   * The COMING BACK board: jobs with gear physically out, overdue pinned
+   * first, each row carrying its locally computed due label — plus the two
+   * affordances the desk actually uses on a late job: the WhatsApp nudge
+   * (when a confident number exists) and the last handover summary (when a
+   * session was ever recorded).
+   */
+  outJobsDue(nowMs: number = Date.now()): OutRow[] {
+    return dueBoard(this.db, nowMs).outJobs.map((j) => {
+      const phone = parsePhoneNumber(j.contact)
+      const nudgeUrl =
+        phone && j.due.state === 'overdue'
+          ? whatsAppNudgeUrl(
+              phone,
+              overdueNudgeMessage({
+                jobLabel: j.label,
+                itemsSummary: itemsSummary(outItemNames(this.db, j.id)),
+                dueLabel: j.due.label,
+              }),
+            )
+          : null
+      return {
+        id: j.id,
+        label: j.label,
+        out: j.out,
+        contact: j.contact,
+        expectedBack: j.expectedBack,
+        due: j.due,
+        nudgeUrl,
+        hasSummary: this.hasSummary(j.id),
+      }
+    })
   }
 
   pullList(jobId: string, mode: SessionMode = 'out'): PullListView | null {
@@ -311,15 +353,19 @@ export class DemoStore {
       .map((r) => ({ id: r.id, name: r.display_name ?? 'Unnamed' }))
   }
 
-  /** Answer a pasted WhatsApp kit list against the demo catalogue. */
+  /**
+   * Answer a pasted WhatsApp kit list against the demo catalogue — with the
+   * open jobs' claims attached, so a short line says WHEN another unit comes
+   * back instead of leaving the owner to reconstruct it from memory.
+   */
   checkKitList(text: string): AvailabilitySummary {
     const matched = matchKitList(parseKitList(text), this.catalogue)
-    return checkAvailability(this.db, matched)
+    return checkAvailability(this.db, matched, openJobCommitments(this.db))
   }
 
   /** Re-answer a list after the desk has resolved a line by hand. */
   recheck(lines: MatchedLine[]): AvailabilitySummary {
-    return checkAvailability(this.db, lines)
+    return checkAvailability(this.db, lines, openJobCommitments(this.db))
   }
 
   outboxCounts(): { pending: number; failures: number; oldestAgeMs: number } {
@@ -381,14 +427,16 @@ export class DemoStore {
          sum(case when health <> 'ok' then 1 else 0 end) as attention
        from assets`,
     )
+    // Overdue and due-back come from the same dueBoard read the COMING BACK
+    // list renders from, so the counter and the list it deep-links to can
+    // never disagree. Jobs whose expected_back is free text land in neither
+    // number — 'no date' is not late, it is unknown, and it stays that way.
+    const due = dueBoard(this.db, Date.now())
     return {
       outNow: Number(row?.out_now ?? 0),
       onShelf: Number(row?.on_shelf ?? 0),
-      // No bookings yet, so nothing can be late by a date. Reported as zero
-      // rather than invented, because a made-up overdue count is the fastest
-      // way to teach an owner that the numbers here are decorative.
-      dueBack: 0,
-      overdue: 0,
+      dueBack: due.dueBack,
+      overdue: due.overdue,
       needsAttention: Number(row?.attention ?? 0),
     }
   }
@@ -427,24 +475,17 @@ export class DemoStore {
     )
     if (!row) return null
 
-    const history: AssetHistoryRow[] = this.db
-      .all<{ id: string; payload: string; created_at: number }>(
-        `select id, payload, created_at from outbox
-          where op = 'submit_scan_batch' order by seq desc`,
-      )
-      .flatMap((o): AssetHistoryRow[] => {
-        const op = JSON.parse(o.payload) as Record<string, unknown>
-        if (op.asset_id !== assetId) return []
-        const jobId = typeof op.job_id === 'string' ? op.job_id : null
-        return [{
-          id: o.id,
-          event: String(op.event_type ?? 'check_out'),
-          at: new Date(o.created_at).toLocaleString(),
-          entryMethod: String(op.entry_method ?? 'scanned'),
-          jobLabel: jobId ? (this.job(jobId)?.label ?? null) : null,
-          actor: this.seed.userName,
-        }]
-      })
+    const history: AssetHistoryRow[] = decodeScanOps(this.db)
+      .filter((op) => op.assetId === assetId)
+      .reverse() // newest first — it reads as a story, latest chapter on top
+      .map((op) => ({
+        id: op.outboxId,
+        event: op.eventType,
+        at: new Date(op.createdAt).toLocaleString(),
+        entryMethod: op.entryMethod,
+        jobLabel: op.jobId ? (this.job(op.jobId)?.label ?? null) : null,
+        actor: this.seed.userName,
+      }))
 
     return {
       id: row.id,
@@ -470,40 +511,30 @@ export class DemoStore {
    */
   sessionSummary(jobId: string): SessionSummary | null {
     const job = this.job(jobId)
-    // The job's most recently opened session — the one the tech just held
-    // "finish" on. Another job's session running in parallel is not consulted.
+    if (!job) return null
+
+    // The job's most recently opened LIVE session — the one the tech just
+    // held "finish" on — when there is one. When there is not (the session
+    // was completed, or the app reloaded), the same facts come from the
+    // scan_sessions row written when it opened: summaries used to die with
+    // the in-memory session, which meant "done" on the handover card
+    // destroyed the only record of the morning the desk could read.
     const entry = this.sessions.peek(jobId)
-    if (!job || !entry) return null
-    const sessionId = entry.session.id
-    const mode = entry.mode
+    const rec = entry
+      ? { id: entry.session.id, mode: entry.mode, expected: entry.expected }
+      : lastSessionRecord(this.db, jobId)
+    if (!rec) return null
 
     // Read back from the QUEUE, not from the screen: the queue is what was
     // actually written, and on a real phone it is the only record that exists
     // until a sync happens.
-    const ops = this.db
-      .all<{ id: string; payload: string }>(
-        `select id, payload from outbox where op = 'submit_scan_batch' order by seq`,
-      )
-      .map((o) => ({ id: o.id, op: JSON.parse(o.payload) as Record<string, unknown> }))
-      .filter((o) => o.op.session_id === sessionId)
-
-    const recorded: string[] = []
-    const assumed: string[] = []
-    const unknownTags: { key: string }[] = []
-    for (const { id, op } of ops) {
-      const assetId = typeof op.asset_id === 'string' ? op.asset_id : null
-      if (!assetId) { unknownTags.push({ key: id }); continue }
-      recorded.push(assetId)
-      if (op.entry_method === 'assumed') assumed.push(assetId)
-    }
+    const facts = sessionScanFacts(decodeScanOps(this.db), rec.id)
 
     return buildSummary({
       jobLabel: job.label,
-      mode,
-      expected: entry.expected,
-      recorded,
-      assumed,
-      unknownTags,
+      mode: rec.mode,
+      expected: rec.expected,
+      ...facts,
       facts: (id) => {
         const row = this.db.get<{ asset_code: string | null; display_name: string | null }>(
           `select a.asset_code, coalesce(p.display_name, a.display_name) as display_name
@@ -522,7 +553,52 @@ export class DemoStore {
    * only whichever one was touched last.
    */
   scannedCount(jobId: string): number {
-    return this.sessions.peek(jobId, 'out')?.session.scannedIds.length ?? 0
+    // The live session when one exists — it also counts off-list additions.
+    // Otherwise the mirror itself: promised items whose projection already
+    // says they left on this job. Without the fallback, a reload zeroed
+    // every ring on the board while the vans stayed loaded.
+    return (
+      this.sessions.peek(jobId, 'out')?.session.scannedIds.length ??
+      packedProgress(this.db, jobId)
+    )
+  }
+
+  /**
+   * A job born at the desk — from an answered kit list, or from nothing
+   * (the walk-in). Resolved lines become the promised set via the same
+   * job_expected table the seed writes, so the new job is on the board,
+   * scannable and counted by availability the moment this returns. Lines
+   * the matcher never resolved are LEFT OUT, not guessed in.
+   */
+  createJobFromLines(
+    lines: MatchedLine[],
+    input: { label: string; contact: string | null; expectedBack: string | null },
+  ): { jobId: string; allocated: number; requested: number } {
+    const wants = lines
+      .filter((l): l is MatchedLine & { productId: string } => !!l.productId)
+      .map((l) => ({ productId: l.productId, qty: l.quantity }))
+
+    const jobId = `job-${crypto.randomUUID()}`
+    const result = createJob(this.db, {
+      id: jobId,
+      orgId: this.seed.orgId,
+      label: input.label,
+      contact: input.contact,
+      expectedBack: input.expectedBack,
+      wants,
+    })
+    return { jobId, allocated: result.expected.length, requested: result.requested }
+  }
+
+  /** Set or clear a job's due date. ISO in, honest 'no date' when cleared. */
+  setDueDate(jobId: string, value: string | null): void {
+    setExpectedBack(this.db, jobId, value)
+  }
+
+  /** A session was recorded on this job at some point, so its handover is
+   *  reviewable — live or finished. */
+  hasSummary(jobId: string): boolean {
+    return lastSessionRecord(this.db, jobId) !== null
   }
 }
 

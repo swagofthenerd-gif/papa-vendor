@@ -33,7 +33,7 @@ export type {
 export { PhotoStore, pairBySide, DEFAULT_BUDGET_BYTES } from './photos.ts'
 export type { PhotoRow, PhotoSide, PhotoPair, CaptureInput, CaptureResult } from './photos.ts'
 export {
-  whatsAppShareUrl, parsePhoneNumber, whatsAppNudgeUrl, telUrl,
+  whatsAppShareUrl, parsePhoneNumber, whatsAppNudgeUrl, whatsAppChatUrl, telUrl,
   overdueNudgeMessage, OVERDUE_NUDGE_TEMPLATE,
 } from './share.ts'
 export { dueStatus, parseDueDate, compareDueDates, compareJobsByDue } from './overdue.ts'

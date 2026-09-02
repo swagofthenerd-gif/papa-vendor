@@ -1,4 +1,5 @@
 import type { SqlDriver } from '@papa/core'
+import { DEMO_SCHEMA } from './read-model.ts'
 
 /**
  * A demo rental house, so the app can be used before there is any login,
@@ -95,7 +96,8 @@ interface JobSpec {
   label: string
   contact: string
   departsAt: string
-  expectedBack: string
+  /** Days from "today" the gear is expected back. See isoDaysFromNow. */
+  backInDays: number
   /** Product keys and how many of each the job expects. */
   wants: [string, number][]
 }
@@ -106,7 +108,7 @@ const JOBS: JobSpec[] = [
     label: 'Shan Foods TVC — Ghazi Studios',
     contact: 'Bilal (prod) 0300 4412233',
     departsAt: '06:30',
-    expectedBack: 'Thu 21 Aug',
+    backInDays: 0, // due today — the middle of the board's three states
     wants: [['fx9', 1], ['sigma1835', 2], ['aputure600', 2], ['vmount', 4], ['sachtler', 1], ['smallhd', 1]],
   },
   {
@@ -114,7 +116,7 @@ const JOBS: JobSpec[] = [
     label: 'Wedding — DHA Phase 5',
     contact: 'Hamza 0321 8899001',
     departsAt: '14:00',
-    expectedBack: 'Sun 24 Aug',
+    backInDays: 3, // upcoming
     wants: [['fx6', 2], ['sigma50100', 1], ['ronin', 1], ['vmount', 4], ['sachdeva', 2], ['aputure300', 1]],
   },
   {
@@ -122,10 +124,34 @@ const JOBS: JobSpec[] = [
     label: 'Documentary — Walled City',
     contact: 'Ayesha 0333 1122334',
     departsAt: '09:15',
-    expectedBack: 'Fri 22 Aug',
+    // OVERDUE — and deliberately the job that also has the FX6 physically
+    // out, so the coming-back board opens with a real red row, a nudge to
+    // send, and an overdue counter that is not zero.
+    backInDays: -2,
     wants: [['c300', 1], ['cne', 1], ['mixpre', 1], ['mkh416', 1], ['vmount', 3], ['xlr', 4]],
   },
 ]
+
+/**
+ * Due dates are RELATIVE to the day the demo opens, as real ISO dates.
+ *
+ * The tag codes above are fixed-seed because a printed label must survive a
+ * refresh. Dates have the OPPOSITE requirement: a fixed calendar date rots —
+ * within a week of writing it, every job would read overdue and the board
+ * would only ever demonstrate one of its three states. So the now-reference
+ * is `new Date()` at seed time (the same clock `dueStatus` reads at render,
+ * and the same one the seed already uses for updated_at), and the offsets
+ * are chosen so the board always shows one overdue, one due-today and one
+ * upcoming job. Formatted as local YYYY-MM-DD — exactly what the server's
+ * `date` column mirrors — so parseDueDate accepts it.
+ */
+function isoDaysFromNow(days: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mm}-${dd}`
+}
 
 /**
  * Two stand-in condition photos, so the out/in comparison is visible before
@@ -186,6 +212,20 @@ export function seedDemo(db: SqlDriver): DemoSeed {
   const rng = makeRng(0x5A17A11)
   const tags: DemoTag[] = []
 
+  // The demo-only tables (job_expected, job_meta, scan_sessions) sit beside
+  // the real schema, applied the same create-if-not-exists way.
+  db.exec(DEMO_SCHEMA)
+
+  const expectedFor = (j: JobSpec): string[] => {
+    const out: string[] = []
+    for (const [key, n] of j.wants) {
+      const spec = PRODUCTS.find((p) => p.key === key)
+      if (!spec) continue
+      for (let i = 1; i <= Math.min(n, spec.units); i++) out.push(`asset-${key}-${i}`)
+    }
+    return out
+  }
+
   db.transaction(() => {
     for (const l of LOCATIONS) {
       db.exec(
@@ -239,8 +279,20 @@ export function seedDemo(db: SqlDriver): DemoSeed {
       db.exec(
         `insert into jobs (id, org_id, label, contact, expected_back, status)
          values (?, ?, ?, ?, ?, 'open')`,
-        [j.id, ORG, j.label, j.contact, j.expectedBack],
+        [j.id, ORG, j.label, j.contact, isoDaysFromNow(j.backInDays)],
       )
+      db.exec(
+        `insert into job_meta (job_id, departs_at) values (?, ?)`,
+        [j.id, j.departsAt],
+      )
+      // The promised set lives in the database, not on the seed object, so a
+      // job created at the desk later behaves exactly like these three.
+      for (const assetId of expectedFor(j)) {
+        db.exec(
+          `insert into job_expected (job_id, asset_id) values (?, ?)`,
+          [j.id, assetId],
+        )
+      }
     }
 
     // One camera already out, so the double-checkout warning is reachable
@@ -314,16 +366,6 @@ export function seedDemo(db: SqlDriver): DemoSeed {
     }
   })
 
-  const expectedFor = (j: JobSpec): string[] => {
-    const out: string[] = []
-    for (const [key, n] of j.wants) {
-      const spec = PRODUCTS.find((p) => p.key === key)
-      if (!spec) continue
-      for (let i = 1; i <= Math.min(n, spec.units); i++) out.push(`asset-${key}-${i}`)
-    }
-    return out
-  }
-
   return {
     orgId: ORG,
     userName: 'Usman (prep)',
@@ -333,7 +375,7 @@ export function seedDemo(db: SqlDriver): DemoSeed {
       label: j.label,
       contact: j.contact,
       departsAt: j.departsAt,
-      expectedBack: j.expectedBack,
+      expectedBack: isoDaysFromNow(j.backInDays),
       expected: expectedFor(j),
     })),
   }

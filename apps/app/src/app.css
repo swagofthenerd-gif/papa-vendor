@@ -101,6 +101,20 @@ body {
   mask: radial-gradient(circle, transparent 58%, #000 60%);
 }
 
+/* A job row is now a band (the big scan target) plus a strip of desk actions
+   under it. The actions live OUTSIDE the button -- links cannot nest inside
+   one -- and every action keeps the 40px btn-sm floor with the glove gap
+   between neighbours. */
+.job-block { display: flex; flex-direction: column; gap: var(--sp-1); }
+.job-block.is-overdue .job-card { border-color: var(--red); }
+.job-actions {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--sp-2) var(--tap-gap-glove);
+  padding: 0 var(--sp-2);
+}
+.job-actions .job-contact { margin-right: auto; }
+.job-actions a.btn { text-decoration: none; }
+
 .empty {
   flex: 1; display: grid; place-content: center; justify-items: center;
   gap: var(--sp-2); padding: var(--sp-8); text-align: center; color: var(--muted);
@@ -312,6 +326,19 @@ body {
   font-family: var(--ff-code); font-size: var(--fs-md);
 }
 .sheet-hint { margin-top: var(--sp-3); color: var(--muted); font-size: var(--fs-sm); }
+.field-label {
+  display: block; margin-top: var(--sp-3);
+  font-size: var(--fs-sm); font-weight: 700; color: var(--muted);
+}
+.field-label + .sheet-search { margin-top: var(--sp-1); }
+.sheet-submit { margin-top: var(--sp-4); }
+.sheet-foot-split {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: var(--sp-4);
+  /* Clear-vs-Save is a remove-information verb beside a frequent one, so
+     they sit at opposite ends with the danger gap between them. */
+  gap: var(--tap-gap-danger);
+}
 .sheet-list { flex: 1; overflow-y: auto; margin-top: var(--sp-3); list-style: none; padding: 0; }
 .sheet-row {
   display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
@@ -489,6 +516,10 @@ body {
 }
 .badge-green { background: var(--green-soft); color: var(--green-ink); }
 .badge-orange { background: var(--accent-soft); color: var(--accent-strong); }
+/* Overdue. Ink on the card tint plus a real border, following the stat
+   strip's is-bad pattern rather than red-on-red-soft, which has the same
+   sub-AA contrast problem the green-ink token comment documents. */
+.badge-red { background: var(--card-2); color: var(--red); border: 1px solid var(--red); }
 
 /* ---- quick actions ----------------------------------------- */
 .quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }

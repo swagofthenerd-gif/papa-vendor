@@ -10,6 +10,7 @@ import assert from 'node:assert/strict'
 import {
   parsePhoneNumber,
   whatsAppNudgeUrl,
+  whatsAppChatUrl,
   telUrl,
   overdueNudgeMessage,
   OVERDUE_NUDGE_TEMPLATE,
@@ -76,6 +77,11 @@ describe('the links built from a parsed number', () => {
 
   test('tel link puts the + back for the dialer', () => {
     assert.equal(telUrl('923004412233'), 'tel:+923004412233')
+  })
+
+  test('plain chat link carries the number and nothing else', () => {
+    // No ?text= at all: this is "open the thread", not "send our sentence".
+    assert.equal(whatsAppChatUrl('923004412233'), 'https://wa.me/923004412233')
   })
 })
 
