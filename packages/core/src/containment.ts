@@ -27,7 +27,7 @@ import type { SqlDriver } from './db/driver.ts'
  * ---------------------------------------------------------------------------
  */
 
-export type ContainmentKind = 'permanent' | 'packed'
+export type ContainmentKind = 'permanent' | 'packed' | 'subrented'
 
 export interface ContainedChild {
   assetId: string
@@ -45,6 +45,11 @@ export interface CaseManifest {
   permanent: ContainedChild[]
   /** Believed to be inside. NEVER recorded without a person. */
   packed: ContainedChild[]
+  /** Believed to be inside AND belongs to someone else. Same rule as packed —
+   *  never recorded without a person — but kept apart because a dispute over
+   *  a subrented item is a dispute with a SUPPLIER, not a client, and a
+   *  manifest that files it under "ours, believed inside" hides that. */
+  subrented: ContainedChild[]
 }
 
 /** Everything one case claims to contain, split by how much that claim is worth. */
@@ -69,16 +74,21 @@ export function caseManifest(db: SqlDriver, parentId: string): CaseManifest | nu
        from asset_containment c
        join assets a on a.id = c.child_asset_id
        left join products p on p.id = a.product_id
-      where c.parent_asset_id = ?
+      where c.parent_asset_id = ? and c.removed_at is null
       order by a.asset_code`,
     [parentId],
   )
 
+  // Every relation is carried through as itself. 'subrented' used to be
+  // coerced to 'packed' here, which silently laundered a supplier's gear
+  // into "ours, believed inside". Anything genuinely unknown — a relation a
+  // newer server ships before this build knows it — degrades to 'packed',
+  // the weakest claim: believed inside, never recorded without a person.
   const children: ContainedChild[] = rows.map((r) => ({
     assetId: r.child_asset_id,
     assetCode: r.asset_code,
     displayName: r.display_name,
-    kind: r.kind === 'permanent' ? 'permanent' : 'packed',
+    kind: r.kind === 'permanent' || r.kind === 'subrented' ? r.kind : 'packed',
     presence: r.presence,
   }))
 
@@ -87,13 +97,19 @@ export function caseManifest(db: SqlDriver, parentId: string): CaseManifest | nu
     parentName: parent.display_name,
     permanent: children.filter((c) => c.kind === 'permanent'),
     packed: children.filter((c) => c.kind === 'packed'),
+    subrented: children.filter((c) => c.kind === 'subrented'),
   }
 }
 
 /** Whether this asset is worth opening a manifest for at all. */
 export function hasContents(db: SqlDriver, assetId: string): boolean {
+  // Same filter as the manifest itself, or a case emptied by removals would
+  // open a manifest with nothing on it. A removed row is history, not
+  // contents — a manifest still listing Tuesday's pulled plate invites the
+  // tech to confirm, with their name on it, gear that is not there.
   const row = db.get<{ n: number }>(
-    `select count(*) as n from asset_containment where parent_asset_id = ?`,
+    `select count(*) as n from asset_containment
+      where parent_asset_id = ? and removed_at is null`,
     [assetId],
   )
   return Number(row?.n ?? 0) > 0

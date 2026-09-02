@@ -63,6 +63,41 @@ describe('the manifest', () => {
   test('an unknown parent returns nothing rather than an empty case', () => {
     assert.equal(caseManifest(db, 'nope'), null)
   })
+
+  test('removed gear does not appear on the manifest', () => {
+    // A removed row is history, not contents. A manifest that still lists
+    // the plate pulled out on Tuesday invites the tech to confirm — as
+    // 'assumed', with their name on it — gear that is not there.
+    db.exec(`update asset_containment set removed_at = '2026-08-30T10:00:00Z'
+              where child_asset_id = 'plate'`)
+    const m = caseManifest(db, 'case')
+    assert.equal(m.packed.length, 1)
+    assert.ok(!m.packed.some((c) => c.assetId === 'plate'))
+  })
+
+  test('a case emptied by removals opens no manifest at all', () => {
+    db.exec(`update asset_containment set removed_at = '2026-08-30T10:00:00Z'
+              where parent_asset_id = 'case'`)
+    assert.equal(hasContents(db, 'case'), false)
+  })
+
+  test('subrented gear keeps its relation instead of masquerading as packed', () => {
+    // Subrented is someone ELSE'S gear passing through. Coercing it to
+    // 'packed' silently laundered a supplier's item into "ours, believed
+    // inside" — and a dispute over it is a dispute with a supplier, not a
+    // client, so the manifest must say which it is.
+    db.exec(`insert into assets (id, org_id, product_id, asset_code, is_container, presence, health)
+             values ('sub','o','pl','SUB-01',0,'here','ok')`)
+    db.exec(`insert into asset_containment (parent_asset_id, child_asset_id, kind)
+             values ('case','sub','subrented')`)
+
+    const m = caseManifest(db, 'case')
+    assert.equal(m.subrented.length, 1)
+    assert.equal(m.subrented[0].assetId, 'sub')
+    assert.equal(m.subrented[0].kind, 'subrented')
+    assert.ok(!m.packed.some((c) => c.assetId === 'sub'), 'not in packed')
+    assert.ok(!m.permanent.some((c) => c.assetId === 'sub'), 'not in permanent')
+  })
 })
 
 describe('what a case scan is allowed to record', () => {

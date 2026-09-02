@@ -135,7 +135,7 @@ describe('progress', () => {
 })
 
 describe('the feedback vocabulary', () => {
-  const outcomes = ['accepted', 'duplicate', 'unexpected', 'unknown_tag', 'conflict', 'complete']
+  const outcomes = ['accepted', 'duplicate', 'unexpected', 'unknown_tag', 'retired_tag', 'conflict', 'complete']
 
   test('every outcome has a pattern', () => {
     for (const o of outcomes) assert.ok(FEEDBACK[o], `${o} has no feedback`)
@@ -180,7 +180,7 @@ describe('the feedback vocabulary', () => {
   test('conflict is the most insistent pattern in the set', () => {
     // It is the one that must be noticed while the truck is in the yard.
     const conflict = hapticDurationMs(FEEDBACK.conflict)
-    for (const o of ['accepted', 'duplicate', 'unexpected', 'unknown_tag']) {
+    for (const o of ['accepted', 'duplicate', 'unexpected', 'unknown_tag', 'retired_tag']) {
       assert.ok(conflict > hapticDurationMs(FEEDBACK[o]), `conflict must out-buzz ${o}`)
     }
   })

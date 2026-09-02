@@ -27,6 +27,7 @@ export type ScanOutcome =
   | 'duplicate'
   | 'unexpected'
   | 'unknown_tag'
+  | 'retired_tag'
   | 'conflict'
 
 export interface ScanResult {
@@ -63,6 +64,43 @@ interface AssetRow {
 }
 
 /**
+ * How long the same tag is ignored after it decodes.
+ *
+ * The camera sees a sticker roughly sixty times a second, so without this one
+ * held-up label becomes sixty rows. It is NOT the session dedupe — that lives
+ * in ScanSession and lasts the whole session on purpose. This is only about
+ * the camera staring at the same thing, so it is short enough that a
+ * deliberate rescan a couple of seconds later still gets its double-tick,
+ * which is the feedback that tells the tech the scanner is alive.
+ */
+export const SAME_TAG_QUIET_MS = 1_500
+
+/**
+ * The decode-side debounce — one per open camera, not per session.
+ *
+ * The quiet window runs from the last decode that was ACCEPTED, never the
+ * last one merely seen: if a suppressed frame refreshed it, a label held up
+ * to the camera would renew its own window sixty times a second and never
+ * re-fire.
+ */
+export class SameTagDebounce {
+  private readonly quietMs: number
+  private readonly lastAccepted = new Map<string, number>()
+
+  constructor(quietMs = SAME_TAG_QUIET_MS) {
+    this.quietMs = quietMs
+  }
+
+  /** Whether this decode should be handled, recording it if so. */
+  accept(tagCode: string, now = Date.now()): boolean {
+    const last = this.lastAccepted.get(tagCode)
+    if (last !== undefined && now - last < this.quietMs) return false
+    this.lastAccepted.set(tagCode, now)
+    return true
+  }
+}
+
+/**
  * One scan session — a pull, a return, or a cycle count.
  *
  * Holds the per-session dedupe set. Suppression lasts the WHOLE SESSION rather
@@ -73,7 +111,13 @@ interface AssetRow {
 export class ScanSession {
   readonly id: string
   private readonly outbox: Outbox
-  private readonly seen = new Map<string, string>()   // assetId -> outboxId
+  // Keyed by asset AND event type. Same asset, same event is the rescan case
+  // and is swallowed; same asset, DIFFERENT event is two real things
+  // happening to one camera — gear that goes out and comes home in a single
+  // session must not have its check_in eaten as a 'duplicate'.
+  private readonly seen = new Set<string>()           // `assetId\n eventType`
+  private readonly recorded = new Set<string>()       // asset ids, scan order
+  private readonly lastOp = new Map<string, string>() // assetId -> outboxId
   private readonly now: () => number
   private readonly newId: () => string
 
@@ -91,14 +135,14 @@ export class ScanSession {
 
   /** Assets recorded so far, in scan order. */
   get scannedIds(): string[] {
-    return [...this.seen.keys()]
+    return [...this.recorded]
   }
 
   /** Expected but not yet scanned — the shortfall, shown while the truck is
    *  still in the yard rather than discovered on somebody's set. */
   get outstanding(): string[] {
     if (!this.opts.expected) return []
-    return [...this.opts.expected].filter((id) => !this.seen.has(id))
+    return [...this.opts.expected].filter((id) => !this.recorded.has(id))
   }
 
   /**
@@ -112,6 +156,25 @@ export class ScanSession {
       `select asset_id, status from asset_tags where tag_code = ?`,
       [tagCode],
     )
+
+    // A RETIRED OR LOST label keeps its asset_id — that IS the historical
+    // record — but it must never resolve with full confidence. A peeled
+    // label found on the floor and stuck back on the wrong case would scan
+    // as whatever it USED to be on, and the wrong camera goes out under the
+    // right name, with no warning anywhere. The scan is still recorded (the
+    // label is physically in front of the camera; reality outranks the
+    // mirror), but by tag_code only, so the server — which knows why the
+    // label was revoked — decides what it means.
+    if (tag?.asset_id && tag.status !== 'active') {
+      const outboxId = this.enqueue({ tag_code: tagCode, event_type: eventType })
+      return {
+        outcome: 'retired_tag',
+        message: tag.status === 'lost'
+          ? 'This label was reported lost — check what it is stuck to'
+          : 'This label was retired — use the item’s current label',
+        outboxId,
+      }
+    }
 
     // An unknown tag is RECORDED, not rejected. It may be a label bound on
     // another device since this one last synced. A scan that silently vanishes
@@ -140,7 +203,7 @@ export class ScanSession {
     // gets nothing, and concludes the scanner is broken, which is precisely
     // how the system dies. The caller fires a distinct double-tick and pulses
     // the existing row.
-    if (this.seen.has(asset.id)) {
+    if (this.seen.has(seenKey(asset.id, eventType))) {
       return { ...base, outcome: 'duplicate', message: 'Already in this session' }
     }
 
@@ -156,7 +219,7 @@ export class ScanSession {
         event_type: eventType,
         entry_method: 'scanned',
       })
-      this.seen.set(asset.id, outboxId)
+      this.remember(asset.id, eventType, outboxId)
 
       // Records anyway. The truck is real and reality outranks the schedule —
       // but nobody walks away from a collision they could have caught in the
@@ -176,7 +239,7 @@ export class ScanSession {
       event_type: eventType,
       entry_method: 'scanned',
     })
-    this.seen.set(asset.id, outboxId)
+    this.remember(asset.id, eventType, outboxId)
 
     // An unexpected item does not increment the count and does not stop the
     // line. Two inline buttons on the row; neither is required.
@@ -203,7 +266,7 @@ export class ScanSession {
     const asset = this.loadAsset(assetId)
     if (!asset) return { outcome: 'unknown_tag', message: 'No such item' }
 
-    if (this.seen.has(asset.id)) {
+    if (this.seen.has(seenKey(asset.id, eventType))) {
       // baseResult, matching scan(). This branch used to return only the id,
       // so a duplicate added by hand lost its code and name and the row went
       // blank in the UI — copy-paste drift between two paths that must agree.
@@ -215,7 +278,7 @@ export class ScanSession {
       event_type: eventType,
       entry_method: 'manual',
     })
-    this.seen.set(asset.id, outboxId)
+    this.remember(asset.id, eventType, outboxId)
 
     return { ...this.baseResult(asset), outcome: 'accepted', outboxId }
   }
@@ -299,7 +362,7 @@ export class ScanSession {
       const asset = this.loadAsset(assetId)
       const base = asset ? this.baseResult(asset) : { assetId }
 
-      if (this.seen.has(assetId)) {
+      if (this.seen.has(seenKey(assetId, eventType))) {
         return { ...base, outcome: 'duplicate' as const, message: 'Already in this session' }
       }
       const outboxId = this.enqueue({
@@ -307,7 +370,7 @@ export class ScanSession {
         event_type: eventType,
         entry_method: 'assumed',
       })
-      this.seen.set(assetId, outboxId)
+      this.remember(assetId, eventType, outboxId)
       return { ...base, outcome: 'accepted' as const, message: 'Taken on trust', outboxId }
     })
   }
@@ -345,6 +408,17 @@ export class ScanSession {
     }
   }
 
+  /**
+   * Marks an asset+event as recorded, and the op as the asset's latest.
+   * Every path that enqueues for a known asset ends here, so the dedupe set
+   * and the ordering chain cannot drift apart.
+   */
+  private remember(assetId: string, eventType: string, outboxId: string): void {
+    this.seen.add(seenKey(assetId, eventType))
+    this.recorded.add(assetId)
+    this.lastOp.set(assetId, outboxId)
+  }
+
   private enqueue(payload: Record<string, unknown>): string {
     const id = this.newId()
     const deviceTime = new Date(this.now()).toISOString()
@@ -360,8 +434,22 @@ export class ScanSession {
       clock_offset_ms: this.opts.clockOffsetMs ?? 0,
     }
 
+    // ORDERING, made real. The outbox's rule — a permanent failure poisons
+    // its depends_on subtree — only protects anything if the edges exist,
+    // and until now nothing wrote them. A second event for the SAME asset in
+    // this session (its check_in after its check_out) genuinely depends on
+    // the first: applied without it, the server sees "checked in before it
+    // was checked out". So it gets a real edge, and a parked check_out drags
+    // its check_in down with it instead of letting it ship alone. Ops for
+    // DIFFERENT assets stay independent on purpose — one bad row must never
+    // freeze a warehouse's entire sync.
+    const dependsOn =
+      typeof payload.asset_id === 'string'
+        ? this.lastOp.get(payload.asset_id) ?? null
+        : null
+
     this.db.transaction(() => {
-      this.outbox.enqueue({ id, op: 'submit_scan_batch', payload: op })
+      this.outbox.enqueue({ id, op: 'submit_scan_batch', payload: op, dependsOn })
 
       // Optimistic local projection, in the SAME transaction as the queue row.
       // If these could separate, the UI would show a scan that will never be
@@ -373,4 +461,10 @@ export class ScanSession {
 
     return id
   }
+}
+
+/** The session dedupe key. A newline can appear in neither an id nor an
+ *  event type, so the pair cannot collide with a different pair. */
+function seenKey(assetId: string, eventType: string): string {
+  return `${assetId}\n${eventType}`
 }

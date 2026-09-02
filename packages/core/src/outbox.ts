@@ -44,15 +44,11 @@ export interface EnqueueInput {
   dependsOn?: string | null
 }
 
-/** Backoff, capped. Plus an immediate flush on `online` and on app foreground. */
-const BACKOFF_MS = [1_000, 2_000, 5_000, 15_000, 60_000, 300_000, 1_800_000]
-
 /**
- * After this many attempts an op is parked rather than retried forever. A
- * single bad row must never freeze a warehouse's entire sync — that is the
- * failure mode that gets an app uninstalled.
+ * Backoff, capped — the LAST step repeats forever. Plus an immediate flush on
+ * `online` and on app foreground, which is what actually ends a long outage.
  */
-export const MAX_ATTEMPTS = 8
+const BACKOFF_MS = [1_000, 2_000, 5_000, 15_000, 60_000, 300_000, 1_800_000]
 
 export class Outbox {
   // Explicit field + assignment rather than a constructor parameter property.
@@ -155,11 +151,17 @@ export class Outbox {
       [limit],
     )
     const batch: OutboxRow[] = []
+    const included = new Set<string>()
 
     for (const row of rows) {
       if (row.next_retry_at !== null && row.next_retry_at > now) break
-      if (row.depends_on && this.isUnsettled(row.depends_on)) break
+      // A dependency already IN this batch counts as settled: batches are
+      // all-or-nothing and applied in seq order, so it lands with — never
+      // after — its dependent. Stopping at it would split every same-asset
+      // check_out/check_in pair across two flushes for no safety gain.
+      if (row.depends_on && !included.has(row.depends_on) && this.isUnsettled(row.depends_on)) break
       batch.push(row)
+      included.add(row.id)
       if (batch.length >= limit) break
     }
     return batch
@@ -197,16 +199,22 @@ export class Outbox {
 
   /**
    * A retryable failure — network, timeout, 5xx. Backs off and stays queued.
+   *
+   * NEVER escalates to fail(). A retryable error is a statement about the
+   * NETWORK, not about the op, and no number of network statements adds up to
+   * a verdict. The old "park after 8 attempts" rule meant ~40 minutes on a
+   * captive portal — Wi-Fi that answers TCP and delivers nothing, every
+   * flush a timeout — quietly turned a session of good scans into a failed
+   * subtree, permanently, over a condition that fixes itself when the phone
+   * leaves the cafe. What saturates is the backoff DELAY (the last BACKOFF_MS
+   * step repeats forever); the attempt count keeps climbing as a diagnostic
+   * for the "needs attention" surface. Parking is reserved for fail(), which
+   * only the server refusing an op can trigger.
    */
   retryLater(id: string, code: string, detail = '', now = Date.now()): void {
     const row = this.byId(id)
     if (!row) return
     const attempts = row.attempts + 1
-
-    if (attempts >= MAX_ATTEMPTS) {
-      this.fail(id, code, detail)
-      return
-    }
 
     this.db.exec(
       `update outbox set state = 'pending', attempts = ?, next_retry_at = ?,
