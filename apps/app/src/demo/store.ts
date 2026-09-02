@@ -514,9 +514,13 @@ export class DemoStore {
    */
   sessionSummary(jobId: string): SessionSummary | null {
     const found = this.lastSessionFacts(jobId)
-    if (!found) return null
-    const { job, rec, facts } = found
+    return found ? this.summaryOf(found) : null
+  }
 
+  /** buildSummary over one job's last session — the shape both the handover
+   *  card and the parchi are built from, so they can never disagree. */
+  private summaryOf(found: NonNullable<ReturnType<DemoStore['lastSessionFacts']>>): SessionSummary {
+    const { job, rec, facts } = found
     return buildSummary({
       jobLabel: job.label,
       mode: rec.mode,
@@ -535,14 +539,7 @@ export class DemoStore {
     const found = this.lastSessionFacts(jobId)
     if (!found) return null
     const { job, rec, facts } = found
-
-    const summary = buildSummary({
-      jobLabel: job.label,
-      mode: rec.mode,
-      expected: rec.expected,
-      ...facts,
-      facts: (id) => assetFacts(this.db, id),
-    })
+    const summary = this.summaryOf(found)
 
     return buildParchi({
       houseName: this.seed.houseName,

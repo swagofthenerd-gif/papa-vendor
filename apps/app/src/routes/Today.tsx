@@ -323,7 +323,7 @@ export function Today({
  * The due state as a badge. Overdue is the only red on the card — everything
  * else is information; late is work.
  */
-function DueBadge({ due }: { due: DueStatus }) {
+export function DueBadge({ due }: { due: DueStatus }) {
   const cls =
     due.state === 'overdue'
       ? ' badge-red'

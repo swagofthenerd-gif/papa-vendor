@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { Icon } from '@papa/icons'
 import { Shell, SectionHead } from '../components/Shell.tsx'
 import { go, type View } from '../nav.ts'
+import { DueBadge } from '../routes/Today.tsx'
 import { dayAccountText, type DayItem } from './hisaab.ts'
 import type { DemoStore } from './store.ts'
 
@@ -132,17 +133,7 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
                   {j.out} item{j.out === 1 ? '' : 's'} still out
                 </span>
                 <span className="line-code">
-                  <span
-                    className={`badge${
-                      j.due.state === 'overdue'
-                        ? ' badge-red'
-                        : j.due.state === 'due_today'
-                          ? ' badge-orange'
-                          : ''
-                    }`}
-                  >
-                    {j.due.label}
-                  </span>
+                  <DueBadge due={j.due} />
                 </span>
               </li>
             ))}
