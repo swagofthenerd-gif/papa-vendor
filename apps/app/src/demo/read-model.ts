@@ -443,6 +443,24 @@ export function lastSessionRecord(
   }
 }
 
+/**
+ * Code and display name for one asset — the shape buildSummary's `facts`
+ * callback wants. The store inlined this join once and the parchi and the
+ * day's account both need it too; three inline copies of the same coalesce
+ * is how one of them quietly stops preferring the product name.
+ */
+export function assetFacts(
+  db: SqlDriver,
+  id: string,
+): { id: string; code: string | null; name: string | null } | undefined {
+  const row = db.get<{ asset_code: string | null; display_name: string | null }>(
+    `select a.asset_code, coalesce(p.display_name, a.display_name) as display_name
+       from assets a left join products p on p.id = a.product_id where a.id = ?`,
+    [id],
+  )
+  return row ? { id, code: row.asset_code, name: row.display_name } : undefined
+}
+
 /** Names of the items physically out on a job, for the nudge message. */
 export function outItemNames(db: SqlDriver, jobId: string): string[] {
   return db

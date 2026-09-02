@@ -293,6 +293,11 @@ export function Today({
             <span className="quick-t">Just scan</span>
             <span className="quick-s">Where is this thing?</span>
           </button>
+          <button className="quick pressable" onClick={() => go({ name: 'hisaab' })}>
+            <Icon name="clipboard" size={20} />
+            <span className="quick-t">Din ka hisaab</span>
+            <span className="quick-s">What moved today</span>
+          </button>
           <button className="quick pressable" onClick={() => go({ name: 'import' })}>
             <Icon name="scroll" size={20} />
             <span className="quick-t">Load your gear</span>

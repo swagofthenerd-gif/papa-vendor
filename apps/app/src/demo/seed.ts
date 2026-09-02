@@ -188,6 +188,8 @@ export interface DemoTag {
 
 export interface DemoSeed {
   orgId: string
+  /** The house's name as it reads on a challan — the parchi letterhead. */
+  houseName: string
   userName: string
   tags: DemoTag[]
   jobs: {
@@ -368,6 +370,7 @@ export function seedDemo(db: SqlDriver): DemoSeed {
 
   return {
     orgId: ORG,
+    houseName: 'Ravi Light & Grip',
     userName: 'Usman (prep)',
     tags,
     jobs: JOBS.map((j) => ({

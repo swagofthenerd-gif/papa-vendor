@@ -11,6 +11,7 @@ import { SessionScreen } from './demo/SessionScreen.tsx'
 import { EnquiryScreen } from './demo/EnquiryScreen.tsx'
 import { Tags } from './demo/Tags.tsx'
 import { ImportScreen } from './demo/ImportScreen.tsx'
+import { HisaabScreen } from './demo/HisaabScreen.tsx'
 
 /**
  * The app shell.
@@ -139,6 +140,9 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
 
     case 'session':
       return <SessionScreen store={store} jobId={view.sessionId} />
+
+    case 'hisaab':
+      return <HisaabScreen store={store} />
 
     case 'enquiry':
       return (

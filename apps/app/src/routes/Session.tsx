@@ -22,11 +22,14 @@ import { shortfall, type SessionSummary } from '../session-summary.ts'
 export function Session({
   summary,
   onShareWhatsApp,
+  onShowParchi,
   onBackToScanning,
   onDone,
 }: {
   summary: SessionSummary
   onShareWhatsApp: () => void
+  /** Show the challan as a full-screen QR — the phone-to-phone gate pass. */
+  onShowParchi: () => void
   onBackToScanning: () => void
   onDone: () => void
 }) {
@@ -123,6 +126,12 @@ export function Session({
         <button className="btn btn-primary btn-block" onClick={onShareWhatsApp}>
           <Icon name="send" size={18} />{' '}
           {coming ? 'Send what is still out' : 'Send the list on WhatsApp'}
+        </button>
+        {/* The gate pass. The guard's phone reads it with any camera app —
+            plain text in, challan out — so it works with no app and no
+            network on either side. */}
+        <button className="btn btn-outline btn-block" onClick={onShowParchi}>
+          <Icon name="qr" size={18} /> Parchi — show at the gate
         </button>
         <button className="btn btn-ghost btn-block" onClick={onBackToScanning}>
           <Icon name="camera" size={18} /> Keep scanning

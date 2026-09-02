@@ -28,6 +28,7 @@ import { SqlJsDriver } from './sqljs-driver.ts'
 import { demoCatalogue, seedDemo, type DemoSeed } from './seed.ts'
 import { SessionRegistry, type SessionMode } from './sessions.ts'
 import {
+  assetFacts,
   createJob,
   decodeScanOps,
   dueBoard,
@@ -42,6 +43,8 @@ import {
   setExpectedBack,
   type OpenJobRow,
 } from './read-model.ts'
+import { dayAccount, type DayAccount } from './hisaab.ts'
+import { buildParchi } from '../parchi.ts'
 import type { GearRow } from '../routes/Gear.tsx'
 import type { OutRow, TodayStats } from '../routes/Today.tsx'
 import type { AssetHistoryRow, AssetView } from '../routes/Asset.tsx'
@@ -510,6 +513,68 @@ export class DemoStore {
    * because there is no such fact.
    */
   sessionSummary(jobId: string): SessionSummary | null {
+    const found = this.lastSessionFacts(jobId)
+    if (!found) return null
+    const { job, rec, facts } = found
+
+    return buildSummary({
+      jobLabel: job.label,
+      mode: rec.mode,
+      expected: rec.expected,
+      ...facts,
+      facts: (id) => assetFacts(this.db, id),
+    })
+  }
+
+  /**
+   * The challan text the handover screen renders as a QR code — the parchi.
+   * Built from the same session record and queue read as the summary, so the
+   * gate pass and the screen above it can never tell different stories.
+   */
+  parchiText(jobId: string, nowMs: number = Date.now()): string | null {
+    const found = this.lastSessionFacts(jobId)
+    if (!found) return null
+    const { job, rec, facts } = found
+
+    const summary = buildSummary({
+      jobLabel: job.label,
+      mode: rec.mode,
+      expected: rec.expected,
+      ...facts,
+      facts: (id) => assetFacts(this.db, id),
+    })
+
+    return buildParchi({
+      houseName: this.seed.houseName,
+      jobLabel: job.label,
+      mode: rec.mode,
+      whenMs: nowMs,
+      items: facts.recorded.map((id) => {
+        const f = assetFacts(this.db, id)
+        return { code: f?.code ?? null, name: f?.name ?? null }
+      }),
+      assumedCount: facts.assumed.length,
+      shortfall: summary.missing.map((m) => ({ code: m.code, name: m.name })),
+    })
+  }
+
+  /** Din ka hisaab — the whole day, computed locally. See hisaab.ts. */
+  dayAccount(nowMs: number = Date.now()): DayAccount {
+    return dayAccount(this.db, nowMs)
+  }
+
+  /**
+   * The most recent session on a job — live entry first, durable record
+   * second — with its scans read back from the QUEUE, not from the screen:
+   * the queue is what was actually written, and on a real phone it is the
+   * only record that exists until a sync happens. Shared by the summary and
+   * the parchi.
+   */
+  private lastSessionFacts(jobId: string): {
+    job: OpenJobRow
+    rec: { id: string; mode: 'out' | 'in'; expected: string[] }
+    facts: ReturnType<typeof sessionScanFacts>
+  } | null {
     const job = this.job(jobId)
     if (!job) return null
 
@@ -525,25 +590,7 @@ export class DemoStore {
       : lastSessionRecord(this.db, jobId)
     if (!rec) return null
 
-    // Read back from the QUEUE, not from the screen: the queue is what was
-    // actually written, and on a real phone it is the only record that exists
-    // until a sync happens.
-    const facts = sessionScanFacts(decodeScanOps(this.db), rec.id)
-
-    return buildSummary({
-      jobLabel: job.label,
-      mode: rec.mode,
-      expected: rec.expected,
-      ...facts,
-      facts: (id) => {
-        const row = this.db.get<{ asset_code: string | null; display_name: string | null }>(
-          `select a.asset_code, coalesce(p.display_name, a.display_name) as display_name
-             from assets a left join products p on p.id = a.product_id where a.id = ?`,
-          [id],
-        )
-        return row ? { id, code: row.asset_code, name: row.display_name } : undefined
-      },
-    })
+    return { job, rec, facts: sessionScanFacts(decodeScanOps(this.db), rec.id) }
   }
 
   /**

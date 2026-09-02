@@ -16,6 +16,7 @@ export type View =
   | { name: 'session'; sessionId: string }       // the reconciliation card
   | { name: 'asset'; assetId: string }
   | { name: 'gear'; query?: string }             // search-first inventory
+  | { name: 'hisaab' }                           // din ka hisaab: the day's account
   | { name: 'enquiry' }                          // the pasted kit list
   | { name: 'import' }                           // load the house's catalogue
   | { name: 'settings' }
@@ -60,6 +61,8 @@ export function parseHash(hash: string): View {
       const q = params.get('q')
       return q ? { name: 'gear', query: q } : { name: 'gear' }
     }
+    case 'hisaab':
+      return { name: 'hisaab' }
     case 'enquiry':
       return { name: 'enquiry' }
     case 'import':
@@ -83,6 +86,8 @@ export function viewToHash(view: View): string {
       return `#/asset/${view.assetId}`
     case 'gear':
       return view.query ? `#/gear?q=${encodeURIComponent(view.query)}` : '#/gear'
+    case 'hisaab':
+      return '#/hisaab'
     case 'enquiry':
       return '#/enquiry'
     case 'import':

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
 import { Icon } from '@papa/icons'
 import type { DemoStore } from './store.ts'
@@ -10,15 +10,26 @@ import type { DemoStore } from './store.ts'
  * gear. Until then this page is the substitute: display it on a second screen
  * (or print it) and scan from there. The codes are generated from a fixed seed
  * (seed.ts), so a page printed today still scans tomorrow.
+ *
+ * GENERATION IS PARALLEL AND THE BUTTON NEVER BLOCKS. The first version drew
+ * ~80 data-URLs one after another and disabled Print until the last one
+ * landed — several seconds of a dead button on a phone. Now every label
+ * renders concurrently and appears as it arrives, and Print is pressable
+ * immediately: if labels are still drawing when it is pressed, the click
+ * WAITS for the batch and then prints, rather than printing a page of empty
+ * squares — a label sheet with blank cells is worse than a moment's wait,
+ * because the blanks get stuck on gear anyway.
  */
 export function Tags({ store }: { store: DemoStore }) {
   const [images, setImages] = useState<Map<string, string>>(new Map())
+  const [waiting, setWaiting] = useState(false)
+  const buildRef = useRef<Promise<unknown>>(Promise.resolve())
+  const mountedRef = useRef(true)
 
   useEffect(() => {
-    let cancelled = false
-    const build = async () => {
-      const out = new Map<string, string>()
-      for (const tag of store.seed.tags) {
+    mountedRef.current = true
+    buildRef.current = Promise.all(
+      store.seed.tags.map(async (tag) => {
         // Small and high-contrast: these are read off a screen at ~20cm, and
         // a large sparse code is harder for the decoder than a dense one.
         const url = await QRCode.toDataURL(tag.tagCode, {
@@ -26,13 +37,27 @@ export function Tags({ store }: { store: DemoStore }) {
           width: 160,
           color: { dark: '#000000', light: '#ffffff' },
         })
-        out.set(tag.tagCode, url)
-      }
-      if (!cancelled) setImages(out)
-    }
-    void build()
-    return () => { cancelled = true }
+        if (!mountedRef.current) return
+        // Each label appears the moment it exists instead of the whole page
+        // popping in at the end — the perceived speed IS the speed here.
+        setImages((prev) => {
+          const next = new Map(prev)
+          next.set(tag.tagCode, url)
+          return next
+        })
+      }),
+    )
+    return () => { mountedRef.current = false }
   }, [store])
+
+  const onPrint = () => {
+    setWaiting(true)
+    void buildRef.current.then(() => {
+      if (!mountedRef.current) return
+      setWaiting(false)
+      window.print()
+    })
+  }
 
   const byShelf = new Map<string, typeof store.seed.tags>()
   for (const t of store.seed.tags) {
@@ -41,8 +66,6 @@ export function Tags({ store }: { store: DemoStore }) {
     byShelf.set(t.shelf, list)
   }
 
-  const ready = images.size === store.seed.tags.length
-
   return (
     <div className="tags-screen">
       <div className="tags-bar">
@@ -50,12 +73,8 @@ export function Tags({ store }: { store: DemoStore }) {
           Print these onto sticker paper and put one on each item. Then scan a
           label and tap <strong>Attach this label</strong> to say what it is on.
         </p>
-        <button
-          className="btn btn-primary"
-          disabled={!ready}
-          onClick={() => window.print()}
-        >
-          <Icon name="scroll" size={18} /> {ready ? 'Print the labels' : 'Drawing labels…'}
+        <button className="btn btn-primary" disabled={waiting} onClick={onPrint}>
+          <Icon name="scroll" size={18} /> {waiting ? 'Drawing labels…' : 'Print the labels'}
         </button>
       </div>
       {[...byShelf.entries()].map(([shelf, items]) => (

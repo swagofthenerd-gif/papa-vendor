@@ -55,6 +55,7 @@ describe('routing', () => {
       // hash, so anything that does not survive encoding lands the person on
       // a different screen than the one they linked to.
       { name: 'gear', query: 'FX9 / 01' },
+      { name: 'hisaab' },
       { name: 'enquiry' },
       { name: 'import' },
       { name: 'settings' },
@@ -69,13 +70,14 @@ describe('routing', () => {
     // rename broke routing: the switch simply fell through and the caller
     // navigated to "undefined". Any new route added to the View union without
     // a case here fails this rather than at runtime in a warehouse.
-    const names = ['jobs', 'scan', 'session', 'asset', 'gear', 'enquiry', 'import', 'settings']
+    const names = ['jobs', 'scan', 'session', 'asset', 'gear', 'hisaab', 'enquiry', 'import', 'settings']
     const sample = {
       jobs: { name: 'jobs' },
       scan: { name: 'scan', jobId: 'j', mode: 'out' },
       session: { name: 'session', sessionId: 's' },
       asset: { name: 'asset', assetId: 'a' },
       gear: { name: 'gear' },
+      hisaab: { name: 'hisaab' },
       enquiry: { name: 'enquiry' },
       import: { name: 'import' },
       settings: { name: 'settings' },
