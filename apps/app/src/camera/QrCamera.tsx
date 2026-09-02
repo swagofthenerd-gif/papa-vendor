@@ -36,14 +36,36 @@ function detectorCtor(): BarcodeDetectorCtor | null {
 
 export type CameraState = 'starting' | 'live' | 'denied' | 'insecure' | 'error'
 
+// Below this mean luma (0–255) the room is dark enough that ML Kit needs the
+// lamp. Judged from the first frames — a warehouse before dawn sits well under
+// this; an indoor-lit shelf sits comfortably above it.
+const DARK_LUMA_THRESHOLD = 60
+// Average across the first few frames rather than one, so a single dark frame
+// while the sensor's auto-exposure settles does not trip the lamp on its own.
+const LUMA_SAMPLE_FRAMES = 5
+
+// Track.getCapabilities is not in the DOM lib's type and is absent on some
+// browsers; read it defensively.
+interface TorchCapableTrack {
+  getCapabilities?: () => { torch?: boolean }
+}
+
 export function QrCamera({
   torchOn,
   onDecode,
+  onAutoTorch,
   paused = false,
 }: {
   torchOn: boolean
   /** Called with the decoded text. Fires repeatedly; dedupe downstream. */
   onDecode: (value: string) => void
+  /**
+   * Called at most once, early, when the room is dark AND the platform can
+   * drive the lamp — so the parent can default the torch on. The parent stays
+   * the source of truth, so the header toggle keeps working after. Absent or
+   * silently ignored where the lamp is unsupported.
+   */
+  onAutoTorch?: () => void
   paused?: boolean
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -57,6 +79,8 @@ export function QrCamera({
   // on every scan.
   const decodeRef = useRef(onDecode)
   decodeRef.current = onDecode
+  const autoTorchRef = useRef(onAutoTorch)
+  autoTorchRef.current = onAutoTorch
   const pausedRef = useRef(paused)
   pausedRef.current = paused
 
@@ -103,6 +127,14 @@ export function QrCamera({
       const ctx = canvas.getContext('2d', { willReadFrequently: true })
       let busy = false
 
+      // Ambient-light torch default. Only worth measuring where the lamp can
+      // actually be driven; otherwise a dark reading has no action to take.
+      const capTrack = trackRef.current as TorchCapableTrack | null
+      const torchSupported = capTrack?.getCapabilities?.().torch === true
+      let lumaFrames = 0
+      let lumaSum = 0
+      let autoTorchDone = !torchSupported
+
       const tick = () => {
         if (stopped) return
         raf = requestAnimationFrame(tick)
@@ -112,6 +144,27 @@ export function QrCamera({
         canvas.width = video.videoWidth
         canvas.height = video.videoHeight
         ctx.drawImage(video, 0, 0)
+
+        // Sample average luma over the first few frames, then decide once. Read
+        // from a small centre crop — cheap, and it is what the lens is aimed at.
+        if (!autoTorchDone) {
+          const s = Math.min(64, canvas.width, canvas.height)
+          const px = ctx.getImageData(
+            (canvas.width - s) / 2,
+            (canvas.height - s) / 2,
+            s,
+            s,
+          ).data
+          let sum = 0
+          for (let i = 0; i < px.length; i += 4) {
+            sum += 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]
+          }
+          lumaSum += sum / (px.length / 4)
+          if (++lumaFrames >= LUMA_SAMPLE_FRAMES) {
+            autoTorchDone = true
+            if (lumaSum / lumaFrames < DARK_LUMA_THRESHOLD) autoTorchRef.current?.()
+          }
+        }
 
         if (!detector) {
           const frame = ctx.getImageData(0, 0, canvas.width, canvas.height)

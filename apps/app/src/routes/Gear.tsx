@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Icon } from '@papa/icons'
 import { go } from '../nav.ts'
 import { StatusBadge } from '../components/StatusBadge.tsx'
+import { toBucket } from '../status.ts'
 import type { Presence, Health } from '../status.ts'
 
 /**
@@ -52,9 +53,9 @@ export function Gear({
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
     return rows.filter((r) => {
-      if (filter === 'here' && r.presence !== 'here') return false
-      if (filter === 'out' && r.presence !== 'out' && r.presence !== 'in_transit') return false
-      if (filter === 'attention' && r.health === 'ok') return false
+      // The same three-axes-to-one-bucket collapse the badge uses, so a
+      // filter and the chip it filters by never disagree on the same row.
+      if (filter !== 'all' && toBucket(r) !== filter) return false
       if (q.length === 0) return true
       return (
         r.name.toLowerCase().includes(q) ||
