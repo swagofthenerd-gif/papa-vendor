@@ -132,39 +132,50 @@ export class SyncEngine {
   }
 
   private async handleBatchError(batch: OutboxRow[], err: unknown, now: number): Promise<FlushReport> {
+    const report = { ...emptyReport(), sent: batch.length }
+    await this.parkOrBisect(batch, err, report, now)
+    return report
+  }
+
+  /**
+   * Turn a send error into queue state — retry the lot, or park the one bad op.
+   *
+   * On a retryable error every op backs off and the flush stops: the network
+   * had a moment, not the ops.
+   *
+   * On a permanent error submit_scan_batch is all-or-nothing, so the op the
+   * server refused can sit ANYWHERE in the batch — parking batch[0] on faith
+   * parked an innocent op and left the real poison pending, to fail the next
+   * flush, forever. So: park the op the server NAMES when it names one, and
+   * bisect (via isolate) to find it when it does not.
+   *
+   * Either way the queue's DAG rule does the rest: fail() poisons the parked
+   * op's whole depends_on closure (ScanSession writes those edges for
+   * same-asset ordering), and everything else stays queued to resend in seq
+   * order — one bad row must never freeze a warehouse's entire sync. That is
+   * the failure mode that gets an app uninstalled.
+   */
+  private async parkOrBisect(rows: OutboxRow[], err: unknown, report: FlushReport, now: number): Promise<void> {
     const code = err instanceof TransportError ? err.code : 'unknown'
     const retryable = err instanceof TransportError ? err.retryable : true
     const detail = err instanceof Error ? err.message : String(err)
 
     if (retryable) {
-      for (const row of batch) this.outbox.retryLater(row.id, code, detail, now)
-      return { ...emptyReport(), sent: batch.length, stopped: 'retry_later' }
+      for (const row of rows) this.outbox.retryLater(row.id, code, detail, now)
+      report.stopped = 'retry_later'
+      return
     }
 
-    // Permanent. submit_scan_batch is all-or-nothing, so the op the server
-    // refused can sit ANYWHERE in the batch — parking batch[0] on faith
-    // parked an innocent op and left the real poison pending, to fail the
-    // next flush, forever. So: park the op the server NAMES when it names
-    // one, and bisect to find it when it does not.
-    //
-    // Either way the queue's DAG rule does the rest: fail() poisons the
-    // parked op's whole depends_on closure (ScanSession writes those edges
-    // for same-asset ordering), and everything else stays queued to resend in
-    // seq order — one bad row must never freeze a warehouse's entire sync.
-    // That is the failure mode that gets an app uninstalled.
-    const report = { ...emptyReport(), sent: batch.length }
     const named = poisonClientSeq(err)
-    const hit = named === null ? undefined : batch.find((r) => r.seq === named)
-
-    if (hit || batch.length === 1) {
-      report.failed.push(...this.outbox.fail((hit ?? batch[0]).id, code, detail))
-      return report
+    const hit = named === null ? undefined : rows.find((r) => r.seq === named)
+    if (hit || rows.length === 1) {
+      report.failed.push(...this.outbox.fail((hit ?? rows[0]).id, code, detail))
+      return
     }
 
-    const mid = Math.ceil(batch.length / 2)
-    await this.isolate(batch.slice(0, mid), report, now)
-    await this.isolate(batch.slice(mid), report, now)
-    return report
+    const mid = Math.ceil(rows.length / 2)
+    await this.isolate(rows.slice(0, mid), report, now)
+    await this.isolate(rows.slice(mid), report, now)
   }
 
   /**
@@ -186,26 +197,7 @@ export class SyncEngine {
     try {
       results = await this.transport.submitScanBatch(this.deviceId, live.map(toOp))
     } catch (err) {
-      const code = err instanceof TransportError ? err.code : 'unknown'
-      const retryable = err instanceof TransportError ? err.retryable : true
-      const detail = err instanceof Error ? err.message : String(err)
-
-      if (retryable) {
-        for (const row of live) this.outbox.retryLater(row.id, code, detail, now)
-        report.stopped = 'retry_later'
-        return
-      }
-
-      const named = poisonClientSeq(err)
-      const hit = named === null ? undefined : live.find((r) => r.seq === named)
-      if (hit || live.length === 1) {
-        report.failed.push(...this.outbox.fail((hit ?? live[0]).id, code, detail))
-        return
-      }
-
-      const mid = Math.ceil(live.length / 2)
-      await this.isolate(live.slice(0, mid), report, now)
-      await this.isolate(live.slice(mid), report, now)
+      await this.parkOrBisect(live, err, report, now)
       return
     }
 
