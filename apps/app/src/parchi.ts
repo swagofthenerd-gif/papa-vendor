@@ -25,6 +25,7 @@
  * the tests with no build step. Pure: (facts in, text out), no clock reads —
  * the caller passes `whenMs`, which is what makes the output deterministic.
  */
+import { stamp } from './stamp.ts'
 
 export interface ParchiLine {
   code: string | null
@@ -81,14 +82,6 @@ const MAX_VALUE_CHARS = 30
 function clip(value: string, n: number): string {
   const s = value.trim()
   return s.length > n ? `${s.slice(0, n - 1)}…` : s
-}
-
-/** Deterministic local timestamp — no locale, no timezone name, so the same
- *  input always yields the same challan (and the same QR). */
-function stamp(ms: number): string {
-  const d = new Date(ms)
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
 function row(line: ParchiLine): string {

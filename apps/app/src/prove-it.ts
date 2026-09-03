@@ -21,6 +21,7 @@
  * plain Node in the tests. Pure: facts in, text out, no clock reads — the
  * caller passes timestamps, which is what makes the output deterministic.
  */
+import { stamp } from './stamp.ts'
 
 export interface ProveItScan {
   /** 'check_out' | 'check_in' | anything else the log holds. */
@@ -43,13 +44,6 @@ export interface ProveItInput {
   lastScan: ProveItScan | null
   /** Condition photos of this asset on this phone. */
   photoCount: number
-}
-
-/** Same deterministic local stamp as the parchi: no locale, no timezone name. */
-function stamp(ms: number): string {
-  const d = new Date(ms)
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
 const EVENT_PHRASE: Record<string, string> = {
