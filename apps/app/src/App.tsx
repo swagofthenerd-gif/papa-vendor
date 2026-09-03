@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react'
 import { Icon, IconSketchFilter } from '@papa/icons'
 import { parseHash, go, type View } from './nav.ts'
 import { Shell } from './components/Shell.tsx'
-import { SyncStrip } from './components/SyncStrip.tsx'
-import { Today } from './routes/Today.tsx'
+import { TodayScreen } from './demo/TodayScreen.tsx'
 import { Gear, type GearFilter } from './routes/Gear.tsx'
 import { Asset } from './routes/Asset.tsx'
 import { DemoStore } from './demo/store.ts'
@@ -12,6 +11,7 @@ import { SessionScreen } from './demo/SessionScreen.tsx'
 import { EnquiryScreen } from './demo/EnquiryScreen.tsx'
 import { Tags } from './demo/Tags.tsx'
 import { ImportScreen } from './demo/ImportScreen.tsx'
+import { HisaabScreen } from './demo/HisaabScreen.tsx'
 
 /**
  * The app shell.
@@ -100,53 +100,10 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
   }
 
   switch (view.name) {
-    case 'jobs': {
-      const counts = store.outboxCounts()
-      return (
-        <Shell
-          view={view}
-          title="Today"
-          subtitle={
-            <>
-              <Icon name="user" size={13} /> {store.seed.userName}
-            </>
-          }
-          action={
-            <button
-              className="icon-btn"
-              onClick={() => go({ name: 'gear' })}
-              aria-label="Search the gear"
-            >
-              <Icon name="search" size={22} />
-            </button>
-          }
-        >
-          <SyncStrip
-            // Always "offline": there is no server in the demo, so pretending
-            // to be connected would hide the one thing the strip exists for.
-            online={false}
-            pending={counts.pending}
-            oldestAgeMs={counts.oldestAgeMs}
-            failures={counts.failures}
-            onOpenFailures={() => {}}
-          />
-          <Today
-            jobs={store.jobs().map((j) => ({
-              id: j.id,
-              label: j.label,
-              contact: j.contact,
-              expectedBack: j.expectedBack,
-              expected: j.expected.length,
-              scanned: store.scannedCount(j.id),
-              departsAt: j.departsAt,
-            }))}
-            outJobs={store.jobsWithGearOut()}
-            stats={store.stats()}
-            onOpenGear={(f) => go({ name: 'gear', query: f === 'all' ? undefined : f })}
-          />
-        </Shell>
-      )
-    }
+    case 'jobs':
+      // The board owns desk state of its own now (the walk-in sheet, the
+      // due-date editor), so it wires itself in demo/TodayScreen.tsx.
+      return <TodayScreen store={store} />
 
     case 'gear': {
       // The Today counters deep-link here by filter rather than by text, so
@@ -183,6 +140,9 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
 
     case 'session':
       return <SessionScreen store={store} jobId={view.sessionId} />
+
+    case 'hisaab':
+      return <HisaabScreen store={store} />
 
     case 'enquiry':
       return (

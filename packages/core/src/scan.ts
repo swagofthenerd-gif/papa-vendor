@@ -468,3 +468,59 @@ export class ScanSession {
 function seenKey(assetId: string, eventType: string): string {
   return `${assetId}\n${eventType}`
 }
+
+/** What a decoded label turned out to be, without anything being recorded. */
+export type TagLookup =
+  | { kind: 'found'; assetId: string; assetCode: string | null; displayName: string | null }
+  /** The label resolves, but not with confidence — see scan()'s retired-tag
+   *  rule. `status` is the tag's own status ('retired' | 'lost'). */
+  | { kind: 'retired'; status: string }
+  /** A tag row pointing at an asset this device has not synced. */
+  | { kind: 'unknown_item' }
+  /** No tag row at all. */
+  | { kind: 'unknown_tag' }
+
+/**
+ * Resolve a label WITHOUT recording anything.
+ *
+ * A scan session exists to assert facts about the physical past — gear moved,
+ * so an event is enqueued. A LOOKUP asserts nothing: pointing the camera at a
+ * label to ask "where is this thing?" must not open a session, must not
+ * enqueue an op, and must not move the projection. The defect this function
+ * exists to prevent: routing a lookup through a real check-in session, so
+ * that ASKING where an item was marked it RETURNED.
+ *
+ * The resolution rules are scan()'s exactly, minus every write. A retired or
+ * lost label keeps its asset_id — that is the historical record — but never
+ * resolves with confidence, because a peeled label stuck back on the wrong
+ * case would answer as whatever it USED to be on. Synchronous for the same
+ * reason scan() is: the answer comes from local SQLite, never the network.
+ */
+export function lookupTag(db: SqlDriver, tagCode: string): TagLookup {
+  const tag = db.get<{ asset_id: string | null; status: string }>(
+    `select asset_id, status from asset_tags where tag_code = ?`,
+    [tagCode],
+  )
+
+  if (tag?.asset_id && tag.status !== 'active') {
+    return { kind: 'retired', status: tag.status }
+  }
+
+  if (!tag?.asset_id) return { kind: 'unknown_tag' }
+
+  const asset = db.get<{ id: string; asset_code: string | null; display_name: string | null }>(
+    `select a.id, a.asset_code, p.display_name
+       from assets a
+       left join products p on p.id = a.product_id
+      where a.id = ?`,
+    [tag.asset_id],
+  )
+  if (!asset) return { kind: 'unknown_item' }
+
+  return {
+    kind: 'found',
+    assetId: asset.id,
+    assetCode: asset.asset_code,
+    displayName: asset.display_name,
+  }
+}

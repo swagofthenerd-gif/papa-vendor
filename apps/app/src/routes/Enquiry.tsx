@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { Icon, type AnyIconName } from '@papa/icons'
-import type { AvailabilitySummary, AvailabilityLine, CatalogueItem } from '@papa/core'
+import {
+  availabilityNote,
+  type AvailabilitySummary,
+  type AvailabilityLine,
+  type CatalogueItem,
+} from '@papa/core'
 
 /**
  * Answering a kit list pasted from WhatsApp.
@@ -140,10 +145,21 @@ export function Enquiry({
                 <span className="row-note">they wrote: “{line.raw}”</span>
               ) : null}
 
-              {line.state === 'short' ? (
-                <span className="row-note">only {line.onHand} of {line.wanted} here</span>
-              ) : null}
-              {line.state === 'none' ? <span className="row-note">none on the shelf</span> : null}
+              {/* The stock story. With commitments it is the full sentence —
+                  "2 here now · 1 out on Shan Foods TVC, due today" — which is
+                  the line the owner was going to reconstruct from memory.
+                  Without them it degrades to the plain counts; it never
+                  pretends to know about bookings. */}
+              {line.state !== 'unknown' && line.committed.length > 0 ? (
+                <span className="row-note">{availabilityNote(line)}</span>
+              ) : (
+                <>
+                  {line.state === 'short' ? (
+                    <span className="row-note">only {line.onHand} of {line.wanted} here</span>
+                  ) : null}
+                  {line.state === 'none' ? <span className="row-note">none on the shelf</span> : null}
+                </>
+              )}
             </span>
 
             {/* Unresolved lines are the only ones with an action. Nothing here

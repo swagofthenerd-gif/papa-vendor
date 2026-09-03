@@ -2,6 +2,7 @@ import {
   LOCAL_SCHEMA,
   PhotoStore,
   ScanSession,
+  lookupTag,
   caseManifest,
   hasContents,
   pairBySide,
@@ -9,6 +10,9 @@ import {
   checkAvailability,
   matchKitList,
   parseKitList,
+  overdueNudgeMessage,
+  parsePhoneNumber,
+  whatsAppNudgeUrl,
   type AvailabilitySummary,
   type CatalogueItem,
   type CaptureResult,
@@ -18,18 +22,37 @@ import {
   type MatchedLine,
   type PullListView,
   type SqlDriver,
+  type TagLookup,
 } from '@papa/core'
 import { SqlJsDriver } from './sqljs-driver.ts'
 import { demoCatalogue, seedDemo, type DemoSeed } from './seed.ts'
-import type { ScanMode } from '../nav.ts'
+import { SessionRegistry, type SessionMode } from './sessions.ts'
+import {
+  assetFacts,
+  createJob,
+  decodeScanOps,
+  dueBoard,
+  itemsSummary,
+  lastSessionRecord,
+  openJob,
+  openJobCommitments,
+  openJobs,
+  outItemNames,
+  packedProgress,
+  sessionScanFacts,
+  setExpectedBack,
+  type OpenJobRow,
+} from './read-model.ts'
+import { dayAccount, type DayAccount } from './hisaab.ts'
+import { buildParchi } from '../parchi.ts'
 import type { GearRow } from '../routes/Gear.tsx'
-import type { TodayStats } from '../routes/Today.tsx'
+import type { OutRow, TodayStats } from '../routes/Today.tsx'
 import type { AssetHistoryRow, AssetView } from '../routes/Asset.tsx'
 import { buildSummary, type SessionSummary } from '../session-summary.ts'
 
 /**
  * The demo's one piece of state: a real local database with the demo house in
- * it, plus whichever scan session is open.
+ * it, plus whichever scan sessions are open.
  *
  * WHAT IS AND IS NOT PRETENDED HERE. The scan engine, the outbox, the pull
  * list, the kit-list reader and the local double-checkout check are the real
@@ -43,27 +66,22 @@ export class DemoStore {
   readonly seed: DemoSeed
   catalogue: CatalogueItem[]
 
-  private session: ScanSession | null = null
-  private sessionJobId: string | null = null
-  private sessionMode: ScanMode = 'out'
   /**
-   * What the OPEN session is looking for, captured when it opened.
-   *
-   * A SNAPSHOT, not a live query. On a return the expected set is "what is
-   * physically out on this job", and checking an item in removes it from that
-   * query — so re-asking on every render shrank the denominator as the tech
-   * worked: four items to find became "0 of 1" after three scans. A total that
-   * melts while you look at it is the fastest way to lose someone's trust in
-   * the screen, and it hides the one number that matters, which is how many
-   * are still missing.
+   * Sessions keyed by (job, direction) — see sessions.ts for why there are
+   * several and what each entry snapshots. One live session here was the bug:
+   * opening a return mid-prep destroyed the prep's dedupe set, and every
+   * rescan on resuming wrote a duplicate op.
    */
-  private sessionExpected: string[] = []
+  private readonly sessions: SessionRegistry
   readonly photos: PhotoStore
 
   private constructor(db: SqlDriver, seed: DemoSeed) {
     this.db = db
     this.seed = seed
     this.catalogue = demoCatalogue()
+    this.sessions = new SessionRegistry(db, 'demo-device', (jobId, mode) =>
+      this.expectedFor(jobId, mode),
+    )
     // A deliberately small budget in the demo — a few megabytes rather than
     // 512 — so the "device full" refusal is reachable by a person trying the
     // app for ten minutes, instead of being a branch nobody ever sees.
@@ -77,36 +95,29 @@ export class DemoStore {
     return new DemoStore(db, seed)
   }
 
-  jobs(): DemoSeed['jobs'] {
-    return this.seed.jobs
+  /**
+   * The open jobs, FROM THE DATABASE, sorted by departure. The seed keeps a
+   * copy for the tests, but the board reads the tables — that is what lets a
+   * job created at the desk appear here indistinguishable from a seeded one.
+   */
+  jobs(): OpenJobRow[] {
+    return openJobs(this.db)
   }
 
-  job(jobId: string): DemoSeed['jobs'][number] | undefined {
-    return this.seed.jobs.find((j) => j.id === jobId)
+  job(jobId: string): OpenJobRow | undefined {
+    return openJob(this.db, jobId) ?? undefined
   }
 
   /**
-   * The session for a job, created on first use and then kept.
+   * The session for a job and direction, created on first use and then kept.
    *
-   * Kept rather than rebuilt because the session owns the "already scanned in
-   * this session" set, and that suppression lasts the whole session by design
-   * (scan.ts) — rebuilding it on a re-render would make every duplicate read
-   * as a fresh scan and quietly double-count the morning.
+   * Kept — with its dedupe set and expected snapshot — even while OTHER
+   * sessions run: the registry resumes it when the tech comes back, so a
+   * return opened mid-prep no longer resets the prep's progress. The
+   * lifecycle lives in sessions.ts.
    */
-  sessionFor(jobId: string, mode: ScanMode = 'out'): ScanSession {
-    if (this.session && this.sessionJobId === jobId && this.sessionMode === mode) {
-      return this.session
-    }
-    const expected = this.expectedFor(jobId, mode)
-    this.session = new ScanSession(this.db, {
-      deviceId: 'demo-device',
-      jobId,
-      expected: new Set(expected),
-    })
-    this.sessionJobId = jobId
-    this.sessionMode = mode
-    this.sessionExpected = expected
-    return this.session
+  sessionFor(jobId: string, mode: SessionMode = 'out'): ScanSession {
+    return this.sessions.open(jobId, mode).session
   }
 
   /**
@@ -122,7 +133,7 @@ export class DemoStore {
    * and a return screen that cries wolf on the normal case is one a tech stops
    * reading by the second week.
    */
-  expectedFor(jobId: string, mode: ScanMode): string[] {
+  expectedFor(jobId: string, mode: SessionMode): string[] {
     const job = this.job(jobId)
     if (mode === 'out') return job?.expected ?? []
     return this.db
@@ -135,37 +146,59 @@ export class DemoStore {
       .map((r) => r.id)
   }
 
+  /** Complete the session the tech just finished — and only that one. Any
+   *  other job's half-scanned session stays open behind it. */
   endSession(): void {
-    this.session = null
-    this.sessionJobId = null
-    this.sessionMode = 'out'
-    this.sessionExpected = []
+    this.sessions.endCurrent()
   }
 
-  /** Which direction the open session is running in. */
-  get openMode(): ScanMode {
-    return this.sessionMode
+  /**
+   * Resolve a label WITHOUT recording anything — the "where is this thing?"
+   * question. Answered entirely from the local mirror: no session, no outbox
+   * op, no projection change. See lookupTag in @papa/core for the rules.
+   */
+  lookup(tagCode: string): TagLookup {
+    return lookupTag(this.db, tagCode)
   }
 
-  /** Jobs with gear physically out, for the "bring it back" list. */
-  jobsWithGearOut(): { id: string; label: string; out: number }[] {
-    return this.db
-      .all<{ job_id: string; n: number }>(
-        `select current_job_id as job_id, count(*) as n from assets
-          where current_job_id is not null and presence in ('out', 'in_transit')
-          group by current_job_id`,
-      )
-      .map((r) => ({
-        id: r.job_id,
-        label: this.job(r.job_id)?.label ?? 'Gear out with no job',
-        out: Number(r.n),
-      }))
+  /**
+   * The COMING BACK board: jobs with gear physically out, overdue pinned
+   * first, each row carrying its locally computed due label — plus the two
+   * affordances the desk actually uses on a late job: the WhatsApp nudge
+   * (when a confident number exists) and the last handover summary (when a
+   * session was ever recorded).
+   */
+  outJobsDue(nowMs: number = Date.now()): OutRow[] {
+    return dueBoard(this.db, nowMs).outJobs.map((j) => {
+      const phone = parsePhoneNumber(j.contact)
+      const nudgeUrl =
+        phone && j.due.state === 'overdue'
+          ? whatsAppNudgeUrl(
+              phone,
+              overdueNudgeMessage({
+                jobLabel: j.label,
+                itemsSummary: itemsSummary(outItemNames(this.db, j.id)),
+                dueLabel: j.due.label,
+              }),
+            )
+          : null
+      return {
+        id: j.id,
+        label: j.label,
+        out: j.out,
+        contact: j.contact,
+        expectedBack: j.expectedBack,
+        due: j.due,
+        nudgeUrl,
+        hasSummary: this.hasSummary(j.id),
+      }
+    })
   }
 
-  pullList(jobId: string, mode: ScanMode = 'out'): PullListView | null {
+  pullList(jobId: string, mode: SessionMode = 'out'): PullListView | null {
     if (!this.job(jobId)) return null
-    const session = this.sessionFor(jobId, mode)
-    return buildPullList(this.db, this.sessionExpected, session.scannedIds)
+    const entry = this.sessions.open(jobId, mode)
+    return buildPullList(this.db, entry.expected, entry.session.scannedIds)
   }
 
   /**
@@ -181,10 +214,11 @@ export class DemoStore {
     bytes: number
     sha256: string
   }): CaptureResult {
+    const current = this.sessions.current()
     return this.photos.capture({
       assetId: input.assetId,
-      jobId: this.sessionJobId,
-      sessionId: this.session?.id ?? null,
+      jobId: current?.jobId ?? null,
+      sessionId: current?.session.id ?? null,
       side: input.side,
       localUri: input.dataUri,
       bytes: input.bytes,
@@ -322,15 +356,19 @@ export class DemoStore {
       .map((r) => ({ id: r.id, name: r.display_name ?? 'Unnamed' }))
   }
 
-  /** Answer a pasted WhatsApp kit list against the demo catalogue. */
+  /**
+   * Answer a pasted WhatsApp kit list against the demo catalogue — with the
+   * open jobs' claims attached, so a short line says WHEN another unit comes
+   * back instead of leaving the owner to reconstruct it from memory.
+   */
   checkKitList(text: string): AvailabilitySummary {
     const matched = matchKitList(parseKitList(text), this.catalogue)
-    return checkAvailability(this.db, matched)
+    return checkAvailability(this.db, matched, openJobCommitments(this.db))
   }
 
   /** Re-answer a list after the desk has resolved a line by hand. */
   recheck(lines: MatchedLine[]): AvailabilitySummary {
-    return checkAvailability(this.db, lines)
+    return checkAvailability(this.db, lines, openJobCommitments(this.db))
   }
 
   outboxCounts(): { pending: number; failures: number; oldestAgeMs: number } {
@@ -392,14 +430,16 @@ export class DemoStore {
          sum(case when health <> 'ok' then 1 else 0 end) as attention
        from assets`,
     )
+    // Overdue and due-back come from the same dueBoard read the COMING BACK
+    // list renders from, so the counter and the list it deep-links to can
+    // never disagree. Jobs whose expected_back is free text land in neither
+    // number — 'no date' is not late, it is unknown, and it stays that way.
+    const due = dueBoard(this.db, Date.now())
     return {
       outNow: Number(row?.out_now ?? 0),
       onShelf: Number(row?.on_shelf ?? 0),
-      // No bookings yet, so nothing can be late by a date. Reported as zero
-      // rather than invented, because a made-up overdue count is the fastest
-      // way to teach an owner that the numbers here are decorative.
-      dueBack: 0,
-      overdue: 0,
+      dueBack: due.dueBack,
+      overdue: due.overdue,
       needsAttention: Number(row?.attention ?? 0),
     }
   }
@@ -438,24 +478,17 @@ export class DemoStore {
     )
     if (!row) return null
 
-    const history: AssetHistoryRow[] = this.db
-      .all<{ id: string; payload: string; created_at: number }>(
-        `select id, payload, created_at from outbox
-          where op = 'submit_scan_batch' order by seq desc`,
-      )
-      .flatMap((o): AssetHistoryRow[] => {
-        const op = JSON.parse(o.payload) as Record<string, unknown>
-        if (op.asset_id !== assetId) return []
-        const jobId = typeof op.job_id === 'string' ? op.job_id : null
-        return [{
-          id: o.id,
-          event: String(op.event_type ?? 'check_out'),
-          at: new Date(o.created_at).toLocaleString(),
-          entryMethod: String(op.entry_method ?? 'scanned'),
-          jobLabel: jobId ? (this.job(jobId)?.label ?? null) : null,
-          actor: this.seed.userName,
-        }]
-      })
+    const history: AssetHistoryRow[] = decodeScanOps(this.db)
+      .filter((op) => op.assetId === assetId)
+      .reverse() // newest first — it reads as a story, latest chapter on top
+      .map((op) => ({
+        id: op.outboxId,
+        event: op.eventType,
+        at: new Date(op.createdAt).toLocaleString(),
+        entryMethod: op.entryMethod,
+        jobLabel: op.jobId ? (this.job(op.jobId)?.label ?? null) : null,
+        actor: this.seed.userName,
+      }))
 
     return {
       id: row.id,
@@ -480,53 +513,136 @@ export class DemoStore {
    * because there is no such fact.
    */
   sessionSummary(jobId: string): SessionSummary | null {
-    const job = this.job(jobId)
-    if (!job || this.sessionJobId !== jobId || !this.session) return null
-    const sessionId = this.session.id
-    const mode = this.sessionMode
+    const found = this.lastSessionFacts(jobId)
+    return found ? this.summaryOf(found) : null
+  }
 
-    // Read back from the QUEUE, not from the screen: the queue is what was
-    // actually written, and on a real phone it is the only record that exists
-    // until a sync happens.
-    const ops = this.db
-      .all<{ id: string; payload: string }>(
-        `select id, payload from outbox where op = 'submit_scan_batch' order by seq`,
-      )
-      .map((o) => ({ id: o.id, op: JSON.parse(o.payload) as Record<string, unknown> }))
-      .filter((o) => o.op.session_id === sessionId)
-
-    const recorded: string[] = []
-    const assumed: string[] = []
-    const unknownTags: { key: string }[] = []
-    for (const { id, op } of ops) {
-      const assetId = typeof op.asset_id === 'string' ? op.asset_id : null
-      if (!assetId) { unknownTags.push({ key: id }); continue }
-      recorded.push(assetId)
-      if (op.entry_method === 'assumed') assumed.push(assetId)
-    }
-
+  /** buildSummary over one job's last session — the shape both the handover
+   *  card and the parchi are built from, so they can never disagree. */
+  private summaryOf(found: NonNullable<ReturnType<DemoStore['lastSessionFacts']>>): SessionSummary {
+    const { job, rec, facts } = found
     return buildSummary({
       jobLabel: job.label,
-      mode,
-      expected: this.sessionExpected,
-      recorded,
-      assumed,
-      unknownTags,
-      facts: (id) => {
-        const row = this.db.get<{ asset_code: string | null; display_name: string | null }>(
-          `select a.asset_code, coalesce(p.display_name, a.display_name) as display_name
-             from assets a left join products p on p.id = a.product_id where a.id = ?`,
-          [id],
-        )
-        return row ? { id, code: row.asset_code, name: row.display_name } : undefined
-      },
+      mode: rec.mode,
+      expected: rec.expected,
+      ...facts,
+      facts: (id) => assetFacts(this.db, id),
     })
   }
 
-  /** How many of a job's expected items are already recorded, for the Today list. */
+  /**
+   * The challan text the handover screen renders as a QR code — the parchi.
+   * Built from the same session record and queue read as the summary, so the
+   * gate pass and the screen above it can never tell different stories.
+   */
+  parchiText(jobId: string, nowMs: number = Date.now()): string | null {
+    const found = this.lastSessionFacts(jobId)
+    if (!found) return null
+    const { job, rec, facts } = found
+    const summary = this.summaryOf(found)
+
+    return buildParchi({
+      houseName: this.seed.houseName,
+      jobLabel: job.label,
+      mode: rec.mode,
+      whenMs: nowMs,
+      items: facts.recorded.map((id) => {
+        const f = assetFacts(this.db, id)
+        return { code: f?.code ?? null, name: f?.name ?? null }
+      }),
+      assumedCount: facts.assumed.length,
+      shortfall: summary.missing.map((m) => ({ code: m.code, name: m.name })),
+    })
+  }
+
+  /** Din ka hisaab — the whole day, computed locally. See hisaab.ts. */
+  dayAccount(nowMs: number = Date.now()): DayAccount {
+    return dayAccount(this.db, nowMs)
+  }
+
+  /**
+   * The most recent session on a job — live entry first, durable record
+   * second — with its scans read back from the QUEUE, not from the screen:
+   * the queue is what was actually written, and on a real phone it is the
+   * only record that exists until a sync happens. Shared by the summary and
+   * the parchi.
+   */
+  private lastSessionFacts(jobId: string): {
+    job: OpenJobRow
+    rec: { id: string; mode: 'out' | 'in'; expected: string[] }
+    facts: ReturnType<typeof sessionScanFacts>
+  } | null {
+    const job = this.job(jobId)
+    if (!job) return null
+
+    // The job's most recently opened LIVE session — the one the tech just
+    // held "finish" on — when there is one. When there is not (the session
+    // was completed, or the app reloaded), the same facts come from the
+    // scan_sessions row written when it opened: summaries used to die with
+    // the in-memory session, which meant "done" on the handover card
+    // destroyed the only record of the morning the desk could read.
+    const entry = this.sessions.peek(jobId)
+    const rec = entry
+      ? { id: entry.session.id, mode: entry.mode, expected: entry.expected }
+      : lastSessionRecord(this.db, jobId)
+    if (!rec) return null
+
+    return { job, rec, facts: sessionScanFacts(decodeScanOps(this.db), rec.id) }
+  }
+
+  /**
+   * How many of a job's expected items are already recorded, for the Today
+   * list. Reads the job's own OUT session — the "going out" board's number —
+   * so several half-packed jobs each show their progress at once, instead of
+   * only whichever one was touched last.
+   */
   scannedCount(jobId: string): number {
-    if (this.sessionJobId !== jobId || !this.session) return 0
-    return this.session.scannedIds.length
+    // The live session when one exists — it also counts off-list additions.
+    // Otherwise the mirror itself: promised items whose projection already
+    // says they left on this job. Without the fallback, a reload zeroed
+    // every ring on the board while the vans stayed loaded.
+    return (
+      this.sessions.peek(jobId, 'out')?.session.scannedIds.length ??
+      packedProgress(this.db, jobId)
+    )
+  }
+
+  /**
+   * A job born at the desk — from an answered kit list, or from nothing
+   * (the walk-in). Resolved lines become the promised set via the same
+   * job_expected table the seed writes, so the new job is on the board,
+   * scannable and counted by availability the moment this returns. Lines
+   * the matcher never resolved are LEFT OUT, not guessed in.
+   */
+  createJobFromLines(
+    lines: MatchedLine[],
+    input: { label: string; contact: string | null; expectedBack: string | null },
+  ): { jobId: string; allocated: number; requested: number } {
+    const wants = lines
+      .filter((l): l is MatchedLine & { productId: string } => !!l.productId)
+      .map((l) => ({ productId: l.productId, qty: l.quantity }))
+
+    const jobId = `job-${crypto.randomUUID()}`
+    const result = createJob(this.db, {
+      id: jobId,
+      orgId: this.seed.orgId,
+      label: input.label,
+      contact: input.contact,
+      expectedBack: input.expectedBack,
+      wants,
+    })
+    return { jobId, allocated: result.expected.length, requested: result.requested }
+  }
+
+  /** Set or clear a job's due date. ISO in, honest 'no date' when cleared. */
+  setDueDate(jobId: string, value: string | null): void {
+    setExpectedBack(this.db, jobId, value)
+  }
+
+  /** A session was recorded on this job at some point, so its handover is
+   *  reviewable — live or finished. */
+  hasSummary(jobId: string): boolean {
+    return lastSessionRecord(this.db, jobId) !== null
   }
 }
 

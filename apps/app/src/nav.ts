@@ -16,11 +16,17 @@ export type View =
   | { name: 'session'; sessionId: string }       // the reconciliation card
   | { name: 'asset'; assetId: string }
   | { name: 'gear'; query?: string }             // search-first inventory
+  | { name: 'hisaab' }                           // din ka hisaab: the day's account
   | { name: 'enquiry' }                          // the pasted kit list
   | { name: 'import' }                           // load the house's catalogue
   | { name: 'settings' }
 
-export type ScanMode = 'out' | 'in'
+/**
+ * 'out' and 'in' open a real session and write events. 'lookup' is the
+ * asking mode — camera to asset page, ZERO writes — because "where is this
+ * thing?" must never be answered by quietly marking the thing returned.
+ */
+export type ScanMode = 'out' | 'in' | 'lookup'
 
 export function parseHash(hash: string): View {
   const raw = hash.replace(/^#\/?/, '')
@@ -32,13 +38,17 @@ export function parseHash(hash: string): View {
     case undefined:
     case '':
       return { name: 'jobs' }
-    case 'scan':
+    case 'scan': {
       if (!parts[1]) return { name: 'jobs' }
+      // Anything unrecognised falls back to 'out' — the common case at 6am,
+      // and the safe one: a mistyped link must not silently record returns.
+      const m = params.get('mode')
       return {
         name: 'scan',
         jobId: parts[1],
-        mode: params.get('mode') === 'in' ? 'in' : 'out',
+        mode: m === 'in' ? 'in' : m === 'lookup' ? 'lookup' : 'out',
       }
+    }
     case 'session':
       return parts[1] ? { name: 'session', sessionId: parts[1] } : { name: 'jobs' }
     case 'asset':
@@ -51,6 +61,8 @@ export function parseHash(hash: string): View {
       const q = params.get('q')
       return q ? { name: 'gear', query: q } : { name: 'gear' }
     }
+    case 'hisaab':
+      return { name: 'hisaab' }
     case 'enquiry':
       return { name: 'enquiry' }
     case 'import':
@@ -74,6 +86,8 @@ export function viewToHash(view: View): string {
       return `#/asset/${view.assetId}`
     case 'gear':
       return view.query ? `#/gear?q=${encodeURIComponent(view.query)}` : '#/gear'
+    case 'hisaab':
+      return '#/hisaab'
     case 'enquiry':
       return '#/enquiry'
     case 'import':

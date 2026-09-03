@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FEEDBACK, type ScanResult } from '@papa/core'
+import { Icon } from '@papa/icons'
+import { FEEDBACK, SameTagDebounce, type ScanResult } from '@papa/core'
 import { Scan } from '../routes/Scan.tsx'
 import { QrCamera } from '../camera/QrCamera.tsx'
 import { ManualAdd } from './ManualAdd.tsx'
 import { PhotoCapture, type CapturedPhoto } from '../camera/PhotoCapture.tsx'
 import { CaseManifestSheet } from './CaseManifest.tsx'
 import { go, type ScanMode } from '../nav.ts'
-import type { ScanRow } from '../scan-row.ts'
+import { scanRowClass, type ScanRow } from '../scan-row.ts'
 import type { DemoStore } from './store.ts'
 
 /**
@@ -29,6 +30,22 @@ export function ScanScreen({
   store: DemoStore
   jobId: string
   mode: ScanMode
+}) {
+  // The asking mode is its own loop entirely — no session, no writes. The
+  // branch sits above the hooks, which is safe because App keys this
+  // component by (job, mode): an instance can never change mode mid-life.
+  if (mode === 'lookup') return <LookupScreen store={store} />
+  return <SessionScanScreen store={store} jobId={jobId} mode={mode} />
+}
+
+function SessionScanScreen({
+  store,
+  jobId,
+  mode,
+}: {
+  store: DemoStore
+  jobId: string
+  mode: 'out' | 'in'
 }) {
   const [rows, setRows] = useState<ScanRow[]>([])
   const [torchOn, setTorchOn] = useState(false)
@@ -234,5 +251,117 @@ export function ScanScreen({
         />
       ) : null}
     </>
+  )
+}
+
+/**
+ * Lookup — "where is this thing?".
+ *
+ * A separate loop from the job scanner ON PURPOSE. A lookup asserts nothing
+ * about the physical world, so it must never open a session, enqueue an op,
+ * or move the projection. The previous version routed "Just scan" through a
+ * real check-in session — scanning an item to ASK where it was quietly marked
+ * it RETURNED, which is the worst possible answer to an innocent question.
+ *
+ * The loop keeps the scanner's feel: decode → local read → answer, one
+ * gesture, nothing awaited. A known label goes straight to the item's page;
+ * everything else gets a row that names the outcome and says that nothing was
+ * recorded. There is no "attach this label" here — binding is a write, and it
+ * belongs in a session where the tech has already said which job they are on.
+ */
+function LookupScreen({ store }: { store: DemoStore }) {
+  const [rows, setRows] = useState<ScanRow[]>([])
+  const [torchOn, setTorchOn] = useState(false)
+  const debounce = useRef(new SameTagDebounce())
+
+  const onDecode = useCallback(
+    (tagCode: string) => {
+      if (!debounce.current.accept(tagCode)) return
+      const found = store.lookup(tagCode)
+
+      if (found.kind === 'found') {
+        // The answer IS the asset page — one gesture from label to "on Job
+        // 482 since 3 Apr", with the scan recorded nowhere.
+        if (typeof navigator.vibrate === 'function') navigator.vibrate(FEEDBACK.accepted.haptic)
+        go({ name: 'asset', assetId: found.assetId })
+        return
+      }
+
+      // Every miss says "nothing recorded" out loud. This screen's one
+      // promise is that it only looks, and a promise like that has to be
+      // restated at exactly the moments it might be doubted.
+      const result: ScanResult =
+        found.kind === 'retired'
+          ? {
+              outcome: 'retired_tag',
+              message: found.status === 'lost'
+                ? 'This label was reported lost — nothing recorded'
+                : 'This label was retired — nothing recorded',
+            }
+          : {
+              outcome: 'unknown_tag',
+              message: found.kind === 'unknown_item'
+                ? 'Not on this phone yet — nothing recorded'
+                : 'Unknown label — nothing recorded',
+            }
+
+      setRows((prev) => [
+        { ...result, key: `${tagCode}-${Date.now()}`, at: Date.now() },
+        ...prev,
+      ])
+      const spec = FEEDBACK[result.outcome]
+      if (spec && typeof navigator.vibrate === 'function') navigator.vibrate(spec.haptic)
+    },
+    [store],
+  )
+
+  useEffect(() => {
+    document.title = 'Where is this thing? — Papa Vendor'
+  }, [])
+
+  return (
+    <div className="screen scan-screen">
+      <header className="scan-head">
+        <span className="scan-job">Where is this thing?</span>
+        <span className="scan-mode">Only looking — nothing is recorded</span>
+      </header>
+
+      <div className="camera-frame">
+        <QrCamera
+          torchOn={torchOn}
+          onDecode={onDecode}
+          onAutoTorch={() => setTorchOn(true)}
+          paused={false}
+        />
+        <button
+          className={`torch-btn${torchOn ? ' is-on' : ''}`}
+          onClick={() => setTorchOn((t) => !t)}
+          aria-pressed={torchOn}
+          aria-label={torchOn ? 'Turn torch off' : 'Turn torch on'}
+        >
+          <Icon name="bulb" size={24} />
+        </button>
+      </div>
+
+      <ul className="scan-list">
+        {rows.map((row) => (
+          <li key={row.key} className={scanRowClass(row.outcome, false)}>
+            <span className="row-main">
+              <span className="row-name">{row.displayName ?? 'Unknown item'}</span>
+              {row.message ? <span className="row-note">{row.message}</span> : null}
+            </span>
+            <span className="row-code code">{row.assetCode ?? '—'}</span>
+          </li>
+        ))}
+      </ul>
+
+      <div className="scan-foot">
+        {/* A plain tap is fine here — leaving loses nothing, because nothing
+            was ever going to be written. */}
+        <button className="btn btn-ghost manual-btn" onClick={() => go({ name: 'jobs' })}>
+          <Icon name="chevron-left" size={18} /> Back to today
+        </button>
+      </div>
+    </div>
   )
 }

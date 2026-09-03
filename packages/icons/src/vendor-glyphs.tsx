@@ -13,6 +13,13 @@ import type { ReactNode } from 'react'
  * These live in a separate file from core.tsx so the parity test can compare
  * the shared set against papa-rentals mechanically without vendor additions
  * showing up as drift.
+ *
+ * EVERY map key below is QUOTED, including the ones that would not need to
+ * be. The icon-name guard (apps/app/test/icon-names.test.mjs) reads this
+ * file as text and recognises quoted object keys; an unquoted key ships a
+ * glyph that guard cannot vouch for, so the first literal use of it in a
+ * screen failed the check even though the glyph existed — which is exactly
+ * what happened when 'qr' and 'clipboard' were first used.
  */
 
 /** The duotone tint layer. Identical to core.tsx's `T`, duplicated here rather
@@ -30,7 +37,7 @@ export const VENDOR_ICON_PATHS: Record<VendorIconName, ReactNode> = {
   /* ---------- scanning ---------- */
 
   /** Viewfinder corners with a sweep line — the app's primary verb. */
-  scan: (
+  'scan': (
     <>
       <rect {...T} x="4.2" y="4.2" width="15.6" height="15.6" rx="3" />
       <path d="M4.2 9V7.2a3 3 0 0 1 3-3H9" />
@@ -42,7 +49,7 @@ export const VENDOR_ICON_PATHS: Record<VendorIconName, ReactNode> = {
   ),
 
   /** A QR label as an object, distinct from `scan` (the action). */
-  qr: (
+  'qr': (
     <>
       <rect {...T} x="4.3" y="4.3" width="6.4" height="6.4" rx="1.6" />
       <rect x="4.3" y="4.3" width="6.4" height="6.4" rx="1.6" />
@@ -54,7 +61,7 @@ export const VENDOR_ICON_PATHS: Record<VendorIconName, ReactNode> = {
     </>
   ),
 
-  barcode: (
+  'barcode': (
     <>
       <rect {...T} x="3.2" y="5.4" width="17.6" height="13.2" rx="2.4" />
       <path d="M6.4 8.6v6.8M9.2 8.6v6.8M12 8.6v6.8M15.4 8.6v6.8M17.8 8.6v6.8" />
@@ -62,7 +69,7 @@ export const VENDOR_ICON_PATHS: Record<VendorIconName, ReactNode> = {
   ),
 
   /** Asset tag — the physical label bound to one unit. */
-  tag: (
+  'tag': (
     <>
       <path {...T} d="M11.2 3.9H19a1.2 1.2 0 0 1 1.2 1.2v7.8a1.6 1.6 0 0 1-.5 1.1l-6.1 6.1a1.6 1.6 0 0 1-2.3 0l-6.5-6.5a1.6 1.6 0 0 1 0-2.3l6.1-6.1a1.6 1.6 0 0 1 1.3-.3Z" />
       <path d="M11.2 3.9H19a1.2 1.2 0 0 1 1.2 1.2v7.8a1.6 1.6 0 0 1-.5 1.1l-6.1 6.1a1.6 1.6 0 0 1-2.3 0l-6.5-6.5a1.6 1.6 0 0 1 0-2.3l6.1-6.1a1.6 1.6 0 0 1 1.3-.3Z" />
@@ -84,7 +91,7 @@ export const VENDOR_ICON_PATHS: Record<VendorIconName, ReactNode> = {
   /* ---------- the warehouse ---------- */
 
   /** A road case with latches — the unit a tech actually carries. */
-  case: (
+  'case': (
     <>
       <rect {...T} x="3.4" y="6.6" width="17.2" height="11.4" rx="2.2" />
       <rect x="3.4" y="6.6" width="17.2" height="11.4" rx="2.2" />
@@ -95,7 +102,7 @@ export const VENDOR_ICON_PATHS: Record<VendorIconName, ReactNode> = {
   ),
 
   /** Racking. Pull lists are ordered by shelf so the tech walks the floor once. */
-  shelf: (
+  'shelf': (
     <>
       <rect {...T} x="3.6" y="4.4" width="16.8" height="15.2" rx="2.2" />
       <rect x="3.6" y="4.4" width="16.8" height="15.2" rx="2.2" />
@@ -104,7 +111,7 @@ export const VENDOR_ICON_PATHS: Record<VendorIconName, ReactNode> = {
     </>
   ),
 
-  forklift: (
+  'forklift': (
     <>
       <path {...T} d="M3.6 15.4V9.2a1.4 1.4 0 0 1 1.4-1.4h4.8v7.6Z" />
       <path d="M3.6 15.4V9.2a1.4 1.4 0 0 1 1.4-1.4h4.8v7.6" />
@@ -116,7 +123,7 @@ export const VENDOR_ICON_PATHS: Record<VendorIconName, ReactNode> = {
     </>
   ),
 
-  pallet: (
+  'pallet': (
     <>
       <path {...T} d="M3.4 13.4h17.2v4.2H3.4z" />
       <path d="M3.4 13.4h17.2v4.2H3.4z" />
@@ -127,7 +134,7 @@ export const VENDOR_ICON_PATHS: Record<VendorIconName, ReactNode> = {
 
   /* ---------- process ---------- */
 
-  clipboard: (
+  'clipboard': (
     <>
       <path {...T} d="M6.4 5.4h11.2a1.4 1.4 0 0 1 1.4 1.4v12.4a1.4 1.4 0 0 1-1.4 1.4H6.4A1.4 1.4 0 0 1 5 19.2V6.8a1.4 1.4 0 0 1 1.4-1.4Z" />
       <path d="M6.4 5.4h11.2a1.4 1.4 0 0 1 1.4 1.4v12.4a1.4 1.4 0 0 1-1.4 1.4H6.4A1.4 1.4 0 0 1 5 19.2V6.8a1.4 1.4 0 0 1 1.4-1.4Z" />
@@ -150,7 +157,7 @@ export const VENDOR_ICON_PATHS: Record<VendorIconName, ReactNode> = {
 
   /** Torch. A Lahore warehouse before dawn is dark and the decoder needs light,
    *  so this is a persistent control on the scan screen, not a settings item. */
-  torch: (
+  'torch': (
     <>
       <path {...T} d="M9 9.4h6v9.4a1.4 1.4 0 0 1-1.4 1.4h-3.2A1.4 1.4 0 0 1 9 18.8Z" />
       <path d="M9 9.4h6v9.4a1.4 1.4 0 0 1-1.4 1.4h-3.2A1.4 1.4 0 0 1 9 18.8Z" />
@@ -159,7 +166,7 @@ export const VENDOR_ICON_PATHS: Record<VendorIconName, ReactNode> = {
     </>
   ),
 
-  battery: (
+  'battery': (
     <>
       <rect {...T} x="3.2" y="8" width="14.6" height="8" rx="2" />
       <rect x="3.2" y="8" width="14.6" height="8" rx="2" />
