@@ -34,6 +34,7 @@ const small = () => ({
   ],
   assumedCount: 1,
   shortfall: [{ code: 'TRI-04', name: 'Manfrotto 546B' }],
+  shortfallValueLabel: 'Rs 12,000',
 })
 
 /** A brutal session: long names, many items, big shortfall. */
@@ -51,6 +52,9 @@ const huge = () => ({
     code: `MISSING-${i}`,
     name: `Another Long Missing Item Name ${i}`,
   })),
+  // The widest label the formatter can plausibly emit, so the capacity
+  // tests below measure the worst case WITH the money line on it.
+  shortfallValueLabel: 'Rs 99,999,999 +99 unpriced',
 })
 
 /** The QR module grid painted into RGBA for jsQR — same recipe as the label
@@ -109,6 +113,19 @@ describe('what the challan says', () => {
     const clean = buildParchi({ ...small(), shortfall: [] })
     assert.doesNotMatch(clean, /SHORT/)
     assert.match(clean, /Lines: 2 out, 0 short$/)
+  })
+
+  test('the shortfall carries its money, and only when something is priced', () => {
+    // PLAN.md's rule made portable: 'battery plate missing' is a chore,
+    // 'Rs 12,000' is a decision — so the challan says it where the gate and
+    // the client both read it.
+    assert.match(buildParchi(small()), /SHORT \(1\):\n.*\nValue: Rs 12,000/)
+    // Nothing priced -> no Value line at all, never 'Rs 0'.
+    const unpriced = buildParchi({ ...small(), shortfallValueLabel: null })
+    assert.doesNotMatch(unpriced, /Value:/)
+    // No shortfall -> no orphaned money line either.
+    const clean = buildParchi({ ...small(), shortfall: [], shortfallValueLabel: null })
+    assert.doesNotMatch(clean, /Value:/)
   })
 
   test('a return reads as a return', () => {

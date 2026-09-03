@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { whatsAppShareUrl } from '@papa/core'
 import { Icon, IconSketchFilter } from '@papa/icons'
 import { parseHash, go, type View } from './nav.ts'
 import { Shell } from './components/Shell.tsx'
@@ -133,7 +134,18 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
             </button>
           }
         >
-          <Asset asset={asset} photoPairs={store.photoPairs(view.assetId)} />
+          <Asset
+            asset={asset}
+            photoPairs={store.photoPairs(view.assetId)}
+            onProveIt={() => {
+              const text = store.proveItText(view.assetId)
+              if (!text) return
+              // Same fallback pair as every share in the app: WhatsApp where
+              // it exists, clipboard where it does not.
+              const win = window.open(whatsAppShareUrl(text), '_blank', 'noopener')
+              if (!win) void navigator.clipboard?.writeText(text).catch(() => {})
+            }}
+          />
         </Shell>
       )
     }

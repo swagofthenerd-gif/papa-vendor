@@ -1,4 +1,4 @@
-import type { SqlDriver } from '@papa/core'
+import { moneyLabel, type SqlDriver } from '@papa/core'
 import {
   assetFacts,
   decodeScanOps,
@@ -239,7 +239,14 @@ export function dayAccountText(account: DayAccount): string {
     lines.push('')
     lines.push('Still out:')
     for (const j of account.stillOut) {
-      lines.push(`- ${j.label}: ${j.out} item${j.out === 1 ? '' : 's'}, ${j.due.label}`)
+      // Money makes "still out" a decision rather than a note — but only the
+      // honest amount: the label carries its own '+N unpriced', and a job of
+      // entirely unpriced gear gets no number at all rather than 'Rs 0'.
+      const value = moneyLabel(j.value)
+      lines.push(
+        `- ${j.label}: ${j.out} item${j.out === 1 ? '' : 's'}, ${j.due.label}` +
+          (value !== null ? `, ${value}` : ''),
+      )
     }
   }
 

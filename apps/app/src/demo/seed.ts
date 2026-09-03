@@ -51,6 +51,10 @@ interface ProductSpec {
   shelf: string
   /** Prefix for the human-readable asset code stuck on the case. */
   code: string
+  /** Day rate and replacement value in WHOLE RUPEES (stored as minor units).
+   *  Absent means no rate — the honest 'unpriced', never zero. */
+  dayRateRs?: number
+  replacementRs?: number
 }
 
 const LOCATIONS: { id: string; name: string; path: string; kind: string }[] = [
@@ -67,28 +71,34 @@ const LOCATIONS: { id: string; name: string; path: string; kind: string }[] = [
  * the kit-list reader must refuse to guess between them (kit-list.ts) — that
  * refusal is only observable if both are actually in the catalogue.
  */
+// ASSUMPTION: the per-product day rates and replacement values below are
+// plausible Lahore PKR figures, unvalidated — no primary rate-card source.
+// They exist so money renders on the return flow, the hisaab and the parchi;
+// the pilot vendor's real rate card replaces them. Sachdeva Tripod and the
+// C-Stands are LEFT UNPRICED on purpose, so the '+N unpriced' honesty path
+// is visible in the demo. See docs/assumptions.md#demo-rates
 const PRODUCTS: ProductSpec[] = [
-  { key: 'fx9', name: 'Sony FX9', category: 'camera', units: 2, shelf: 'loc-rack-a', code: 'FX9' },
-  { key: 'fx6', name: 'Sony FX6', category: 'camera', units: 3, shelf: 'loc-rack-a', code: 'FX6' },
-  { key: 'c300', name: 'Canon C300 Mark III', category: 'camera', units: 2, shelf: 'loc-rack-a', code: 'C300' },
-  { key: 'c500', name: 'Canon C500 Mark II', category: 'camera', units: 1, shelf: 'loc-rack-a', code: 'C500' },
-  { key: 'komodo', name: 'RED Komodo 6K', category: 'camera', units: 1, shelf: 'loc-rack-a', code: 'KMD' },
-  { key: 'sigma1835', name: 'Sigma 18-35mm f1.8', category: 'lens', units: 3, shelf: 'loc-rack-b', code: 'SG1835' },
-  { key: 'sigma50100', name: 'Sigma 50-100mm f1.8', category: 'lens', units: 2, shelf: 'loc-rack-b', code: 'SG50100' },
-  { key: 'cne', name: 'Canon CN-E Prime Set', category: 'lens', units: 1, shelf: 'loc-rack-b', code: 'CNE' },
-  { key: 'samyang', name: 'Samyang Xeen Prime Set', category: 'lens', units: 1, shelf: 'loc-rack-b', code: 'XEEN' },
-  { key: 'ronin', name: 'DJI Ronin RS3 Pro', category: 'support', units: 2, shelf: 'loc-rack-c', code: 'RS3' },
-  { key: 'sachtler', name: 'Sachtler Flowtech 75', category: 'support', units: 2, shelf: 'loc-rack-c', code: 'SACH' },
+  { key: 'fx9', name: 'Sony FX9', category: 'camera', units: 2, shelf: 'loc-rack-a', code: 'FX9', dayRateRs: 25_000, replacementRs: 3_500_000 },
+  { key: 'fx6', name: 'Sony FX6', category: 'camera', units: 3, shelf: 'loc-rack-a', code: 'FX6', dayRateRs: 18_000, replacementRs: 2_200_000 },
+  { key: 'c300', name: 'Canon C300 Mark III', category: 'camera', units: 2, shelf: 'loc-rack-a', code: 'C300', dayRateRs: 20_000, replacementRs: 2_800_000 },
+  { key: 'c500', name: 'Canon C500 Mark II', category: 'camera', units: 1, shelf: 'loc-rack-a', code: 'C500', dayRateRs: 22_000, replacementRs: 3_000_000 },
+  { key: 'komodo', name: 'RED Komodo 6K', category: 'camera', units: 1, shelf: 'loc-rack-a', code: 'KMD', dayRateRs: 20_000, replacementRs: 2_500_000 },
+  { key: 'sigma1835', name: 'Sigma 18-35mm f1.8', category: 'lens', units: 3, shelf: 'loc-rack-b', code: 'SG1835', dayRateRs: 8_000, replacementRs: 350_000 },
+  { key: 'sigma50100', name: 'Sigma 50-100mm f1.8', category: 'lens', units: 2, shelf: 'loc-rack-b', code: 'SG50100', dayRateRs: 9_000, replacementRs: 400_000 },
+  { key: 'cne', name: 'Canon CN-E Prime Set', category: 'lens', units: 1, shelf: 'loc-rack-b', code: 'CNE', dayRateRs: 30_000, replacementRs: 8_000_000 },
+  { key: 'samyang', name: 'Samyang Xeen Prime Set', category: 'lens', units: 1, shelf: 'loc-rack-b', code: 'XEEN', dayRateRs: 25_000, replacementRs: 4_500_000 },
+  { key: 'ronin', name: 'DJI Ronin RS3 Pro', category: 'support', units: 2, shelf: 'loc-rack-c', code: 'RS3', dayRateRs: 8_000, replacementRs: 250_000 },
+  { key: 'sachtler', name: 'Sachtler Flowtech 75', category: 'support', units: 2, shelf: 'loc-rack-c', code: 'SACH', dayRateRs: 5_000, replacementRs: 700_000 },
   { key: 'sachdeva', name: 'Sachdeva Tripod', category: 'support', units: 3, shelf: 'loc-rack-c', code: 'SDV' },
-  { key: 'smallhd', name: 'SmallHD 702 Monitor', category: 'monitor', units: 2, shelf: 'loc-rack-c', code: 'SHD' },
-  { key: 'aputure600', name: 'Aputure 600D Pro', category: 'light', units: 4, shelf: 'loc-grip', code: 'AP600' },
-  { key: 'aputure300', name: 'Aputure 300X', category: 'light', units: 2, shelf: 'loc-grip', code: 'AP300' },
-  { key: 'forza', name: 'Nanlite Forza 500', category: 'light', units: 2, shelf: 'loc-grip', code: 'FRZ' },
+  { key: 'smallhd', name: 'SmallHD 702 Monitor', category: 'monitor', units: 2, shelf: 'loc-rack-c', code: 'SHD', dayRateRs: 4_000, replacementRs: 250_000 },
+  { key: 'aputure600', name: 'Aputure 600D Pro', category: 'light', units: 4, shelf: 'loc-grip', code: 'AP600', dayRateRs: 12_000, replacementRs: 550_000 },
+  { key: 'aputure300', name: 'Aputure 300X', category: 'light', units: 2, shelf: 'loc-grip', code: 'AP300', dayRateRs: 7_000, replacementRs: 250_000 },
+  { key: 'forza', name: 'Nanlite Forza 500', category: 'light', units: 2, shelf: 'loc-grip', code: 'FRZ', dayRateRs: 8_000, replacementRs: 300_000 },
   { key: 'cstand', name: 'C-Stand', category: 'grip', units: 8, shelf: 'loc-grip', code: 'CST' },
-  { key: 'mixpre', name: 'Sound Devices MixPre-6', category: 'sound', units: 2, shelf: 'loc-rack-c', code: 'MXP' },
-  { key: 'mkh416', name: 'Sennheiser MKH 416', category: 'sound', units: 2, shelf: 'loc-rack-c', code: 'MKH' },
-  { key: 'vmount', name: 'V-Mount Battery 190Wh', category: 'power', units: 12, shelf: 'loc-cage', code: 'VM' },
-  { key: 'xlr', name: 'XLR Cable 5m', category: 'cable', units: 20, shelf: 'loc-cage', code: 'XLR' },
+  { key: 'mixpre', name: 'Sound Devices MixPre-6', category: 'sound', units: 2, shelf: 'loc-rack-c', code: 'MXP', dayRateRs: 6_000, replacementRs: 350_000 },
+  { key: 'mkh416', name: 'Sennheiser MKH 416', category: 'sound', units: 2, shelf: 'loc-rack-c', code: 'MKH', dayRateRs: 4_000, replacementRs: 300_000 },
+  { key: 'vmount', name: 'V-Mount Battery 190Wh', category: 'power', units: 12, shelf: 'loc-cage', code: 'VM', dayRateRs: 1_500, replacementRs: 60_000 },
+  { key: 'xlr', name: 'XLR Cable 5m', category: 'cable', units: 20, shelf: 'loc-cage', code: 'XLR', dayRateRs: 300, replacementRs: 8_000 },
 ]
 
 interface JobSpec {
@@ -244,6 +254,21 @@ export function seedDemo(db: SqlDriver): DemoSeed {
         `insert into products (id, org_id, display_name, category) values (?, ?, ?, ?)`,
         [productId, ORG, p.name, p.category],
       )
+
+      // Rates in minor units (paisa), the server's `_minor` convention. A
+      // product without one gets NO row: 'no rate' must stay distinguishable
+      // from 'Rs 0', and a null-stuffed row invites someone to sum it.
+      if (p.dayRateRs !== undefined || p.replacementRs !== undefined) {
+        db.exec(
+          `insert into product_rates (product_id, day_rate_minor, replacement_minor)
+           values (?, ?, ?)`,
+          [
+            productId,
+            p.dayRateRs === undefined ? null : p.dayRateRs * 100,
+            p.replacementRs === undefined ? null : p.replacementRs * 100,
+          ],
+        )
+      }
 
       const ids: string[] = []
       for (let i = 1; i <= p.units; i++) {
