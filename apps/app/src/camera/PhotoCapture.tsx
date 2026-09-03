@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from '@papa/icons'
+import { STR } from '../strings.ts'
 
 /**
  * Taking one condition photo.
@@ -53,7 +54,7 @@ export function PhotoCapture({
     async function start() {
       if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
         setState('error')
-        setDetail('The camera needs a secure page — open this on localhost or over https.')
+        setDetail(STR.scanPhotoSecurePage)
         return
       }
       try {
@@ -95,13 +96,13 @@ export function PhotoCapture({
       const blob = await new Promise<Blob | null>((resolve) =>
         canvas.toBlob(resolve, 'image/webp', QUALITY),
       )
-      if (!blob) throw new Error('The photo could not be encoded.')
+      if (!blob) throw new Error(STR.scanPhotoNotEncoded)
 
       const bytes = new Uint8Array(await blob.arrayBuffer())
       const dataUri = await new Promise<string>((resolve, reject) => {
         const fr = new FileReader()
         fr.onload = () => resolve(String(fr.result))
-        fr.onerror = () => reject(new Error('The photo could not be read back.'))
+        fr.onerror = () => reject(new Error(STR.scanPhotoNotReadBack))
         fr.readAsDataURL(blob)
       })
 
@@ -115,16 +116,16 @@ export function PhotoCapture({
   }, [busy, onCaptured])
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label={`Photograph ${itemName}`}>
+    <div className="sheet-backdrop" role="dialog" aria-label={STR.scanPhotographAria(itemName)}>
       <div className="photo-sheet">
         <header className="sheet-head">
           <div>
             <span className="sheet-title">{itemName}</span>
             <p className="photo-side">
-              {side === 'out' ? 'How it looks going out' : 'How it came back'}
+              {side === 'out' ? STR.scanHowItLooksGoingOut : STR.scanHowItCameBack}
             </p>
           </div>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">
+          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
             <Icon name="x" size={22} />
           </button>
         </header>
@@ -133,7 +134,7 @@ export function PhotoCapture({
           <video ref={videoRef} playsInline muted autoPlay className="qr-video" />
           {state !== 'live' ? (
             <div className="qr-camera-msg">
-              <p>{state === 'starting' ? 'Starting camera…' : detail}</p>
+              <p>{state === 'starting' ? STR.scanStartingCamera : detail}</p>
             </div>
           ) : null}
         </div>
@@ -143,11 +144,9 @@ export function PhotoCapture({
           onClick={() => void take()}
           disabled={state !== 'live' || busy}
         >
-          <Icon name="camera" size={20} /> {busy ? 'Saving…' : 'Take the photo'}
+          <Icon name="camera" size={20} /> {busy ? STR.scanSaving : STR.scanTakeThePhoto}
         </button>
-        <p className="photo-foot muted">
-          Timed by this phone’s clock. The server stamps its own time when it arrives.
-        </p>
+        <p className="photo-foot muted">{STR.scanTimedByThisPhone}</p>
       </div>
     </div>
   )

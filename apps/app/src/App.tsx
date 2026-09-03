@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { whatsAppShareUrl } from '@papa/core'
 import { Icon, IconSketchFilter } from '@papa/icons'
 import { parseHash, go, type View } from './nav.ts'
+import { STR } from './strings.ts'
 import { Shell } from './components/Shell.tsx'
 import { TodayScreen } from './demo/TodayScreen.tsx'
 import { Gear, type GearFilter } from './routes/Gear.tsx'
@@ -60,11 +61,11 @@ export function App() {
           which looks fine alone and obviously wrong beside one that is not. */}
       <IconSketchFilter />
       {failed ? (
-        <Boot title="The local database would not start." detail={failed} />
+        <Boot title={STR.commonDbWouldNotStart} detail={failed} />
       ) : store ? (
         <Routed view={view} store={store} />
       ) : (
-        <Boot title="Opening the warehouse…" />
+        <Boot title={STR.commonOpeningWarehouse} />
       )}
     </>
   )
@@ -111,7 +112,7 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
       // "4 need a look" lands on those four instead of searching for the word.
       const asFilter = (['here', 'out', 'attention'] as const).find((f) => f === view.query)
       return (
-        <Shell view={view} title="Gear" subtitle="Everything the house owns">
+        <Shell view={view} title={STR.gearTitle} subtitle={STR.gearSubtitle}>
           <Gear
             rows={store.gearRows()}
             initialQuery={asFilter ? '' : (view.query ?? '')}
@@ -126,10 +127,10 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
       return (
         <Shell
           view={view}
-          title={asset?.name ?? 'Item'}
+          title={asset?.name ?? STR.gearItemFallback}
           subtitle={asset?.code}
           action={
-            <button className="icon-btn" onClick={() => go({ name: 'gear' })} aria-label="Back to the gear">
+            <button className="icon-btn" onClick={() => go({ name: 'gear' })} aria-label={STR.gearBackToTheGearAria}>
               <Icon name="chevron-left" size={22} />
             </button>
           }
@@ -158,14 +159,14 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
 
     case 'enquiry':
       return (
-        <Shell view={view} title="Kit list" subtitle="Paste what the client sent">
+        <Shell view={view} title={STR.enquiryTitle} subtitle={STR.enquirySubtitle}>
           <EnquiryScreen store={store} />
         </Shell>
       )
 
     case 'import':
       return (
-        <Shell view={view} title="Load your gear" subtitle="Paste a list, check it, then add it">
+        <Shell view={view} title={STR.labelsLoadYourGear} subtitle={STR.labelsImportSubtitle}>
           <ImportScreen store={store} />
         </Shell>
       )
@@ -174,8 +175,8 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
       return (
         <Shell
           view={view}
-          title="Labels"
-          subtitle={`${store.seed.tags.length} tags · print, or open on another screen`}
+          title={STR.labelsTitle}
+          subtitle={STR.labelsSubtitle(store.seed.tags.length)}
         >
           <Tags store={store} />
         </Shell>

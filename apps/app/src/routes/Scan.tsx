@@ -5,6 +5,7 @@ import { progressSummary } from '@papa/core'
 import { HoldToFinish } from '../components/HoldToFinish.tsx'
 import type { ScanMode } from '../nav.ts'
 import { scanRowClass, scanRowChanged, type ScanRow } from '../scan-row.ts'
+import { STR } from '../strings.ts'
 
 /**
  * The scan screen. The product is this screen.
@@ -63,7 +64,7 @@ const ScanRowItem = memo(function ScanRowItem({
   return (
     <li data-asset={row.assetId ?? ''} className={scanRowClass(row.outcome, isPulsing)}>
       <span className="row-main">
-        <span className="row-name">{row.displayName ?? 'Unknown item'}</span>
+        <span className="row-name">{row.displayName ?? STR.commonUnknownItem}</span>
         {row.message ? <span className="row-note">{row.message}</span> : null}
       </span>
       <span className="row-code code">{row.assetCode ?? '—'}</span>
@@ -75,8 +76,8 @@ const ScanRowItem = memo(function ScanRowItem({
       {row.assetId ? (
         <button
           className={`row-photo${photoCount > 0 ? ' has-photo' : ''}`}
-          onClick={() => onPhoto(row.assetId as string, row.displayName ?? 'this item')}
-          aria-label={`Photograph ${row.displayName ?? 'this item'}`}
+          onClick={() => onPhoto(row.assetId as string, row.displayName ?? STR.scanThisItem)}
+          aria-label={STR.scanPhotographAria(row.displayName ?? STR.scanThisItem)}
         >
           <Icon name="camera" size={18} />
           {photoCount > 0 ? <span className="row-photo-n code">{photoCount}</span> : null}
@@ -90,10 +91,10 @@ const ScanRowItem = memo(function ScanRowItem({
       {row.outcome === 'unexpected' ? (
         <span className="row-actions">
           <button className="btn btn-sm" onClick={() => onResolve(row.key, 'add')}>
-            Add anyway
+            {STR.scanAddAnyway}
           </button>
           <button className="btn btn-sm btn-ghost" onClick={() => onResolve(row.key, 'not-this-job')}>
-            Not this job
+            {STR.scanNotThisJob}
           </button>
         </span>
       ) : null}
@@ -104,7 +105,7 @@ const ScanRowItem = memo(function ScanRowItem({
       {row.outcome === 'unknown_tag' && row.tagCode ? (
         <span className="row-actions">
           <button className="btn btn-sm" onClick={() => onBind(row.tagCode as string)}>
-            Attach this label
+            {STR.scanAttachThisLabel}
           </button>
         </span>
       ) : null}
@@ -197,7 +198,7 @@ export function Scan({
     <div className="screen scan-screen">
       <header className="scan-head">
         <span className="scan-job">{jobLabel}</span>
-        <span className="scan-mode">{mode === 'out' ? 'Going out' : 'Coming back'}</span>
+        <span className="scan-mode">{mode === 'out' ? STR.scanGoingOut : STR.scanComingBack}</span>
       </header>
 
       <div className="camera-frame">
@@ -209,7 +210,7 @@ export function Scan({
           className={`torch-btn${torchOn ? ' is-on' : ''}`}
           onClick={onToggleTorch}
           aria-pressed={torchOn}
-          aria-label={torchOn ? 'Turn torch off' : 'Turn torch on'}
+          aria-label={torchOn ? STR.scanTorchOffAria : STR.scanTorchOnAria}
         >
           <Icon name="bulb" size={24} />
         </button>
@@ -237,7 +238,7 @@ export function Scan({
             date is how gear gets left on a shelf. */}
         {snapshotAge ? (
           <p className="snapshot-age">
-            <Icon name="signal-off" size={13} /> List as of {snapshotAge} · not refreshed
+            <Icon name="signal-off" size={13} /> {STR.scanListAsOf(snapshotAge)}
           </p>
         ) : null}
       </div>
@@ -263,11 +264,11 @@ export function Scan({
             teaches a tech on day one that the app has no answer for the real
             world. */}
         <button className="btn btn-ghost manual-btn" onClick={onManualAdd}>
-          <Icon name="tag-off" size={18} /> Can’t scan it
+          <Icon name="tag-off" size={18} /> {STR.scanCantScanIt}
         </button>
 
         <HoldToFinish
-          label={remaining > 0 ? `Hold to finish · ${remaining} left` : 'Hold to finish'}
+          label={remaining > 0 ? STR.scanHoldToFinishLeft(remaining) : STR.scanHoldToFinish}
           onFinish={onFinish}
         />
       </div>

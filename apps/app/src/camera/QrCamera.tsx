@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import jsQR from 'jsqr'
+import { STR } from '../strings.ts'
 
 /**
  * The camera preview and QR decoder.
@@ -212,19 +213,19 @@ export function QrCamera({
       {/* Named, not hidden. The desk decoder is slower than the phone's, and
           a tech comparing the two must know which one they are holding. */}
       {state === 'live' && !native ? (
-        <span className="qr-decoder-note">Desk decoder</span>
+        <span className="qr-decoder-note">{STR.scanDeskDecoder}</span>
       ) : null}
       {state !== 'live' ? (
         <div className="qr-camera-msg">
-          {state === 'starting' ? <p>Starting camera…</p> : null}
+          {state === 'starting' ? <p>{STR.scanStartingCamera}</p> : null}
           {state === 'insecure' ? (
             <p>
-              The camera needs a secure page. Open this on <strong>localhost</strong>,
-              or start the server with <strong>npm run dev:https</strong>.
+              {STR.scanNeedsSecurePageOpenOn} <strong>localhost</strong>
+              {STR.scanOrStartTheServerWith} <strong>npm run dev:https</strong>.
             </p>
           ) : null}
-          {state === 'denied' ? <p>Camera permission was refused. Allow it and reload.</p> : null}
-          {state === 'error' ? <p>Camera would not start. {detail}</p> : null}
+          {state === 'denied' ? <p>{STR.scanPermissionRefused}</p> : null}
+          {state === 'error' ? <p>{STR.scanCameraWouldNotStart} {detail}</p> : null}
         </div>
       ) : null}
     </div>

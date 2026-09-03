@@ -11,6 +11,7 @@ import {
   type ImportPlan,
 } from '@papa/core'
 import { SectionHead } from '../components/Shell.tsx'
+import { STR } from '../strings.ts'
 
 /**
  * Loading the house's existing catalogue.
@@ -26,12 +27,12 @@ import { SectionHead } from '../components/Shell.tsx'
  */
 
 const FIELD_LABEL: Record<FieldName, string> = {
-  name: 'Product name',
-  code: 'Asset code',
-  serial: 'Serial number',
-  category: 'Category',
-  quantity: 'How many',
-  location: 'Shelf',
+  name: STR.labelsFieldProductName,
+  code: STR.labelsFieldAssetCode,
+  serial: STR.labelsFieldSerialNumber,
+  category: STR.labelsFieldCategory,
+  quantity: STR.labelsFieldHowMany,
+  location: STR.labelsFieldShelf,
 }
 
 const FIELD_ORDER: FieldName[] = ['name', 'quantity', 'code', 'serial', 'category', 'location']
@@ -85,22 +86,19 @@ export function Import({
   if (!table) {
     return (
       <div className="paste-zone">
-        <p className="import-lead">
-          Paste your gear list — straight out of Excel, Google Sheets, or a CSV.
-          Nothing is saved until you have seen what it would do.
-        </p>
+        <p className="import-lead">{STR.labelsImportLead}</p>
         <textarea
           className="paste-box"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={'Item Description,Qty,Asset Code,Shelf\nSony FX9,2,FX9,Rack A\n…'}
+          placeholder={STR.labelsImportPlaceholder}
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
           rows={10}
         />
         <button className="btn btn-ghost" onClick={() => setText(SAMPLE)}>
-          Try it with a sample list
+          {STR.labelsTryASampleList}
         </button>
       </div>
     )
@@ -110,22 +108,22 @@ export function Import({
     <>
       <div className="enquiry-bar">
         <button className="btn btn-ghost btn-sm" onClick={() => { setText(''); setMapping(null) }}>
-          Start again
+          {STR.labelsStartAgain}
         </button>
       </div>
 
       <section className="section">
         <SectionHead
           icon="sliders"
-          title="Check the columns"
-          sub={`${table.rows.length} row${table.rows.length === 1 ? '' : 's'} · these are guesses`}
+          title={STR.labelsCheckTheColumns}
+          sub={STR.labelsRowsTheseAreGuesses(table.rows.length)}
         />
         <div className="map-grid">
           {FIELD_ORDER.map((field) => (
             <label key={field} className="map-row">
               <span className="map-label">
                 {FIELD_LABEL[field]}
-                {field === 'name' ? <span className="map-req"> required</span> : null}
+                {field === 'name' ? <span className="map-req"> {STR.labelsRequired}</span> : null}
               </span>
               <select
                 className="map-select"
@@ -134,10 +132,10 @@ export function Import({
                   setField(field, e.target.value === '' ? undefined : Number(e.target.value))
                 }
               >
-                <option value="">— not in this file —</option>
+                <option value="">{STR.labelsNotInThisFile}</option>
                 {table.headers.map((h, i) => (
                   <option key={i} value={i}>
-                    {h || `Column ${i + 1}`}
+                    {h || STR.labelsColumnN(i + 1)}
                   </option>
                 ))}
               </select>
@@ -148,8 +146,8 @@ export function Import({
           <div className="notice notice-warn">
             <Icon name="warning" size={18} />
             <div>
-              <strong>Which column is the product name?</strong>
-              <p>Nothing can be read until that one is set.</p>
+              <strong>{STR.labelsWhichColumnIsTheName}</strong>
+              <p>{STR.labelsNothingCanBeRead}</p>
             </div>
           </div>
         ) : null}
@@ -167,24 +165,24 @@ function Preview({ plan, onApply }: { plan: ImportPlan; onApply: () => void }) {
 
   return (
     <section className="section">
-      <SectionHead icon="eye" title="What this would do" sub="Nothing is saved yet" />
+      <SectionHead icon="eye" title={STR.labelsWhatThisWouldDo} sub={STR.labelsNothingIsSavedYet} />
 
       <div className="stat-strip">
         <div className="stat">
           <span className="stat-n code">{plan.newProducts}</span>
-          <span className="stat-label">new products</span>
+          <span className="stat-label">{STR.labelsStatNewProducts}</span>
         </div>
         <div className="stat">
           <span className="stat-n code">{plan.existingProducts}</span>
-          <span className="stat-label">already known</span>
+          <span className="stat-label">{STR.labelsStatAlreadyKnown}</span>
         </div>
         <div className={`stat${plan.ambiguous > 0 ? ' is-warn' : ''}`}>
           <span className="stat-n code">{plan.ambiguous}</span>
-          <span className="stat-label">need a look</span>
+          <span className="stat-label">{STR.labelsStatNeedALook}</span>
         </div>
         <div className={`stat${plan.rejected > 0 ? ' is-bad' : ''}`}>
           <span className="stat-n code">{plan.rejected}</span>
-          <span className="stat-label">unusable</span>
+          <span className="stat-label">{STR.labelsStatUnusable}</span>
         </div>
       </div>
 
@@ -192,16 +190,16 @@ function Preview({ plan, onApply }: { plan: ImportPlan; onApply: () => void }) {
         <ul className="line-list import-problems">
           {problems.map((r, i) => (
             <li key={i} className="line">
-              <span className="line-name">{r.row.name || `Line ${r.row.line}`}</span>
+              <span className="line-name">{r.row.name || STR.labelsLineN(r.row.line)}</span>
               <span className="line-note">
                 {/* Named, not merged. C300 and C500 are one character apart and
                     the importer will not choose between them. */}
                 {r.verdict.kind === 'rejected' ? r.verdict.reason : null}
                 {r.verdict.kind === 'ambiguous'
-                  ? `Close to ${r.verdict.candidates.map((c) => c.name).join(' or ')} — left as its own product`
+                  ? STR.labelsCloseTo(r.verdict.candidates.map((c) => c.name).join(' or '))
                   : null}
               </span>
-              <span className="line-code code">line {r.row.line}</span>
+              <span className="line-code code">{STR.labelsLineNCode(r.row.line)}</span>
             </li>
           ))}
         </ul>
@@ -209,13 +207,9 @@ function Preview({ plan, onApply }: { plan: ImportPlan; onApply: () => void }) {
 
       <div className="session-actions">
         <button className="btn btn-primary btn-block btn-lg" onClick={onApply}>
-          <Icon name="check" size={20} /> Add {plan.unitsToCreate} item
-          {plan.unitsToCreate === 1 ? '' : 's'}
+          <Icon name="check" size={20} /> {STR.labelsAddNItems(plan.unitsToCreate)}
         </button>
-        <p className="session-foot muted">
-          Rows marked “need a look” are added as their own product rather than
-          merged into a similar one. Nothing here overwrites what you already have.
-        </p>
+        <p className="session-foot muted">{STR.labelsRowsMarkedNeedALook}</p>
       </div>
     </section>
   )

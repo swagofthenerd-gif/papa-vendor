@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { HOLD_MS } from '../hold.ts'
+import { STR } from '../strings.ts'
 
 export { HOLD_MS }
 
@@ -79,7 +80,7 @@ export function HoldToFinish({
       onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') begin() }}
       onKeyUp={cancel}
       style={{ ['--hold-progress' as string]: progress }}
-      aria-label={`${label} — press and hold`}
+      aria-label={STR.commonPressAndHoldAria(label)}
     >
       <span className="hold-fill" aria-hidden="true" />
       <span className="hold-label">{label}</span>

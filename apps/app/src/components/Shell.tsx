@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Icon, type AnyIconName } from '@papa/icons'
 import { go, type View } from '../nav.ts'
+import { STR } from '../strings.ts'
 
 /**
  * The app chrome — a top bar and a bottom tab bar, matching the marketplace.
@@ -26,10 +27,10 @@ interface Tab {
 const TABS: Tab[] = [
   // The day's account is a Today surface, not a fifth tab — the tab bar
   // stays four places (see the comment above).
-  { view: { name: 'jobs' }, label: 'Today', icon: 'home', matches: ['jobs', 'session', 'hisaab'] },
-  { view: { name: 'gear' }, label: 'Gear', icon: 'box', matches: ['gear', 'asset'] },
-  { view: { name: 'enquiry' }, label: 'Kit list', icon: 'chat', matches: ['enquiry'] },
-  { view: { name: 'settings' }, label: 'Labels', icon: 'ticket', matches: ['settings', 'import'] },
+  { view: { name: 'jobs' }, label: STR.commonTabToday, icon: 'home', matches: ['jobs', 'session', 'hisaab'] },
+  { view: { name: 'gear' }, label: STR.commonTabGear, icon: 'box', matches: ['gear', 'asset'] },
+  { view: { name: 'enquiry' }, label: STR.commonTabKitList, icon: 'chat', matches: ['enquiry'] },
+  { view: { name: 'settings' }, label: STR.commonTabLabels, icon: 'ticket', matches: ['settings', 'import'] },
 ]
 
 export function Shell({
@@ -58,7 +59,7 @@ export function Shell({
 
       <main className="app-main view">{children}</main>
 
-      <nav className="bottom-nav" aria-label="Main">
+      <nav className="bottom-nav" aria-label={STR.commonNavMainAria}>
         {TABS.map((tab) => {
           const active = tab.matches.includes(view.name)
           return (

@@ -9,6 +9,7 @@ import { CaseManifestSheet } from './CaseManifest.tsx'
 import { go, type ScanMode } from '../nav.ts'
 import { scanRowClass, type ScanRow } from '../scan-row.ts'
 import type { DemoStore } from './store.ts'
+import { STR } from '../strings.ts'
 
 /**
  * How long the same tag is ignored after it decodes.
@@ -127,7 +128,7 @@ function SessionScanScreen({
     setRows((prev) =>
       prev.map((r) =>
         r.key === key
-          ? { ...r, outcome: action === 'add' ? 'accepted' : r.outcome, message: action === 'add' ? 'Added to this job' : 'Left off this job' }
+          ? { ...r, outcome: action === 'add' ? 'accepted' : r.outcome, message: action === 'add' ? STR.scanAddedToThisJob : STR.scanLeftOffThisJob }
           : r,
       ),
     )
@@ -151,10 +152,7 @@ function SessionScanScreen({
       if (!result.ok) {
         // Refused, not failed. Nothing was deleted to make room, and the
         // message says what to do about it rather than just that it broke.
-        setBlocked(
-          `Device full — ${result.waiting} photo${result.waiting === 1 ? '' : 's'} still waiting to send. ` +
-            'Nothing has been deleted. Get this phone online, then try again.',
-        )
+        setBlocked(STR.scanDeviceFull(result.waiting))
         setPhotoFor(null)
         return
       }
@@ -181,13 +179,13 @@ function SessionScanScreen({
   }, [jobId])
 
   useEffect(() => {
-    document.title = job ? `${job.label} — Papa Vendor` : 'Papa Vendor'
+    document.title = job ? STR.scanDocTitle(job.label) : STR.commonAppName
   }, [job])
 
   return (
     <>
       <Scan
-        jobLabel={job?.label ?? 'Loose scan'}
+        jobLabel={job?.label ?? STR.scanLooseScan}
         mode={mode}
         rows={rows}
         pullList={pullList}
@@ -215,7 +213,7 @@ function SessionScanScreen({
         <div className="blocker" role="alert">
           <p>{blocked}</p>
           <button className="btn btn-ghost btn-sm" onClick={() => setBlocked(null)}>
-            Got it
+            {STR.scanGotIt}
           </button>
         </div>
       ) : null}
@@ -245,7 +243,7 @@ function SessionScanScreen({
       {manualOpen ? (
         <ManualAdd
           store={store}
-          title={bindingTag ? 'What is this label on?' : 'Can’t scan it'}
+          title={bindingTag ? STR.scanWhatIsThisLabelOn : STR.scanCantScanIt}
           onPick={onManualPick}
           onClose={() => { setManualOpen(false); setBindingTag(null) }}
         />
@@ -295,14 +293,14 @@ function LookupScreen({ store }: { store: DemoStore }) {
           ? {
               outcome: 'retired_tag',
               message: found.status === 'lost'
-                ? 'This label was reported lost — nothing recorded'
-                : 'This label was retired — nothing recorded',
+                ? STR.scanLabelReportedLost
+                : STR.scanLabelRetired,
             }
           : {
               outcome: 'unknown_tag',
               message: found.kind === 'unknown_item'
-                ? 'Not on this phone yet — nothing recorded'
-                : 'Unknown label — nothing recorded',
+                ? STR.scanNotOnThisPhoneYet
+                : STR.scanUnknownLabel,
             }
 
       setRows((prev) => [
@@ -316,14 +314,14 @@ function LookupScreen({ store }: { store: DemoStore }) {
   )
 
   useEffect(() => {
-    document.title = 'Where is this thing? — Papa Vendor'
+    document.title = STR.scanLookupDocTitle
   }, [])
 
   return (
     <div className="screen scan-screen">
       <header className="scan-head">
-        <span className="scan-job">Where is this thing?</span>
-        <span className="scan-mode">Only looking — nothing is recorded</span>
+        <span className="scan-job">{STR.todayWhereIsThisThing}</span>
+        <span className="scan-mode">{STR.scanOnlyLooking}</span>
       </header>
 
       <div className="camera-frame">
@@ -337,7 +335,7 @@ function LookupScreen({ store }: { store: DemoStore }) {
           className={`torch-btn${torchOn ? ' is-on' : ''}`}
           onClick={() => setTorchOn((t) => !t)}
           aria-pressed={torchOn}
-          aria-label={torchOn ? 'Turn torch off' : 'Turn torch on'}
+          aria-label={torchOn ? STR.scanTorchOffAria : STR.scanTorchOnAria}
         >
           <Icon name="bulb" size={24} />
         </button>
@@ -347,7 +345,7 @@ function LookupScreen({ store }: { store: DemoStore }) {
         {rows.map((row) => (
           <li key={row.key} className={scanRowClass(row.outcome, false)}>
             <span className="row-main">
-              <span className="row-name">{row.displayName ?? 'Unknown item'}</span>
+              <span className="row-name">{row.displayName ?? STR.commonUnknownItem}</span>
               {row.message ? <span className="row-note">{row.message}</span> : null}
             </span>
             <span className="row-code code">{row.assetCode ?? '—'}</span>
@@ -359,7 +357,7 @@ function LookupScreen({ store }: { store: DemoStore }) {
         {/* A plain tap is fine here — leaving loses nothing, because nothing
             was ever going to be written. */}
         <button className="btn btn-ghost manual-btn" onClick={() => go({ name: 'jobs' })}>
-          <Icon name="chevron-left" size={18} /> Back to today
+          <Icon name="chevron-left" size={18} /> {STR.commonBackToToday}
         </button>
       </div>
     </div>

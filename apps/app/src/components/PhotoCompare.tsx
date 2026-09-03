@@ -1,5 +1,6 @@
 import { Icon } from '@papa/icons'
 import type { PhotoPair, PhotoRow } from '@papa/core'
+import { STR } from '../strings.ts'
 
 /**
  * Out beside in — the argument-settling screen.
@@ -18,11 +19,8 @@ export function PhotoCompare({ pairs }: { pairs: PhotoPair[] }) {
     return (
       <div className="empty">
         <Icon name="camera" size={32} />
-        <p>No condition photos yet.</p>
-        <p className="muted">
-          Photograph an item on the way out and again on the way back, and the two
-          sit side by side here.
-        </p>
+        <p>{STR.gearNoConditionPhotosYet}</p>
+        <p className="muted">{STR.gearPhotographOutAndBack}</p>
       </div>
     )
   }
@@ -32,18 +30,14 @@ export function PhotoCompare({ pairs }: { pairs: PhotoPair[] }) {
       {pairs.map((pair, i) => (
         <li key={pair.out?.id ?? pair.in?.id ?? i} className="compare">
           <div className="compare-grid">
-            <Half photo={pair.out} label="Going out" missing="No photo going out" />
-            <Half photo={pair.in} label="Coming back" missing="Not photographed back yet" />
+            <Half photo={pair.out} label={STR.gearGoingOutLabel} missing={STR.gearNoPhotoGoingOut} />
+            <Half photo={pair.in} label={STR.gearComingBackLabel} missing={STR.gearNotPhotographedBackYet} />
           </div>
           {pair.out && !pair.in ? (
-            <p className="compare-note">
-              This went out with a photo and has no matching one coming back.
-            </p>
+            <p className="compare-note">{STR.gearWentOutNoMatchingPhoto}</p>
           ) : null}
           {!pair.out && pair.in ? (
-            <p className="compare-note">
-              Photographed on return only — there is nothing to compare it against.
-            </p>
+            <p className="compare-note">{STR.gearPhotographedOnReturnOnly}</p>
           ) : null}
         </li>
       ))}
@@ -65,16 +59,16 @@ function Half({
       <figcaption className="compare-label">{label}</figcaption>
       {photo ? (
         <>
-          <img className="compare-img" src={photo.localUri} alt={`${label} condition photo`} />
+          <img className="compare-img" src={photo.localUri} alt={STR.gearConditionPhotoAlt(label)} />
           <p className="compare-meta">
             {new Date(photo.capturedAt).toLocaleString()}
             {/* Never presented as a fact. Until the server stamps its own time
                 on arrival, the only timestamp is the one the phone chose. */}
-            <span className="compare-clock"> · by this phone’s clock</span>
+            <span className="compare-clock"> · {STR.gearByThisPhonesClock}</span>
           </p>
           {photo.uploaded ? null : (
             <p className="compare-meta compare-pending">
-              <Icon name="cloud-queue" size={12} /> only on this phone
+              <Icon name="cloud-queue" size={12} /> {STR.gearOnlyOnThisPhone}
             </p>
           )}
         </>

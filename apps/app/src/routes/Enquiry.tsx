@@ -6,6 +6,7 @@ import {
   type AvailabilityLine,
   type CatalogueItem,
 } from '@papa/core'
+import { STR } from '../strings.ts'
 
 /**
  * Answering a kit list pasted from WhatsApp.
@@ -83,7 +84,7 @@ export function Enquiry({
             autoCorrect="off"
             autoCapitalize="off"
             spellCheck={false}
-            placeholder={'Paste the client’s message here…\n\nGreetings and “please confirm” are ignored automatically.'}
+            placeholder={STR.enquiryPastePlaceholder}
             rows={10}
           />
           <button
@@ -91,7 +92,7 @@ export function Enquiry({
             disabled={text.trim().length === 0}
             onClick={() => onPaste(text)}
           >
-            Check availability
+            {STR.enquiryCheckAvailability}
           </button>
         </div>
       </div>
@@ -110,7 +111,7 @@ export function Enquiry({
           to the list itself. */}
       <div className="enquiry-bar">
         <button className="btn btn-ghost btn-sm" onClick={() => onPaste('')}>
-          New list
+          {STR.enquiryNewList}
         </button>
       </div>
 
@@ -122,8 +123,8 @@ export function Enquiry({
         </span>
         <span className="enquiry-verdict-text">
           {summary.canFulfilEverything
-            ? 'Everything is available'
-            : `${summary.needsAttention} need${summary.needsAttention === 1 ? 's' : ''} a look`}
+            ? STR.enquiryEverythingIsAvailable
+            : STR.enquiryNeedALook(summary.needsAttention)}
         </span>
       </div>
 
@@ -142,7 +143,7 @@ export function Enquiry({
                   differs. The owner is the one who can tell a typo from a
                   different product, and cannot do that without seeing it. */}
               {line.productName && line.raw.toLowerCase() !== line.productName.toLowerCase() ? (
-                <span className="row-note">they wrote: “{line.raw}”</span>
+                <span className="row-note">{STR.enquiryTheyWrote(line.raw)}</span>
               ) : null}
 
               {/* The stock story. With commitments it is the full sentence —
@@ -155,9 +156,9 @@ export function Enquiry({
               ) : (
                 <>
                   {line.state === 'short' ? (
-                    <span className="row-note">only {line.onHand} of {line.wanted} here</span>
+                    <span className="row-note">{STR.enquiryOnlyNOfMHere(line.onHand, line.wanted)}</span>
                   ) : null}
-                  {line.state === 'none' ? <span className="row-note">none on the shelf</span> : null}
+                  {line.state === 'none' ? <span className="row-note">{STR.enquiryNoneOnTheShelf}</span> : null}
                 </>
               )}
             </span>
@@ -183,10 +184,10 @@ export function Enquiry({
             owner will want to add a line of his own before sending — a
             send-for-me button would be taking the pen out of his hand. */}
         <button className="btn btn-ghost" onClick={onCopyReply} disabled={reply.length === 0}>
-          <Icon name="clipboard-check" size={18} /> Copy reply
+          <Icon name="clipboard-check" size={18} /> {STR.enquiryCopyReply}
         </button>
         <button className="btn btn-primary" onClick={onCreateJob}>
-          Make a job from this
+          {STR.enquiryMakeAJobFromThis}
         </button>
       </div>
     </div>

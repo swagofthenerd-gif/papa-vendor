@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Icon } from '@papa/icons'
 import type { DemoStore } from './store.ts'
+import { STR } from '../strings.ts'
 
 /**
  * The manual path — search by code or name, tap to add.
@@ -15,7 +16,7 @@ import type { DemoStore } from './store.ts'
  */
 export function ManualAdd({
   store,
-  title = 'Can’t scan it',
+  title = STR.scanCantScanIt,
   onPick,
   onClose,
 }: {
@@ -35,7 +36,7 @@ export function ManualAdd({
       <div className="sheet">
         <header className="sheet-head">
           <span className="sheet-title">{title}</span>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">
+          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
             <Icon name="x" size={22} />
           </button>
         </header>
@@ -44,7 +45,7 @@ export function ManualAdd({
           className="sheet-search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Code or name — e.g. FX9 or Aputure"
+          placeholder={STR.scanManualPlaceholder}
           autoFocus
           autoCorrect="off"
           autoCapitalize="characters"
@@ -52,9 +53,9 @@ export function ManualAdd({
         />
 
         {query.trim().length === 0 ? (
-          <p className="sheet-hint">Type a few letters of the code or the name.</p>
+          <p className="sheet-hint">{STR.scanTypeAFewLetters}</p>
         ) : results.length === 0 ? (
-          <p className="sheet-hint">Nothing matches “{query}”.</p>
+          <p className="sheet-hint">{STR.scanNothingMatchesQuery(query)}</p>
         ) : (
           <ul className="sheet-list">
             {results.map((r) => (

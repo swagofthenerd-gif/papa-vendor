@@ -6,6 +6,7 @@ import { manifestText } from '../session-summary.ts'
 import { Shell } from '../components/Shell.tsx'
 import { go, type View } from '../nav.ts'
 import type { DemoStore } from './store.ts'
+import { STR } from '../strings.ts'
 
 /**
  * The handover summary — live session or long finished.
@@ -35,16 +36,13 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
 
   if (!summary) {
     return (
-      <Shell view={view} title="Handover" subtitle="Nothing open">
+      <Shell view={view} title={STR.sessionHandover} subtitle={STR.sessionNothingOpen}>
         <div className="empty">
           <Icon name="clipboard-check" size={36} />
-          <p>Nothing has been scanned on this job yet.</p>
-          <p className="muted">
-            Scan gear out or back in and the handover summary will be here —
-            finished sessions stay reviewable from the job card.
-          </p>
+          <p>{STR.sessionNothingScannedYet}</p>
+          <p className="muted">{STR.sessionScanAndItWillBeHere}</p>
           <button className="btn btn-outline" onClick={() => go({ name: 'jobs' })}>
-            Back to today
+            {STR.commonBackToToday}
           </button>
         </div>
       </Shell>
@@ -52,7 +50,7 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
   }
 
   return (
-    <Shell view={view} title="Handover" subtitle={summary.jobLabel}>
+    <Shell view={view} title={STR.sessionHandover} subtitle={summary.jobLabel}>
       <Session
         summary={summary}
         onShareWhatsApp={onShare}
@@ -123,19 +121,16 @@ function ParchiOverlay({
     <div
       className="parchi-overlay"
       role="dialog"
-      aria-label="Parchi — gate pass"
+      aria-label={STR.sessionParchiGatePassAria}
       onClick={onClose}
     >
       <p className="parchi-job">{jobLabel}</p>
       {image ? (
-        <img className="parchi-qr" src={image} alt="The challan as a QR code" />
+        <img className="parchi-qr" src={image} alt={STR.sessionChallanAsQrAlt} />
       ) : (
         <div className="parchi-qr parchi-qr-empty" />
       )}
-      <p className="parchi-hint">
-        Any phone camera reads this — the challan text opens directly, no app
-        needed. Tap anywhere to close.
-      </p>
+      <p className="parchi-hint">{STR.sessionAnyPhoneCameraReadsThis}</p>
     </div>
   )
 }

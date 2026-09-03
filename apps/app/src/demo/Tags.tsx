@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
 import { Icon } from '@papa/icons'
 import type { DemoStore } from './store.ts'
+import { STR } from '../strings.ts'
 
 /**
  * The labels, on screen, so there is something to actually scan.
@@ -70,11 +71,11 @@ export function Tags({ store }: { store: DemoStore }) {
     <div className="tags-screen">
       <div className="tags-bar">
         <p className="tags-hint">
-          Print these onto sticker paper and put one on each item. Then scan a
-          label and tap <strong>Attach this label</strong> to say what it is on.
+          {STR.labelsPrintTheseHint} <strong>{STR.labelsAttachThisLabel}</strong>{' '}
+          {STR.labelsToSayWhatItIsOn}
         </p>
         <button className="btn btn-primary" disabled={waiting} onClick={onPrint}>
-          <Icon name="scroll" size={18} /> {waiting ? 'Drawing labels…' : 'Print the labels'}
+          <Icon name="scroll" size={18} /> {waiting ? STR.labelsDrawingLabels : STR.labelsPrintTheLabels}
         </button>
       </div>
       {[...byShelf.entries()].map(([shelf, items]) => (

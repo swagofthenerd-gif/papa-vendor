@@ -6,6 +6,7 @@ import { go, type View } from '../nav.ts'
 import { DueBadge } from '../routes/Today.tsx'
 import { dayAccountText, type DayItem } from './hisaab.ts'
 import type { DemoStore } from './store.ts'
+import { STR } from '../strings.ts'
 
 /**
  * Din ka hisaab — the day's account, on screen.
@@ -46,10 +47,10 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
   return (
     <Shell
       view={view}
-      title="Din ka hisaab"
+      title={STR.hisaabTitle}
       subtitle={account.dayLabel}
       action={
-        <button className="icon-btn" onClick={() => go({ name: 'jobs' })} aria-label="Back to today">
+        <button className="icon-btn" onClick={() => go({ name: 'jobs' })} aria-label={STR.commonBackToToday}>
           <Icon name="chevron-left" size={22} />
         </button>
       }
@@ -57,26 +58,26 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
       <div className="stat-strip">
         <div className="stat">
           <span className="stat-n code">{account.wentOut}</span>
-          <span className="stat-label">went out</span>
+          <span className="stat-label">{STR.hisaabStatWentOut}</span>
         </div>
         <div className="stat">
           <span className="stat-n code">{account.cameBack}</span>
-          <span className="stat-label">came back</span>
+          <span className="stat-label">{STR.hisaabStatCameBack}</span>
         </div>
         <div className={`stat${account.onTrust > 0 ? ' is-warn' : ''}`}>
           <span className="stat-n code">{account.onTrust}</span>
-          <span className="stat-label">on trust</span>
+          <span className="stat-label">{STR.hisaabStatOnTrust}</span>
         </div>
         <div className="stat">
           <span className="stat-n code">{account.photos}</span>
-          <span className="stat-label">photos</span>
+          <span className="stat-label">{STR.hisaabStatPhotos}</span>
         </div>
       </div>
 
       <div className="hisaab-bar">
         <button className="btn btn-primary btn-block" onClick={onCopy}>
           <Icon name="clipboard" size={18} />{' '}
-          {copied ? 'Copied — paste it in WhatsApp' : "Copy the day's account"}
+          {copied ? STR.hisaabCopied : STR.hisaabCopyTheDaysAccount}
         </button>
       </div>
 
@@ -85,9 +86,9 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
           <Icon name="tag-off" size={18} />
           <div>
             <strong>
-              {account.unknownTags} unknown label{account.unknownTags === 1 ? '' : 's'} scanned today.
+              {STR.hisaabUnknownLabelsScanned(account.unknownTags)}
             </strong>
-            <p>Labels this phone has never seen. Recorded, waiting to be identified.</p>
+            <p>{STR.hisaabLabelsNeverSeen}</p>
           </div>
         </div>
       ) : null}
@@ -95,11 +96,8 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
       {quiet ? (
         <div className="empty">
           <Icon name="clipboard" size={36} />
-          <p>Nothing scanned or photographed today yet.</p>
-          <p className="muted">
-            The account fills itself as gear is scanned out and back. What is
-            still out from earlier days is listed below.
-          </p>
+          <p>{STR.hisaabNothingToday}</p>
+          <p className="muted">{STR.hisaabTheAccountFillsItself}</p>
         </div>
       ) : (
         account.jobs.map((g) => (
@@ -109,8 +107,8 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
               title={g.jobLabel}
               sub={jobLine(g.out.length, g.back.length, g.photos)}
             />
-            {g.out.length > 0 ? <DayList heading="Went out" items={g.out} /> : null}
-            {g.back.length > 0 ? <DayList heading="Came back" items={g.back} /> : null}
+            {g.out.length > 0 ? <DayList heading={STR.hisaabWentOutHeading} items={g.out} /> : null}
+            {g.back.length > 0 ? <DayList heading={STR.hisaabCameBackHeading} items={g.back} /> : null}
           </section>
         ))
       )}
@@ -118,11 +116,11 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
       <section className="section">
         <SectionHead
           icon="undo"
-          title="Still out"
+          title={STR.hisaabStillOut}
           sub={
             account.stillOut.length === 0
-              ? 'Everything is home'
-              : 'With the client — the due label says since when'
+              ? STR.hisaabEverythingIsHome
+              : STR.hisaabWithTheClient
           }
         />
         {account.stillOut.length === 0 ? null : (
@@ -136,7 +134,7 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
                 <li key={j.id} className="line">
                   <span className="line-name">{j.label}</span>
                   <span className="line-note">
-                    {j.out} item{j.out === 1 ? '' : 's'} still out
+                    {STR.commonItemsStillOut(j.out)}
                     {value !== null ? ` · ${value}` : ''}
                   </span>
                   <span className="line-code">
@@ -155,10 +153,10 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
 /** '8 out · 2 back · 3 photos' — only the parts that happened. */
 function jobLine(out: number, back: number, photos: number): string {
   const parts: string[] = []
-  if (out > 0) parts.push(`${out} out`)
-  if (back > 0) parts.push(`${back} back`)
-  if (photos > 0) parts.push(`${photos} photo${photos === 1 ? '' : 's'}`)
-  return parts.length > 0 ? parts.join(' · ') : 'Photographed only'
+  if (out > 0) parts.push(STR.hisaabNOut(out))
+  if (back > 0) parts.push(STR.hisaabNBack(back))
+  if (photos > 0) parts.push(STR.hisaabNPhotos(photos))
+  return parts.length > 0 ? parts.join(' · ') : STR.hisaabPhotographedOnly
 }
 
 function DayList({ heading, items }: { heading: string; items: DayItem[] }) {
@@ -167,17 +165,17 @@ function DayList({ heading, items }: { heading: string; items: DayItem[] }) {
     <div className="hisaab-list">
       <h3 className="hisaab-sub">
         {heading}
-        {trust > 0 ? <span className="hisaab-trust-count"> · {trust} on trust</span> : null}
+        {trust > 0 ? <span className="hisaab-trust-count">{STR.hisaabOnTrustCount(trust)}</span> : null}
       </h3>
       <ul className="line-list">
         {items.map((i) => (
           <li key={i.assetId} className={`line${i.assumed ? ' line-assumed' : ''}`}>
-            <span className="line-name">{i.name ?? 'Unknown item'}</span>
+            <span className="line-name">{i.name ?? STR.commonUnknownItem}</span>
             {i.assumed ? (
               // A belief, not an observation — same vocabulary as the
               // handover screen, so the two never disagree about what
               // 'assumed' means.
-              <span className="line-note">Taken on trust — not seen</span>
+              <span className="line-note">{STR.hisaabTakenOnTrust}</span>
             ) : null}
             <span className="line-code code">{i.code ?? '—'}</span>
           </li>

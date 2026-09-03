@@ -4,6 +4,7 @@ import { Enquiry } from '../routes/Enquiry.tsx'
 import { NewJobSheet } from './NewJobSheet.tsx'
 import { go } from '../nav.ts'
 import type { DemoStore } from './store.ts'
+import { STR } from '../strings.ts'
 
 /**
  * The WhatsApp kit-list reader, wired to the demo catalogue.
@@ -62,9 +63,9 @@ export function EnquiryScreen({ store }: { store: DemoStore }) {
     const resolved = summary.lines.filter((l) => l.productId)
     const units = resolved.reduce((n, l) => n + l.quantity, 0)
     const unresolved = summary.lines.length - resolved.length
-    const base = `${units} item${units === 1 ? '' : 's'} from ${resolved.length} line${resolved.length === 1 ? '' : 's'} go on the job.`
+    const base = STR.enquiryLinesGoOnTheJob(units, resolved.length)
     return unresolved > 0
-      ? `${base} ${unresolved} unconfirmed line${unresolved === 1 ? '' : 's'} left out — resolve them first if they belong.`
+      ? STR.enquiryUnconfirmedLeftOut(base, unresolved)
       : base
   }, [summary])
 
