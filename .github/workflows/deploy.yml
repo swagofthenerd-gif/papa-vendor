@@ -82,14 +82,15 @@ jobs:
           # the handoff's hardcoded "23 tables" had already gone stale before
           # anyone ran it, and told the reader to STOP on a healthy database.
           #
-          # This names the single deliberate exception instead. Enabling RLS
+          # This names the deliberate exceptions instead. Enabling RLS
           # without FORCING it leaves the table readable by its owner, so a new
-          # unforced table is a real hole; sync_sensitive_columns is exempt
-          # because it is org-independent reference data with no tenant
-          # dimension to scope by (0009). Adding a table changes nothing here.
-          # Forgetting to FORCE one fails it.
+          # unforced table is a real hole; sync_sensitive_columns (0009) and
+          # sync_column_exclusions (0015) are exempt because both are
+          # org-independent guard registries with no tenant dimension to scope
+          # by. Adding a table changes nothing here. Forgetting to FORCE one
+          # fails it.
           check "select coalesce(string_agg(relname, ',' order by relname), '') from pg_class
                    where relkind='r' and relnamespace='public'::regnamespace
                      and relrowsecurity and not relforcerowsecurity" \
-                "sync_sensitive_columns" \
-                "the only table with unforced row-level security is the known, argued exception"
+                "sync_column_exclusions,sync_sensitive_columns" \
+                "the only tables with unforced row-level security are the known, argued exceptions"
