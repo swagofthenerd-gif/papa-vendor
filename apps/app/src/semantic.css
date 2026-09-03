@@ -86,6 +86,24 @@
   --status-ink:        #ffffff;      /* ink ON a solid status fill */
   --status-gone-ink:   var(--muted);
   --status-gone-line:  var(--line-strong);
+
+  /* ---- Refinement layer -------------------------------------
+     Hairline: the divider that replaces box-in-box borders on desk
+     surfaces. Low-alpha ink so it tracks every theme; sun overrides
+     it to solid black because a translucent line is a rumour in
+     direct light (same reasoning as the shadow kill switch above). */
+  --hairline: color-mix(in srgb, var(--ink) 14%, transparent);
+
+  /* The owner's morning numbers. Large and light-weight: a stat is
+     read as a quantity, not shouted as a headline. Everything else
+     stays on the @papa/design --fs-* scale. */
+  --fs-stat: 34px;
+
+  /* Micro-label: small letterspaced uppercase for section headers
+     and field captions. One pair of values, referenced everywhere,
+     so the treatment cannot drift. */
+  --fs-micro: 11px;
+  --ls-micro: 0.08em;
 }
 
 /* ============================================================
@@ -116,6 +134,9 @@
   --line-strong: #6b6154;
   --accent-strong: #ff9563; /* on dark, accent-as-text goes lighter, not darker */
   --status-ink: #0f0d0b;    /* dark ink on the lighter dark-theme fills */
+  /* A 14%-ink hairline vanishes beside a live viewfinder; in the dark
+     theme dividers stay on the raised --line value instead. */
+  --hairline: var(--line);
 }
 
 /* ============================================================
@@ -169,6 +190,9 @@
   --status-ink:       #ffffff;
   --status-gone-ink:  #3a3a3a;
   --status-gone-line: #000000;
+
+  /* Translucent dividers die in sunlight the same way shadows do. */
+  --hairline: #000000;
 }
 
 /* Default border width, overridden to 2px in sun mode. */
