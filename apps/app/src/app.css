@@ -27,7 +27,59 @@ body {
   letter-spacing: -0.01em;
 }
 
+/* Money and counts line up in columns everywhere, not just where .code
+   happens to be applied. A no-op in faces without the feature. */
+body { font-variant-numeric: tabular-nums; }
+
 .muted { color: var(--muted); }
+
+/* One micro-label voice for every small caption in the app — section
+   headers, stat labels, field captions. One rule, so the treatment
+   cannot drift apart the way the marketplace's headers did. */
+.stat-label,
+.section-head h2,
+.result-count,
+.compare-label,
+.fact dt,
+.tag-shelf-name,
+.field-label {
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: var(--ls-micro);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Keyboard focus is visible everywhere, and only for keyboards — a
+   gloved tap must not leave a ring behind. */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+/* The one motion voice: 140ms ease-out on the properties an interactive
+   element actually changes. Reduced-motion kills it globally below. */
+.btn, .icon-btn, .stat, .quick, .job-card, .filter-chip, .nav-tab,
+.gear-unit, .sheet-row, .row-photo, .search-clear, .torch-btn {
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+/* Hover states exist only where a pointer does. */
+@media (hover: hover) {
+  .btn:hover { background: color-mix(in srgb, var(--ink) 6%, var(--card-2)); }
+  .btn-primary:hover { background: color-mix(in srgb, #000 6%, var(--accent)); }
+  .btn-ghost:hover, .icon-btn:hover, .search-clear:hover { background: var(--card-2); }
+  .btn-outline:hover { background: var(--card-2); }
+  .stat:hover, .quick:hover, .job-card:hover, .gear-unit:hover,
+  .sheet-row:hover { background: var(--card-2); }
+  .filter-chip:hover:not(.active) { border-color: var(--line-strong); }
+  .nav-tab:hover { color: var(--ink); }
+}
 
 /* ---- screens ---------------------------------------------- */
 .screen {
@@ -39,6 +91,9 @@ body {
 }
 
 /* ---- buttons ----------------------------------------------- */
+/* One filled primary per screen; everything else stays quiet. The tonal
+   default and the ghost carry no colour at all — accent is reserved for
+   the single action that moves the day forward. */
 .btn {
   display: inline-flex; align-items: center; justify-content: center;
   gap: var(--sp-2);
@@ -52,10 +107,16 @@ body {
 .btn:active { transform: scale(0.97); }
 .btn-primary {
   background: var(--accent); color: #fff; border: none;
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .btn-block { width: 100%; }
-.btn-outline { background: var(--card); border: 1.5px solid var(--accent); color: var(--accent-strong); }
+/* Secondary emphasis carries accent only as TEXT (the AA-safe alias);
+   the loud orange outline is gone — a quiet border does the framing. */
+.btn-outline {
+  background: var(--card);
+  border: var(--line-w) solid var(--line-strong);
+  color: var(--accent-strong);
+}
 .btn-ghost { background: transparent; border: var(--line-w) solid var(--line); }
 .btn-sm { min-height: 40px; padding: 8px 12px; font-size: var(--fs-sm); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -81,9 +142,11 @@ body {
   border: var(--line-w) solid var(--line);
   border-radius: var(--r-md);
   background: var(--card);
+  box-shadow: var(--shadow-xs);
   color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
 .job-card:active { transform: scale(0.99); }
+.job-tags { display: inline-flex; align-items: center; gap: var(--sp-2); }
 .job-main { display: flex; flex-direction: column; gap: var(--gap-hair); min-width: 0; }
 .job-label {
   font-weight: 700; font-size: var(--fs-md);
@@ -106,7 +169,15 @@ body {
    one -- and every action keeps the 40px btn-sm floor with the glove gap
    between neighbours. */
 .job-block { display: flex; flex-direction: column; gap: var(--sp-1); }
-.job-block.is-overdue .job-card { border-color: var(--red); }
+/* Overdue is a rail, not a box: a 3px leading edge in the status colour
+   reads at a glance without turning the whole card red. It rides INSIDE
+   the border so the card's geometry never shifts, and it survives sun
+   mode because it is solid status colour, not a tint. */
+.job-block.is-overdue .job-card {
+  /* Not layered with --shadow-xs: in sun mode that token is the word
+     `none`, which would invalidate the whole list and delete the rail. */
+  box-shadow: inset 3px 0 0 var(--red);
+}
 .job-actions {
   display: flex; flex-wrap: wrap; align-items: center;
   gap: var(--sp-2) var(--tap-gap-glove);
@@ -279,7 +350,13 @@ body {
   padding: 6px var(--sp-4);
   font-size: var(--fs-xs); font-weight: 700;
 }
-.sync-calm { background: var(--card-2); color: var(--muted); }
+/* Calm is nearly silent: no filled band, just quiet text over a
+   hairline. Escalation keeps its colour — the strip only ever gets
+   LOUDER than this, never quieter. */
+.sync-calm {
+  background: transparent; color: var(--muted);
+  border-bottom: var(--line-w) solid var(--hairline);
+}
 .sync-accent { background: var(--accent-soft); color: var(--accent-strong); }
 .sync-attention { background: var(--status-attention); color: var(--status-ink); }
 
@@ -327,8 +404,8 @@ body {
 }
 .sheet-hint { margin-top: var(--sp-3); color: var(--muted); font-size: var(--fs-sm); }
 .field-label {
+  /* Voice comes from the shared micro-label rule up top. */
   display: block; margin-top: var(--sp-3);
-  font-size: var(--fs-sm); font-weight: 700; color: var(--muted);
 }
 .field-label + .sheet-search { margin-top: var(--sp-1); }
 .sheet-submit { margin-top: var(--sp-4); }
@@ -347,7 +424,7 @@ body {
      misses adjacent ones worse. */
   min-height: var(--tap-glove);
   padding: 0 var(--sp-3);
-  border: none; border-bottom: 1px solid var(--line);
+  border: none; border-bottom: var(--line-w) solid var(--hairline);
   background: transparent; color: var(--ink);
   font-size: var(--fs-sm); font-weight: 700; text-align: left; cursor: pointer;
 }
@@ -357,9 +434,8 @@ body {
 .tags-screen { padding-bottom: var(--sp-5); }
 .tag-shelf { margin-top: var(--sp-4); }
 .tag-shelf-name {
+  /* Voice comes from the shared micro-label rule up top. */
   margin: 0 var(--sp-4) var(--sp-2);
-  font-size: var(--fs-sm); font-weight: 800; color: var(--muted);
-  text-transform: uppercase; letter-spacing: 0.06em;
 }
 .tag-grid {
   display: grid; gap: var(--sp-3);
@@ -452,11 +528,21 @@ body {
   min-height: var(--tap);
   padding: var(--sp-2) 0 calc(var(--sp-2) + 2px);
   border: none; background: transparent;
+  /* Reserved rail track, so activation never shifts the row. */
+  box-shadow: inset 0 2px 0 transparent;
   color: var(--muted); font: inherit; font-size: var(--fs-xs); font-weight: 700;
   cursor: pointer;
 }
-.nav-tab.is-active { color: var(--accent); }
-.nav-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+/* The active place: accent tint under the tab, a 2px rail meeting the
+   top hairline, and the AA-safe accent alias on icon and label. This is
+   one of the two places accent is allowed to live. */
+.nav-tab.is-active {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  box-shadow: inset 0 2px 0 var(--accent-strong);
+  font-weight: 800;
+}
+.nav-tab:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: -3px; }
 
 /* ---- motion ------------------------------------------------ */
 .view { animation: viewin 0.24s var(--ease-out); }
@@ -473,53 +559,84 @@ body {
 .pressable:active { transform: scale(0.985); }
 
 /* ---- sections ---------------------------------------------- */
-.section { margin-top: var(--sp-5); }
+/* Space over borders: sections separate by breathing room, and the
+   header drops to a micro-label so the CONTENT — jobs, numbers — is the
+   loudest thing in each band, not its caption. */
+.section { margin-top: var(--sp-8); }
 .section-head {
   display: flex; align-items: baseline; justify-content: space-between;
   gap: var(--sp-2); margin-bottom: var(--sp-3);
 }
 .section-head h2 {
   margin: 0; display: flex; align-items: center; gap: 7px;
-  font-size: var(--fs-lg); font-weight: 800; letter-spacing: -0.2px;
+  /* Face and colour come from the shared micro-label rule up top. */
+  line-height: 1.4;
 }
-.h-ico { color: var(--accent); }
+/* Section icons are wayfinding, not the primary action — no accent. */
+.h-ico { color: var(--muted); }
 .section-sub { margin-top: 3px; color: var(--muted); font-size: var(--fs-sm); font-weight: 600; }
 
 /* ---- the counters ------------------------------------------ */
 /* Four numbers, each a link to the thing it counts. A number you cannot act
    on is a decoration, and decorations on an operations screen train people
    to stop reading it. */
+/* No boxes. Four quantities separated by hairlines, each a large light
+   numeral over a micro-label — the morning numbers read as an instrument
+   panel, not as four competing cards. Status colour appears ONLY when a
+   count demands action, as a thin top rail plus a coloured numeral. */
 .stat-strip {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-2);
-  margin-top: var(--sp-4);
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+  margin-top: var(--sp-5);
 }
 .stat {
-  display: flex; flex-direction: column; align-items: flex-start; gap: var(--gap-hair);
-  padding: var(--sp-3);
-  border: var(--line-w) solid var(--line); border-radius: var(--r-md);
-  background: var(--card); color: var(--ink);
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1);
+  padding: var(--sp-3) var(--sp-3) var(--sp-2);
+  border: none; border-radius: var(--r-row);
+  /* Every stat reserves the rail track so a count turning bad never
+     shifts its neighbours. */
+  border-top: 3px solid transparent;
+  background: transparent; color: var(--ink);
   font: inherit; text-align: left; cursor: pointer;
 }
-.stat-n { font-size: var(--fs-xl); font-weight: 800; line-height: 1; }
-.stat-label { color: var(--muted); font-size: var(--fs-xs); font-weight: 700; line-height: 1.2; }
-.stat.is-warn { border-color: var(--status-attention); }
-.stat.is-warn .stat-n { color: var(--status-attention); }
-.stat.is-bad { border-color: var(--red); }
-.stat.is-bad .stat-n { color: var(--red); }
+.stat + .stat { border-left: var(--line-w) solid var(--hairline); }
+.stat-n {
+  font-size: var(--fs-stat); font-weight: 300; line-height: 1;
+  letter-spacing: -0.02em;
+}
+.stat-label { line-height: 1.3; }
+.stat.is-warn { border-top-color: var(--status-attention); }
+.stat.is-warn .stat-n { color: var(--status-attention); font-weight: 500; }
+.stat.is-bad { border-top-color: var(--red); }
+.stat.is-bad .stat-n { color: var(--red); font-weight: 500; }
 
 /* ---- badges ------------------------------------------------ */
+/* Informational badges are dot+text, not filled pills: colour appears as
+   a small solid marker plus coloured text, so a card carries at most one
+   quiet mark instead of three competing chips. Overdue keeps the pill —
+   it is work, and it must still pop on a loading dock. */
 .badge {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 8px; border-radius: var(--r-pill);
-  background: var(--card-2); color: var(--muted);
-  font-size: var(--fs-xs); font-weight: 800;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 0; border-radius: var(--r-pill);
+  background: transparent; color: var(--muted);
+  font-size: var(--fs-xs); font-weight: 700;
 }
-.badge-green { background: var(--green-soft); color: var(--green-ink); }
-.badge-orange { background: var(--accent-soft); color: var(--accent-strong); }
+.badge-green { color: var(--green-ink); }
+.badge-orange { color: var(--accent-strong); }
+/* The dot: solid currentColor, so it survives sun mode the way the
+   status fills do. badge-green already carries a check icon; the dot
+   marks the iconless ones. */
+.badge-orange::before {
+  content: ''; width: 6px; height: 6px; flex: none;
+  border-radius: 50%; background: currentColor;
+}
 /* Overdue. Ink on the card tint plus a real border, following the stat
    strip's is-bad pattern rather than red-on-red-soft, which has the same
    sub-AA contrast problem the green-ink token comment documents. */
-.badge-red { background: var(--card-2); color: var(--red); border: 1px solid var(--red); }
+.badge-red {
+  background: var(--card-2); color: var(--red);
+  border: 1px solid var(--red);
+  padding: 2px 8px; font-weight: 800;
+}
 
 /* ---- quick actions ----------------------------------------- */
 .quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
@@ -530,7 +647,9 @@ body {
   background: var(--card); color: var(--ink);
   font: inherit; text-align: left; cursor: pointer;
 }
-.quick svg { color: var(--accent); margin-bottom: 2px; }
+/* Ink, not accent: five orange icons in a grid is decoration, and
+   decoration in accent teaches the eye to stop trusting accent. */
+.quick svg { color: var(--ink); opacity: 0.75; margin-bottom: 2px; }
 .quick-t { font-size: var(--fs-sm); font-weight: 800; }
 .quick-s { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; }
 
@@ -568,12 +687,14 @@ body {
   font: inherit; font-size: var(--fs-sm); font-weight: 700; white-space: nowrap;
   cursor: pointer;
 }
-.filter-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Selection is ink-on-ink, not accent: a filter is a lens, not the
+   primary action. Inverting to the ink colour reads instantly in all
+   three themes and leaves accent meaning exactly one thing. */
+.filter-chip.active { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 
 .result-count {
+  /* Voice comes from the shared micro-label rule up top. */
   margin: var(--sp-3) 0 0;
-  color: var(--muted); font-size: var(--fs-xs); font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.06em;
 }
 
 /* ---- the gear list ----------------------------------------- */
@@ -587,7 +708,7 @@ body {
 .gear-group-head {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--sp-2); padding: var(--sp-3);
-  border-bottom: var(--line-w) solid var(--line);
+  border-bottom: var(--line-w) solid var(--hairline);
 }
 .gear-group-name { font-size: var(--fs-sm); font-weight: 800; }
 .gear-group-count {
@@ -600,7 +721,7 @@ body {
   align-items: center; gap: var(--sp-3);
   width: 100%; min-height: var(--row-h-glove);
   padding: 0 var(--sp-3);
-  border: none; border-top: var(--line-w) solid var(--line);
+  border: none; border-top: var(--line-w) solid var(--hairline);
   background: transparent; color: var(--ink);
   font: inherit; text-align: left; cursor: pointer;
 }
@@ -627,10 +748,7 @@ body {
   border: var(--line-w) solid var(--line); border-radius: var(--r-sm);
   background: var(--card);
 }
-.fact dt {
-  color: var(--muted); font-size: var(--fs-xs); font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.06em;
-}
+/* .fact dt: voice comes from the shared micro-label rule up top. */
 .fact dd { margin: 3px 0 0; font-size: var(--fs-sm); font-weight: 700; }
 
 /* The log. Newest first, and an assumed row is visibly different from a
@@ -640,7 +758,7 @@ body {
   position: relative;
   display: flex; gap: var(--sp-3);
   padding: var(--sp-3) 0 var(--sp-3) var(--sp-1);
-  border-bottom: var(--line-w) solid var(--line);
+  border-bottom: var(--line-w) solid var(--hairline);
 }
 .hist-dot {
   flex: none; width: 9px; height: 9px; margin-top: 6px;
@@ -680,7 +798,7 @@ body {
   display: grid; grid-template-columns: 1fr auto;
   align-items: center; gap: var(--gap-hair) var(--sp-3);
   padding: var(--sp-3) 0;
-  border-bottom: var(--line-w) solid var(--line);
+  border-bottom: var(--line-w) solid var(--hairline);
 }
 .line-name { font-size: var(--fs-sm); font-weight: 700; }
 .line-code { grid-row: 1 / span 2; color: var(--muted); font-size: var(--fs-xs); font-weight: 700; }
@@ -728,7 +846,7 @@ body {
   display: grid; grid-template-columns: auto 1fr; align-items: start;
   gap: var(--sp-3);
   padding: var(--sp-3) 0;
-  border-bottom: var(--line-w) solid var(--line);
+  border-bottom: var(--line-w) solid var(--hairline);
 }
 .enquiry-row > svg { margin-top: 2px; }
 /* Worst first, and the tone carries in the glyph's colour as well as the
@@ -797,10 +915,7 @@ body {
 .compare { margin-top: var(--sp-3); }
 .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
 .compare-half { margin: 0; display: flex; flex-direction: column; gap: 4px; }
-.compare-label {
-  color: var(--muted); font-size: var(--fs-xs); font-weight: 800;
-  text-transform: uppercase; letter-spacing: 0.06em;
-}
+/* .compare-label: voice comes from the shared micro-label rule up top. */
 .compare-img {
   width: 100%; aspect-ratio: 4 / 3; object-fit: cover;
   border: var(--line-w) solid var(--line); border-radius: var(--r-sm);
@@ -863,7 +978,7 @@ body {
   display: grid; grid-template-columns: auto 1fr auto auto;
   align-items: center; gap: var(--sp-3);
   min-height: 44px; padding: 0 2px;
-  border-bottom: var(--line-w) solid var(--line);
+  border-bottom: var(--line-w) solid var(--hairline);
   font-size: var(--fs-sm); font-weight: 600;
 }
 /* Unconfirmed reads as a QUESTION, not as a problem. It is the normal state of
