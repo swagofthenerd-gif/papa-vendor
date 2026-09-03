@@ -7,6 +7,7 @@ import { Today } from '../routes/Today.tsx'
 import { go } from '../nav.ts'
 import { NewJobSheet } from './NewJobSheet.tsx'
 import type { DemoStore } from './store.ts'
+import { STR } from '../strings.ts'
 
 /**
  * The Today board, wired to the demo store.
@@ -28,7 +29,7 @@ export function TodayScreen({ store }: { store: DemoStore }) {
   return (
     <Shell
       view={{ name: 'jobs' }}
-      title="Today"
+      title={STR.commonTabToday}
       subtitle={
         <>
           <Icon name="user" size={13} /> {store.seed.userName}
@@ -38,7 +39,7 @@ export function TodayScreen({ store }: { store: DemoStore }) {
         <button
           className="icon-btn"
           onClick={() => go({ name: 'gear' })}
-          aria-label="Search the gear"
+          aria-label={STR.todaySearchGearAria}
         >
           <Icon name="search" size={22} />
         </button>
@@ -124,19 +125,17 @@ function DueDateSheet({
   const [value, setValue] = useState(/^\d{4}-\d{2}-\d{2}$/.test(current ?? '') ? current! : '')
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label="Expected back">
+    <div className="sheet-backdrop" role="dialog" aria-label={STR.todayExpectedBack}>
       <div className="sheet">
         <header className="sheet-head">
-          <span className="sheet-title">Expected back</span>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">
+          <span className="sheet-title">{STR.todayExpectedBack}</span>
+          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
             <Icon name="x" size={22} />
           </button>
         </header>
 
         {current && !/^\d{4}-\d{2}-\d{2}/.test(current) ? (
-          <p className="sheet-hint">
-            Currently a note: “{current}”. Picking a date replaces it.
-          </p>
+          <p className="sheet-hint">{STR.todayCurrentlyANote(current)}</p>
         ) : null}
 
         <input
@@ -144,7 +143,7 @@ function DueDateSheet({
           type="date"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          aria-label="Expected back date"
+          aria-label={STR.todayExpectedBackDateAria}
         />
 
         <div className="sheet-foot-split">
@@ -153,14 +152,14 @@ function DueDateSheet({
             onClick={() => onSave(null)}
             disabled={current === null}
           >
-            Clear date
+            {STR.todayClearDate}
           </button>
           <button
             className="btn btn-primary"
             onClick={() => onSave(value || null)}
             disabled={value.length === 0}
           >
-            Save
+            {STR.todaySave}
           </button>
         </div>
       </div>

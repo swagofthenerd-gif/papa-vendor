@@ -5,6 +5,7 @@ import { StatusBadge } from '../components/StatusBadge.tsx'
 import { statusSentence, type Health, type Presence } from '../status.ts'
 import { PhotoCompare } from '../components/PhotoCompare.tsx'
 import type { PhotoPair } from '@papa/core'
+import { STR } from '../strings.ts'
 
 /**
  * One item.
@@ -45,18 +46,18 @@ export interface AssetView {
 
 /** How an entry got into the log, said plainly. */
 const METHOD_LABEL: Record<string, string> = {
-  scanned: 'scanned',
-  manual: 'typed in by hand',
-  assumed: 'assumed — in a case, not seen',
-  implied: 'moved with its parent',
-  counted: 'counted',
+  scanned: STR.gearMethodScanned,
+  manual: STR.gearMethodManual,
+  assumed: STR.gearMethodAssumed,
+  implied: STR.gearMethodImplied,
+  counted: STR.gearMethodCounted,
 }
 
 const EVENT_LABEL: Record<string, string> = {
-  check_out: 'Went out',
-  check_in: 'Came back',
-  intake: 'Added to the fleet',
-  move: 'Moved',
+  check_out: STR.gearEventWentOut,
+  check_in: STR.gearEventCameBack,
+  intake: STR.gearEventIntake,
+  move: STR.gearEventMove,
 }
 
 export function Asset({
@@ -73,9 +74,9 @@ export function Asset({
     return (
       <div className="empty">
         <Icon name="question" size={36} />
-        <p>No such item.</p>
+        <p>{STR.gearNoSuchItem}</p>
         <button className="btn btn-ghost" onClick={() => go({ name: 'gear' })}>
-          Back to the gear
+          {STR.gearBackToTheGear}
         </button>
       </div>
     )
@@ -99,23 +100,23 @@ export function Asset({
 
       <dl className="fact-grid">
         <div className="fact">
-          <dt>Category</dt>
+          <dt>{STR.gearFactCategory}</dt>
           <dd>{asset.category}</dd>
         </div>
         <div className="fact">
-          <dt>Shelf</dt>
+          <dt>{STR.gearFactShelf}</dt>
           <dd>{asset.locationName ?? '—'}</dd>
         </div>
         <div className="fact">
-          <dt>Serial</dt>
-          <dd className="code">{asset.serial ?? 'not recorded'}</dd>
+          <dt>{STR.gearFactSerial}</dt>
+          <dd className="code">{asset.serial ?? STR.gearSerialNotRecorded}</dd>
         </div>
         <div className="fact">
-          <dt>Tag</dt>
+          <dt>{STR.gearFactTag}</dt>
           {/* Truncated, because the code is opaque by design and nobody reads
               it — but shown, because "is this thing even tagged" is a real
               question at the bench. */}
-          <dd className="code">{asset.tagCode ? `${asset.tagCode.slice(0, 8)}…` : 'no tag'}</dd>
+          <dd className="code">{asset.tagCode ? `${asset.tagCode.slice(0, 8)}…` : STR.gearNoTag}</dd>
         </div>
       </dl>
 
@@ -124,17 +125,17 @@ export function Asset({
           A full-width tap, glove-sized, with nothing destructive anywhere on
           this page to mis-tap into; it reads, it never writes. */}
       <button className="btn btn-outline btn-block" onClick={onProveIt}>
-        <Icon name="send" size={18} /> Prove it — share this item’s record
+        <Icon name="send" size={18} /> {STR.gearProveIt}
       </button>
 
       <section className="section">
         <SectionHead
           icon="camera"
-          title="Condition"
+          title={STR.gearCondition}
           sub={
             photoPairs.length === 0
-              ? 'Nothing photographed'
-              : 'What it looked like going out, beside how it came back'
+              ? STR.gearNothingPhotographed
+              : STR.gearOutBesideBack
           }
         />
         <PhotoCompare pairs={photoPairs} />
@@ -143,19 +144,19 @@ export function Asset({
       <section className="section">
         <SectionHead
           icon="scroll"
-          title="History"
+          title={STR.gearHistory}
           sub={
             asset.history.length === 0
-              ? 'Nothing recorded yet'
-              : `${asset.history.length} entr${asset.history.length === 1 ? 'y' : 'ies'}, newest first`
+              ? STR.gearNothingRecordedYet
+              : STR.gearEntriesNewestFirst(asset.history.length)
           }
         />
 
         {asset.history.length === 0 ? (
           <div className="empty">
             <Icon name="scroll" size={32} />
-            <p>This item has not moved yet.</p>
-            <p className="muted">Scan it out on a job and it will show up here.</p>
+            <p>{STR.gearItemHasNotMovedYet}</p>
+            <p className="muted">{STR.gearScanItOutAndItShowsUp}</p>
           </div>
         ) : (
           <ol className="history">

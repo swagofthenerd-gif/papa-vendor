@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Icon } from '@papa/icons'
 import type { CaseManifest as Manifest, ContainedChild } from '@papa/core'
 import { confirmRest, toggleNotInHere } from '../case-confirm.ts'
+import { STR } from '../strings.ts'
 
 /**
  * What a case says it contains.
@@ -56,35 +57,33 @@ export function CaseManifestSheet({
   }
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label="What is in this case">
+    <div className="sheet-backdrop" role="dialog" aria-label={STR.scanWhatIsInThisCase}>
       <div className="sheet">
         <header className="sheet-head">
           <div>
-            <span className="sheet-title">{manifest.parentName ?? 'Case'}</span>
+            <span className="sheet-title">{manifest.parentName ?? STR.scanCaseFallback}</span>
             <p className="photo-side">
-              {manifest.packed.length} item{manifest.packed.length === 1 ? '' : 's'} believed inside
+              {STR.scanBelievedInside(manifest.packed.length)}
             </p>
           </div>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">
+          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
             <Icon name="x" size={22} />
           </button>
         </header>
 
         {manifest.permanent.length > 0 ? (
           <div className="manifest-fixed">
-            <span className="compare-label">Part of the case</span>
+            <span className="compare-label">{STR.scanPartOfTheCase}</span>
             <ul className="manifest-list">
               {manifest.permanent.map((c) => (
                 <Row key={c.assetId} child={c} state="fixed" />
               ))}
             </ul>
-            <p className="sheet-hint">
-              These cannot leave without it, so they are recorded with the case.
-            </p>
+            <p className="sheet-hint">{STR.scanCannotLeaveWithoutIt}</p>
           </div>
         ) : null}
 
-        <span className="compare-label">Packed inside — not looked at</span>
+        <span className="compare-label">{STR.scanPackedInside}</span>
         <ul className="manifest-list">
           {manifest.packed.map((c) => {
             const state = rowState(c)
@@ -105,7 +104,7 @@ export function CaseManifestSheet({
 
         <div className="session-actions">
           <button className="btn btn-primary btn-block" onClick={onScanIndividually}>
-            <Icon name="camera" size={18} /> Scan them one by one
+            <Icon name="camera" size={18} /> {STR.scanThemOneByOne}
           </button>
           <button
             className="btn btn-ghost btn-block"
@@ -113,19 +112,16 @@ export function CaseManifestSheet({
             onClick={() => onConfirmAll(outstanding)}
           >
             {excluded > 0
-              ? `Take the rest as packed · ${outstanding.length} unchecked`
-              : `Take the case as packed · ${outstanding.length} unchecked`}
+              ? STR.scanTakeTheRestAsPacked(outstanding.length)
+              : STR.scanTakeTheCaseAsPacked(outstanding.length)}
           </button>
           <p className="session-foot muted">
-            Taking it as packed records those items as <strong>assumed</strong>. They
-            are counted separately and are not used as evidence if this job turns
-            into a damage claim.
+            {STR.scanTakingAsPackedRecords} <strong>{STR.scanAssumedWord}</strong>
+            {STR.scanCountedSeparately}
             {excluded > 0 ? (
               <>
                 {' '}
-                {excluded === 1 ? 'One item' : `${excluded} items`} marked not in
-                here will be recorded as nothing at all, and will show as missing
-                on the handover.
+                {STR.scanMarkedNotInHere(excluded)}
               </>
             ) : null}
           </p>
@@ -153,11 +149,11 @@ function Row({
         name={state === 'excluded' ? 'x' : state === 'unconfirmed' ? 'question' : 'check'}
         size={16}
       />
-      <span className="manifest-name">{child.displayName ?? 'Unnamed'}</span>
+      <span className="manifest-name">{child.displayName ?? STR.scanUnnamed}</span>
       <span className="manifest-code code">{child.assetCode ?? '—'}</span>
       {onToggle ? (
         <button className="btn btn-sm btn-ghost" onClick={onToggle}>
-          {state === 'excluded' ? 'It is here' : 'Not in here'}
+          {state === 'excluded' ? STR.scanItIsHere : STR.scanNotInHere}
         </button>
       ) : null}
     </li>

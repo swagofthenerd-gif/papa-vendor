@@ -7,6 +7,7 @@ import {
 } from '@papa/core'
 import { go } from '../nav.ts'
 import { SectionHead } from '../components/Shell.tsx'
+import { STR } from '../strings.ts'
 
 /** One row on the board. A job is three free-text fields and a tally. */
 export interface JobRow {
@@ -92,11 +93,11 @@ export function Today({
       <div className="stat-strip">
         <button className="stat pressable" onClick={() => onOpenGear('out')}>
           <span className="stat-n code">{stats.outNow}</span>
-          <span className="stat-label">out now</span>
+          <span className="stat-label">{STR.todayStatOutNow}</span>
         </button>
         <button className="stat pressable" onClick={() => onOpenGear('here')}>
           <span className="stat-n code">{stats.onShelf}</span>
-          <span className="stat-label">on the shelf</span>
+          <span className="stat-label">{STR.todayStatOnTheShelf}</span>
         </button>
         <button
           className={`stat pressable${stats.overdue > 0 ? ' is-bad' : ''}`}
@@ -114,29 +115,29 @@ export function Today({
           }}
         >
           <span className="stat-n code">{stats.overdue}</span>
-          <span className="stat-label">overdue</span>
+          <span className="stat-label">{STR.todayStatOverdue}</span>
         </button>
         <button
           className={`stat pressable${stats.needsAttention > 0 ? ' is-warn' : ''}`}
           onClick={() => onOpenGear('attention')}
         >
           <span className="stat-n code">{stats.needsAttention}</span>
-          <span className="stat-label">need a look</span>
+          <span className="stat-label">{STR.todayStatNeedALook}</span>
         </button>
       </div>
 
       <section className="section">
         <SectionHead
           icon="truck"
-          title="Going out today"
+          title={STR.todayGoingOutToday}
           sub={
             jobs.length === 0
-              ? 'Nothing scheduled'
-              : `${jobs.length} job${jobs.length === 1 ? '' : 's'} · ${totalScanned} of ${totalExpected} items packed`
+              ? STR.todayNothingScheduled
+              : STR.todayJobsPacked(jobs.length, totalScanned, totalExpected)
           }
           action={
             <button className="btn btn-sm btn-outline" onClick={onNewJob}>
-              <Icon name="clapperboard" size={16} /> New job
+              <Icon name="clapperboard" size={16} /> {STR.todayNewJob}
             </button>
           }
         />
@@ -144,12 +145,10 @@ export function Today({
         {jobs.length === 0 ? (
           <div className="empty">
             <Icon name="clipboard-check" size={40} />
-            <p>Nothing scheduled today.</p>
-            <p className="muted">
-              Start a job to scan gear out, or scan anything to see where it is.
-            </p>
+            <p>{STR.todayNothingScheduledToday}</p>
+            <p className="muted">{STR.todayStartAJob}</p>
             <button className="btn btn-outline" onClick={() => go({ name: 'scan', jobId: 'lookup', mode: 'lookup' })}>
-              <Icon name="camera" size={18} /> Just scan
+              <Icon name="camera" size={18} /> {STR.todayJustScan}
             </button>
           </div>
         ) : (
@@ -174,10 +173,10 @@ export function Today({
                         <span className="job-tags">
                           {ready ? (
                             <span className="badge badge-green">
-                              <Icon name="check" size={12} /> Packed
+                              <Icon name="check" size={12} /> {STR.todayPacked}
                             </span>
                           ) : started ? (
-                            <span className="badge badge-orange">In progress</span>
+                            <span className="badge badge-orange">{STR.todayInProgress}</span>
                           ) : null}
                           <DueBadge due={job.due} />
                         </span>
@@ -212,7 +211,7 @@ export function Today({
                           className="btn btn-sm btn-ghost"
                           onClick={() => go({ name: 'session', sessionId: job.id })}
                         >
-                          <Icon name="clipboard-check" size={16} /> Last handover
+                          <Icon name="clipboard-check" size={16} /> {STR.todayLastHandover}
                         </button>
                       ) : null}
                     </div>
@@ -228,8 +227,8 @@ export function Today({
         <section className="section" id={COMING_BACK_ID}>
           <SectionHead
             icon="undo"
-            title="Coming back"
-            sub="Tap one to book its gear back in"
+            title={STR.todayComingBack}
+            sub={STR.todayTapOneToBookBack}
           />
           <ul className="job-list">
             {outJobs.map((j, i) => (
@@ -242,7 +241,7 @@ export function Today({
                     <span className="job-main">
                       <span className="job-label">{j.label}</span>
                       <span className="job-contact">
-                        {j.out} item{j.out === 1 ? '' : 's'} still out
+                        {STR.commonItemsStillOut(j.out)}
                       </span>
                       <span className="job-tags">
                         <DueBadge due={j.due} />
@@ -266,7 +265,7 @@ export function Today({
                         target="_blank"
                         rel="noopener"
                       >
-                        <Icon name="send" size={16} /> Nudge on WhatsApp
+                        <Icon name="send" size={16} /> {STR.todayNudgeOnWhatsApp}
                       </a>
                     ) : null}
                     {j.hasSummary ? (
@@ -274,7 +273,7 @@ export function Today({
                         className="btn btn-sm btn-ghost"
                         onClick={() => go({ name: 'session', sessionId: j.id })}
                       >
-                        <Icon name="clipboard-check" size={16} /> Last handover
+                        <Icon name="clipboard-check" size={16} /> {STR.todayLastHandover}
                       </button>
                     ) : null}
                   </div>
@@ -286,32 +285,32 @@ export function Today({
       ) : null}
 
       <section className="section">
-        <SectionHead icon="bolt" title="Quick" />
+        <SectionHead icon="bolt" title={STR.todayQuick} />
         <div className="quick-grid">
           <button className="quick pressable" onClick={() => go({ name: 'scan', jobId: 'lookup', mode: 'lookup' })}>
             <Icon name="camera" size={20} />
-            <span className="quick-t">Just scan</span>
-            <span className="quick-s">Where is this thing?</span>
+            <span className="quick-t">{STR.todayJustScan}</span>
+            <span className="quick-s">{STR.todayWhereIsThisThing}</span>
           </button>
           <button className="quick pressable" onClick={() => go({ name: 'hisaab' })}>
             <Icon name="clipboard" size={20} />
-            <span className="quick-t">Din ka hisaab</span>
-            <span className="quick-s">What moved today</span>
+            <span className="quick-t">{STR.todayDinKaHisaab}</span>
+            <span className="quick-s">{STR.todayWhatMovedToday}</span>
           </button>
           <button className="quick pressable" onClick={() => go({ name: 'import' })}>
             <Icon name="scroll" size={20} />
-            <span className="quick-t">Load your gear</span>
-            <span className="quick-s">Paste a list from Excel</span>
+            <span className="quick-t">{STR.todayLoadYourGear}</span>
+            <span className="quick-s">{STR.todayPasteAListFromExcel}</span>
           </button>
           <button className="quick pressable" onClick={() => go({ name: 'enquiry' })}>
             <Icon name="chat" size={20} />
-            <span className="quick-t">Answer a kit list</span>
-            <span className="quick-s">Paste from WhatsApp</span>
+            <span className="quick-t">{STR.todayAnswerAKitList}</span>
+            <span className="quick-s">{STR.todayPasteFromWhatsApp}</span>
           </button>
           <button className="quick pressable" onClick={() => onOpenGear('all')}>
             <Icon name="box" size={20} />
-            <span className="quick-t">All the gear</span>
-            <span className="quick-s">Search by name or code</span>
+            <span className="quick-t">{STR.todayAllTheGear}</span>
+            <span className="quick-s">{STR.todaySearchByNameOrCode}</span>
           </button>
         </div>
       </section>
@@ -346,17 +345,17 @@ function ContactLinks({ contact }: { contact: string | null }) {
   return (
     <>
       <span className="job-contact">{contact}</span>
-      <a className="btn btn-sm btn-ghost" href={telUrl(phone)} aria-label={`Call ${contact}`}>
-        <Icon name="phone" size={16} /> Call
+      <a className="btn btn-sm btn-ghost" href={telUrl(phone)} aria-label={STR.todayCallAria(contact)}>
+        <Icon name="phone" size={16} /> {STR.todayCall}
       </a>
       <a
         className="btn btn-sm btn-ghost"
         href={whatsAppChatUrl(phone)}
         target="_blank"
         rel="noopener"
-        aria-label={`WhatsApp ${contact}`}
+        aria-label={STR.todayWhatsAppAria(contact)}
       >
-        <Icon name="chat" size={16} /> WhatsApp
+        <Icon name="chat" size={16} /> {STR.todayWhatsApp}
       </a>
     </>
   )
@@ -377,7 +376,7 @@ function EditDateButton({
   return (
     <button className="btn btn-sm btn-ghost" onClick={() => onEditDate(job.id)}>
       <Icon name="calendar" size={16} />{' '}
-      {job.expectedBack ? 'Change date' : 'Set a date'}
+      {job.expectedBack ? STR.todayChangeDate : STR.todaySetADate}
     </button>
   )
 }

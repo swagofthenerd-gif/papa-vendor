@@ -4,6 +4,7 @@ import { go } from '../nav.ts'
 import { StatusBadge } from '../components/StatusBadge.tsx'
 import { toBucket } from '../status.ts'
 import type { Presence, Health } from '../status.ts'
+import { STR } from '../strings.ts'
 
 /**
  * The inventory, search-first.
@@ -32,10 +33,10 @@ export interface GearRow {
 export type GearFilter = 'all' | 'here' | 'out' | 'attention'
 
 const FILTERS: { key: GearFilter; label: string }[] = [
-  { key: 'all', label: 'Everything' },
-  { key: 'here', label: 'On the shelf' },
-  { key: 'out', label: 'Out' },
-  { key: 'attention', label: 'Needs a look' },
+  { key: 'all', label: STR.gearFilterEverything },
+  { key: 'here', label: STR.gearFilterOnTheShelf },
+  { key: 'out', label: STR.gearFilterOut },
+  { key: 'attention', label: STR.gearFilterNeedsALook },
 ]
 
 export function Gear({
@@ -85,14 +86,14 @@ export function Gear({
           className="searchbox"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name or code — FX9, AP600, battery"
+          placeholder={STR.gearSearchPlaceholder}
           autoCorrect="off"
           autoCapitalize="none"
           spellCheck={false}
-          aria-label="Search the gear"
+          aria-label={STR.todaySearchGearAria}
         />
         {query ? (
-          <button className="search-clear" onClick={() => setQuery('')} aria-label="Clear search">
+          <button className="search-clear" onClick={() => setQuery('')} aria-label={STR.gearClearSearchAria}>
             <Icon name="x" size={16} />
           </button>
         ) : null}
@@ -112,16 +113,16 @@ export function Gear({
       </div>
 
       <p className="result-count">
-        {shown.length} item{shown.length === 1 ? '' : 's'}
-        {groups.length !== shown.length ? ` · ${groups.length} kinds` : ''}
+        {STR.gearItemCount(shown.length)}
+        {groups.length !== shown.length ? STR.gearKindsSuffix(groups.length) : ''}
       </p>
 
       {shown.length === 0 ? (
         <div className="empty">
           <Icon name="search" size={36} />
-          <p>Nothing matches.</p>
+          <p>{STR.gearNothingMatches}</p>
           <p className="muted">
-            {query ? `No gear called “${query}”.` : 'Nothing in this filter right now.'}
+            {query ? STR.gearNoGearCalled(query) : STR.gearNothingInThisFilter}
           </p>
         </div>
       ) : (
@@ -144,8 +145,8 @@ export function Gear({
                         {/* Where it IS, in the words a person would use.
                             "Out — Wedding, DHA" beats a status enum. */}
                         {r.presence === 'here'
-                          ? (r.locationName ?? 'Somewhere here')
-                          : (r.jobLabel ?? 'Out')}
+                          ? (r.locationName ?? STR.gearSomewhereHere)
+                          : (r.jobLabel ?? STR.gearOutFallback)}
                       </span>
                       <StatusBadge status={{ presence: r.presence, health: r.health }} />
                     </button>

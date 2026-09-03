@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Icon } from '@papa/icons'
+import { STR } from '../strings.ts'
 
 /**
  * The desk's "make a job" card — three fields, none clever.
@@ -27,41 +28,41 @@ export function NewJobSheet({
   const [expectedBack, setExpectedBack] = useState('')
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label="New job">
+    <div className="sheet-backdrop" role="dialog" aria-label={STR.todayNewJob}>
       <div className="sheet">
         <header className="sheet-head">
-          <span className="sheet-title">New job</span>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">
+          <span className="sheet-title">{STR.todayNewJob}</span>
+          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
             <Icon name="x" size={22} />
           </button>
         </header>
 
         {linesNote ? <p className="sheet-hint">{linesNote}</p> : null}
 
-        <label className="field-label" htmlFor="new-job-label">What is the job?</label>
+        <label className="field-label" htmlFor="new-job-label">{STR.todayWhatIsTheJob}</label>
         <input
           id="new-job-label"
           className="sheet-search"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          placeholder="e.g. Music video — Gulberg"
+          placeholder={STR.todayJobLabelPlaceholder}
           autoFocus
           autoCorrect="off"
           spellCheck={false}
         />
 
-        <label className="field-label" htmlFor="new-job-contact">Contact (optional)</label>
+        <label className="field-label" htmlFor="new-job-contact">{STR.todayContactOptional}</label>
         <input
           id="new-job-contact"
           className="sheet-search"
           value={contact}
           onChange={(e) => setContact(e.target.value)}
-          placeholder="Name and number — e.g. Bilal 0300 4412233"
+          placeholder={STR.todayContactPlaceholder}
           autoCorrect="off"
           spellCheck={false}
         />
 
-        <label className="field-label" htmlFor="new-job-back">Expected back (optional)</label>
+        <label className="field-label" htmlFor="new-job-back">{STR.todayExpectedBackOptional}</label>
         <input
           id="new-job-back"
           className="sheet-search"
@@ -81,7 +82,7 @@ export function NewJobSheet({
             })
           }
         >
-          Create job
+          {STR.todayCreateJob}
         </button>
       </div>
     </div>
