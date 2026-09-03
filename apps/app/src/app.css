@@ -19,6 +19,9 @@ body {
   overscroll-behavior: none;
   /* Text selection on a scan screen only ever happens by accident. */
   user-select: none;
+  /* Money and counts line up in columns everywhere, not just where .code
+     happens to be applied. A no-op in faces without the feature. */
+  font-variant-numeric: tabular-nums;
 }
 
 .code {
@@ -26,10 +29,6 @@ body {
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
-
-/* Money and counts line up in columns everywhere, not just where .code
-   happens to be applied. A no-op in faces without the feature. */
-body { font-variant-numeric: tabular-nums; }
 
 .muted { color: var(--muted); }
 
