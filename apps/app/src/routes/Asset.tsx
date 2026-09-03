@@ -59,7 +59,16 @@ const EVENT_LABEL: Record<string, string> = {
   move: 'Moved',
 }
 
-export function Asset({ asset, photoPairs }: { asset: AssetView | null; photoPairs: PhotoPair[] }) {
+export function Asset({
+  asset,
+  photoPairs,
+  onProveIt,
+}: {
+  asset: AssetView | null
+  photoPairs: PhotoPair[]
+  /** Share the alibi card built from this item's local history. */
+  onProveIt: () => void
+}) {
   if (!asset) {
     return (
       <div className="empty">
@@ -109,6 +118,14 @@ export function Asset({ asset, photoPairs }: { asset: AssetView | null; photoPai
           <dd className="code">{asset.tagCode ? `${asset.tagCode.slice(0, 8)}…` : 'no tag'}</dd>
         </div>
       </dl>
+
+      {/* The tech's alibi (PLAN.md's "Prove it"): this item's story — state,
+          last scan, photo count — as one WhatsApp card built from local data.
+          A full-width tap, glove-sized, with nothing destructive anywhere on
+          this page to mis-tap into; it reads, it never writes. */}
+      <button className="btn btn-outline btn-block" onClick={onProveIt}>
+        <Icon name="send" size={18} /> Prove it — share this item’s record
+      </button>
 
       <section className="section">
         <SectionHead

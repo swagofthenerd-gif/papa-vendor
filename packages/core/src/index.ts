@@ -36,6 +36,8 @@ export {
   whatsAppShareUrl, parsePhoneNumber, whatsAppNudgeUrl, whatsAppChatUrl, telUrl,
   overdueNudgeMessage, OVERDUE_NUDGE_TEMPLATE,
 } from './share.ts'
+export { formatRupees, totalRates, moneyLabel, indicativeDayTotal } from './money.ts'
+export type { MoneyTotal } from './money.ts'
 export { dueStatus, parseDueDate, compareDueDates, compareJobsByDue } from './overdue.ts'
 export type { DueState, DueStatus } from './overdue.ts'
 export { FEEDBACK, ERROR_FEEDBACK, firstBuzzMs, hapticDurationMs } from './feedback.ts'

@@ -44,6 +44,12 @@ export interface ParchiInput {
   assumedCount: number
   /** Expected but not recorded — the lines the gate should ask about. */
   shortfall: ParchiLine[]
+  /**
+   * The shortfall's money as a PRE-FORMATTED label ('Rs 43,000 +2 unpriced')
+   * or null when nothing in it is priced. The caller formats because it owns
+   * the rates and the honesty split; the challan only carries the sentence.
+   */
+  shortfallValueLabel: string | null
 }
 
 /**
@@ -55,14 +61,20 @@ export interface ParchiInput {
  */
 export const PARCHI_MAX_CHARS = 660
 
-/** Listed rows are capped; the counts never are. */
-export const PARCHI_MAX_ITEM_ROWS = 10
-export const PARCHI_MAX_SHORT_ROWS = 5
+/** Listed rows are capped; the counts never are. One row was reclaimed from
+ *  each list when the shortfall's Value line landed — money on the challan
+ *  buys more at the gate than the tenth listed item ever did, and the counts
+ *  (which is what the gate reads) are untouched. */
+export const PARCHI_MAX_ITEM_ROWS = 9
+export const PARCHI_MAX_SHORT_ROWS = 4
 
 const MAX_HOUSE_CHARS = 28
 const MAX_JOB_CHARS = 40
 const MAX_CODE_CHARS = 10
 const MAX_NAME_CHARS = 16
+// 'Rs 99,999,999 +99 unpriced' is 26; anything longer is clipped, because a
+// scannable QR outranks the last digits of an implausible number.
+const MAX_VALUE_CHARS = 30
 
 /** Clip to a budget, marking the cut. The mark spends one of the n chars so
  *  a clipped value can never exceed an unclipped one's budget. */
@@ -113,6 +125,12 @@ export function buildParchi(input: ParchiInput): string {
     // on the way back a gap is gear at a client's site.
     lines.push(`${coming ? 'STILL OUT' : 'SHORT'} (${input.shortfall.length}):`)
     lines.push(...listed(input.shortfall, PARCHI_MAX_SHORT_ROWS))
+    if (input.shortfallValueLabel) {
+      // Money on the shortfall, clipped like every free-ish field so a
+      // runaway label cannot cost the QR its scannability. No label when
+      // nothing is priced — the gate counts lines either way.
+      lines.push(`Value: ${clip(input.shortfallValueLabel, MAX_VALUE_CHARS)}`)
+    }
   }
 
   lines.push('')

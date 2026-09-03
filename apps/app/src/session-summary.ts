@@ -13,6 +13,7 @@
  * exists to prevent, and the cure is the same: the number and the list are
  * derived here, together, from one input.
  */
+import { totalRates, type MoneyTotal } from '@papa/core'
 
 export interface SessionLine {
   key: string
@@ -20,6 +21,14 @@ export interface SessionLine {
   name: string | null
   outcome: 'accepted' | 'assumed' | 'missing' | 'unexpected' | 'conflict' | 'unknown'
   note?: string
+  /**
+   * What this line is worth, in minor units — replacement value coming BACK
+   * (a gap there is gear at a client's site), day rate going OUT (revenue
+   * still on the shelf). Null is 'no rate', never zero: PLAN.md's rule is
+   * that "battery plate missing" is a chore and "Rs 12,000" is a decision,
+   * and a made-up zero would quietly subtract from that decision.
+   */
+  valueMinor: number | null
 }
 
 export interface SessionSummary {
@@ -29,6 +38,10 @@ export interface SessionSummary {
   scanned: number
   assumed: number
   missing: SessionLine[]
+  /** The missing lines' money, totalled with the unpriced count carried —
+   *  the 'Rs 43,000 not back' figure, derived HERE beside the list it
+   *  describes so the header and the rows cannot drift apart. */
+  missingValue: MoneyTotal
   exceptions: SessionLine[]
 }
 
@@ -37,6 +50,9 @@ export interface ItemFacts {
   id: string
   code: string | null
   name: string | null
+  /** Minor units (paisa); absent or null means 'no rate'. */
+  dayRateMinor?: number | null
+  replacementMinor?: number | null
 }
 
 export interface SummaryInput {
@@ -59,9 +75,22 @@ export function buildSummary(input: SummaryInput): SessionSummary {
   const expected = new Set(input.expected)
   const assumed = new Set(input.assumed)
 
+  // Coming back, a gap is a potential claim: replacement value. Going out, a
+  // gap is a day of revenue still on the shelf: day rate. Same source rule as
+  // the section vocabulary — the money must mean what the heading says.
+  const valueOf = (f: ItemFacts | undefined): number | null =>
+    (input.mode === 'in' ? f?.replacementMinor : f?.dayRateMinor) ?? null
+
   const line = (id: string, outcome: SessionLine['outcome'], note?: string): SessionLine => {
     const f = input.facts(id)
-    return { key: id, code: f?.code ?? null, name: f?.name ?? null, outcome, note }
+    return {
+      key: id,
+      code: f?.code ?? null,
+      name: f?.name ?? null,
+      outcome,
+      note,
+      valueMinor: valueOf(f),
+    }
   }
 
   const missing = input.expected
@@ -78,6 +107,7 @@ export function buildSummary(input: SummaryInput): SessionSummary {
       name: 'Unknown tag',
       outcome: 'unknown' as const,
       note: 'A label this phone has never seen',
+      valueMinor: null,
     })),
   ]
 
@@ -90,6 +120,7 @@ export function buildSummary(input: SummaryInput): SessionSummary {
     scanned: [...recorded].filter((id) => !assumed.has(id)).length,
     assumed: [...recorded].filter((id) => assumed.has(id)).length,
     missing,
+    missingValue: totalRates(missing.map((m) => m.valueMinor)),
     exceptions,
   }
 }

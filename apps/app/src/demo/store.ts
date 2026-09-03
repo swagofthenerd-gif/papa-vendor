@@ -8,10 +8,13 @@ import {
   pairBySide,
   buildPullList,
   checkAvailability,
+  indicativeDayTotal,
   matchKitList,
+  moneyLabel,
   parseKitList,
   overdueNudgeMessage,
   parsePhoneNumber,
+  replySummary,
   whatsAppNudgeUrl,
   type AvailabilitySummary,
   type CatalogueItem,
@@ -30,6 +33,7 @@ import { SessionRegistry, type SessionMode } from './sessions.ts'
 import {
   assetFacts,
   createJob,
+  dayRateFor,
   decodeScanOps,
   dueBoard,
   itemsSummary,
@@ -45,6 +49,8 @@ import {
 } from './read-model.ts'
 import { dayAccount, type DayAccount } from './hisaab.ts'
 import { buildParchi } from '../parchi.ts'
+import { buildProveIt } from '../prove-it.ts'
+import { statusSentence } from '../status.ts'
 import type { GearRow } from '../routes/Gear.tsx'
 import type { OutRow, TodayStats } from '../routes/Today.tsx'
 import type { AssetHistoryRow, AssetView } from '../routes/Asset.tsx'
@@ -371,6 +377,24 @@ export class DemoStore {
     return checkAvailability(this.db, lines, openJobCommitments(this.db))
   }
 
+  /**
+   * The WhatsApp reply for an answered list, with one money line under it:
+   * the sum of the resolved lines' day rates, SAID TO BE INDICATIVE — a
+   * day-rate sum is not a quote; duration, discounts and the owner's
+   * judgement are not in the data, and the owner types the real number.
+   * Unresolved and rateless lines ride in the label's own '+N unpriced';
+   * when nothing is priced the line is omitted entirely.
+   */
+  replyText(summary: AvailabilitySummary): string {
+    const reply = replySummary(summary)
+    const label = moneyLabel(
+      indicativeDayTotal(summary.lines, (id) => dayRateFor(this.db, id)),
+    )
+    return label === null
+      ? reply
+      : `${reply}\n\nIndicative: ${label} per day — final quote from the desk.`
+  }
+
   outboxCounts(): { pending: number; failures: number; oldestAgeMs: number } {
     const row = this.db.get<{ pending: number; failures: number; oldest: number | null }>(
       `select
@@ -552,12 +576,56 @@ export class DemoStore {
       }),
       assumedCount: facts.assumed.length,
       shortfall: summary.missing.map((m) => ({ code: m.code, name: m.name })),
+      // The same money the handover header shows, so the challan and the
+      // screen above it cannot name two different figures for one shortfall.
+      shortfallValueLabel: moneyLabel(summary.missingValue),
     })
   }
 
   /** Din ka hisaab — the whole day, computed locally. See hisaab.ts. */
   dayAccount(nowMs: number = Date.now()): DayAccount {
     return dayAccount(this.db, nowMs)
+  }
+
+  /**
+   * The tech's alibi card for one item — see prove-it.ts. Everything on it
+   * comes from stored facts (the mirror, the queue, the photo table); no
+   * clock is read, because the card asserts the past, not the present.
+   */
+  proveItText(assetId: string): string | null {
+    const asset = this.assetView(assetId)
+    if (!asset) return null
+
+    // Newest scan of this asset in the queue — the queue is what was
+    // actually written, and on a real phone it is the only record there is
+    // until a sync happens. Same source as the asset page's history.
+    const last = decodeScanOps(this.db)
+      .filter((op) => op.assetId === assetId)
+      .at(-1)
+
+    const photos = this.db.get<{ n: number }>(
+      `select count(*) as n from condition_photos where asset_id = ?`,
+      [assetId],
+    )
+
+    return buildProveIt({
+      houseName: this.seed.houseName,
+      code: asset.code,
+      name: asset.name,
+      statusLine: statusSentence(
+        { presence: asset.presence, health: asset.health },
+        { jobLabel: asset.jobLabel, locationName: asset.locationName },
+      ),
+      lastScan: last
+        ? {
+            eventType: last.eventType,
+            whenMs: last.createdAt,
+            jobLabel: last.jobId ? (this.job(last.jobId)?.label ?? null) : null,
+            entryMethod: last.entryMethod,
+          }
+        : null,
+      photoCount: Number(photos?.n ?? 0),
+    })
   }
 
   /**

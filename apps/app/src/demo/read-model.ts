@@ -3,6 +3,7 @@ import {
   dueStatus,
   type DueStatus,
   type JobCommitment,
+  type MoneyTotal,
   type SqlDriver,
 } from '@papa/core'
 
@@ -34,6 +35,14 @@ import {
  * facts the outbox does not carry (mode, and the expected snapshot the
  * session was reconciling against), so a finished session's handover summary
  * can be rebuilt after the in-memory session is gone.
+ *
+ * `product_rates` — day rate and replacement value per product, MINOR units
+ * (paisa), following the server's `_minor` convention. A demo-side table for
+ * the same reason as `job_meta`: the `products` mirror's shape is the
+ * server's, and the server keeps money in rate cards (phase 2), not on the
+ * product row. Both columns nullable ON PURPOSE — a product with no rate
+ * reports 'no rate' and is counted as unpriced in every total, never priced
+ * at zero.
  */
 export const DEMO_SCHEMA = /* sql */ `
 create table if not exists job_expected (
@@ -56,6 +65,12 @@ create table if not exists scan_sessions (
   expected_json text not null
 );
 create index if not exists scan_sessions_job_idx on scan_sessions (job_id, started_at);
+
+create table if not exists product_rates (
+  product_id        text primary key,
+  day_rate_minor    integer,
+  replacement_minor integer
+);
 `
 
 export interface OpenJobRow {
@@ -153,6 +168,9 @@ export interface OutDueRow {
   out: number
   /** Locally computed at read time — the CONTRIBUTING time rule. */
   due: DueStatus
+  /** Replacement value of what is out — what this job is holding, in money.
+   *  Unpriced items are counted, never folded in as zero. */
+  value: MoneyTotal
 }
 
 /** Reading order for the coming-back list: the ones costing money first. */
@@ -178,14 +196,22 @@ export function dueBoard(
     .all<{
       job_id: string
       n: number
+      priced: number
+      total_minor: number | null
       label: string | null
       contact: string | null
       expected_back: string | null
     }>(
+      // count(r.replacement_minor) counts only non-null values, so priced
+      // and n - priced are exactly the split moneyLabel needs — an item
+      // without a rate raises the unpriced count instead of pricing at zero.
       `select a.current_job_id as job_id, count(*) as n,
+              count(r.replacement_minor) as priced,
+              sum(r.replacement_minor) as total_minor,
               j.label, j.contact, j.expected_back
          from assets a
          left join jobs j on j.id = a.current_job_id
+         left join product_rates r on r.product_id = a.product_id
         where a.current_job_id is not null
           and a.presence in ('out', 'in_transit')
         group by a.current_job_id`,
@@ -197,6 +223,11 @@ export function dueBoard(
       expectedBack: r.expected_back,
       out: Number(r.n),
       due: dueStatus(r.expected_back, nowMs),
+      value: {
+        totalMinor: Number(r.total_minor ?? 0),
+        priced: Number(r.priced),
+        unpriced: Number(r.n) - Number(r.priced),
+      },
     }))
     .sort(
       (a, b) =>
@@ -452,13 +483,47 @@ export function lastSessionRecord(
 export function assetFacts(
   db: SqlDriver,
   id: string,
-): { id: string; code: string | null; name: string | null } | undefined {
-  const row = db.get<{ asset_code: string | null; display_name: string | null }>(
-    `select a.asset_code, coalesce(p.display_name, a.display_name) as display_name
-       from assets a left join products p on p.id = a.product_id where a.id = ?`,
+): {
+  id: string
+  code: string | null
+  name: string | null
+  dayRateMinor: number | null
+  replacementMinor: number | null
+} | undefined {
+  const row = db.get<{
+    asset_code: string | null
+    display_name: string | null
+    day_rate_minor: number | null
+    replacement_minor: number | null
+  }>(
+    `select a.asset_code, coalesce(p.display_name, a.display_name) as display_name,
+            r.day_rate_minor, r.replacement_minor
+       from assets a
+       left join products p on p.id = a.product_id
+       left join product_rates r on r.product_id = a.product_id
+      where a.id = ?`,
     [id],
   )
-  return row ? { id, code: row.asset_code, name: row.display_name } : undefined
+  return row
+    ? {
+        id,
+        code: row.asset_code,
+        name: row.display_name,
+        dayRateMinor: row.day_rate_minor === null ? null : Number(row.day_rate_minor),
+        replacementMinor: row.replacement_minor === null ? null : Number(row.replacement_minor),
+      }
+    : undefined
+}
+
+/** A product's day rate in minor units, or null — 'no rate', not zero. */
+export function dayRateFor(db: SqlDriver, productId: string): number | null {
+  const row = db.get<{ day_rate_minor: number | null }>(
+    `select day_rate_minor from product_rates where product_id = ?`,
+    [productId],
+  )
+  return row?.day_rate_minor === null || row?.day_rate_minor === undefined
+    ? null
+    : Number(row.day_rate_minor)
 }
 
 /** Names of the items physically out on a job, for the nudge message. */

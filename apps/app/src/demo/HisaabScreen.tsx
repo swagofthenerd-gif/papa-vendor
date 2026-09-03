@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { moneyLabel } from '@papa/core'
 import { Icon } from '@papa/icons'
 import { Shell, SectionHead } from '../components/Shell.tsx'
 import { go, type View } from '../nav.ts'
@@ -126,17 +127,24 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
         />
         {account.stillOut.length === 0 ? null : (
           <ul className="line-list">
-            {account.stillOut.map((j) => (
-              <li key={j.id} className="line">
-                <span className="line-name">{j.label}</span>
-                <span className="line-note">
-                  {j.out} item{j.out === 1 ? '' : 's'} still out
-                </span>
-                <span className="line-code">
-                  <DueBadge due={j.due} />
-                </span>
-              </li>
-            ))}
+            {account.stillOut.map((j) => {
+              // Replacement value of what the job is holding. The label says
+              // '+N unpriced' itself; a fully unpriced job shows no figure —
+              // the count is still the fact, money is only added when known.
+              const value = moneyLabel(j.value)
+              return (
+                <li key={j.id} className="line">
+                  <span className="line-name">{j.label}</span>
+                  <span className="line-note">
+                    {j.out} item{j.out === 1 ? '' : 's'} still out
+                    {value !== null ? ` · ${value}` : ''}
+                  </span>
+                  <span className="line-code">
+                    <DueBadge due={j.due} />
+                  </span>
+                </li>
+              )
+            })}
           </ul>
         )}
       </section>

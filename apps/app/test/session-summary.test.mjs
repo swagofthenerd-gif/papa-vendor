@@ -15,8 +15,9 @@ import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { NodeSqliteDriver } from '@papa/core/node-driver'
-import { LOCAL_SCHEMA, ScanSession } from '@papa/core'
+import { LOCAL_SCHEMA, ScanSession, moneyLabel } from '@papa/core'
 import { seedDemo } from '../src/demo/seed.ts'
+import { assetFacts } from '../src/demo/read-model.ts'
 import { buildSummary, manifestText, shortfall } from '../src/session-summary.ts'
 
 function build() {
@@ -125,5 +126,76 @@ describe('the WhatsApp message', () => {
 
     const text = manifestText(summarise(db, seed, job, session))
     assert.ok(!text.includes('Still to come'), 'no empty section')
+  })
+})
+
+describe('money on the missing lines', () => {
+  // The real facts source, rates included — what the store actually wires.
+  const factsOf = (db) => (id) => assetFacts(db, id)
+
+  test('coming back, a missing line is priced at replacement value', () => {
+    const { db, seed } = build()
+    const job = seed.jobs[0]
+    // Expect the FX9 (asset-fx9-1) back and record nothing.
+    const s = buildSummary({
+      jobLabel: job.label,
+      mode: 'in',
+      expected: ['asset-fx9-1'],
+      recorded: [],
+      assumed: [],
+      unknownTags: [],
+      facts: factsOf(db),
+    })
+    assert.equal(s.missing.length, 1)
+    assert.equal(s.missing[0].valueMinor, 3_500_000 * 100)
+    assert.deepEqual(s.missingValue, { totalMinor: 350_000_000, priced: 1, unpriced: 0 })
+  })
+
+  test('going out, the same gap is a day of revenue, not a claim', () => {
+    const { db, seed } = build()
+    const s = buildSummary({
+      jobLabel: seed.jobs[0].label,
+      mode: 'out',
+      expected: ['asset-fx9-1'],
+      recorded: [],
+      assumed: [],
+      unknownTags: [],
+      facts: factsOf(db),
+    })
+    assert.equal(s.missing[0].valueMinor, 25_000 * 100)
+  })
+
+  test('an unpriced item is counted, never priced at zero', () => {
+    const { db, seed } = build()
+    // Sachdeva Tripod is deliberately seeded without a rate.
+    const s = buildSummary({
+      jobLabel: seed.jobs[0].label,
+      mode: 'in',
+      expected: ['asset-fx9-1', 'asset-sachdeva-1'],
+      recorded: [],
+      assumed: [],
+      unknownTags: [],
+      facts: factsOf(db),
+    })
+    const tripod = s.missing.find((m) => m.key === 'asset-sachdeva-1')
+    assert.equal(tripod.valueMinor, null)
+    // The header total: the FX9's money, plus the honest unpriced count.
+    assert.deepEqual(s.missingValue, { totalMinor: 350_000_000, priced: 1, unpriced: 1 })
+    assert.equal(moneyLabel(s.missingValue), 'Rs 3,500,000 +1 unpriced')
+  })
+
+  test('nothing missing means a zero total with nothing to say', () => {
+    const { db, seed } = build()
+    const s = buildSummary({
+      jobLabel: seed.jobs[0].label,
+      mode: 'in',
+      expected: ['asset-fx9-1'],
+      recorded: ['asset-fx9-1'],
+      assumed: [],
+      unknownTags: [],
+      facts: factsOf(db),
+    })
+    assert.deepEqual(s.missingValue, { totalMinor: 0, priced: 0, unpriced: 0 })
+    assert.equal(moneyLabel(s.missingValue), null)
   })
 })

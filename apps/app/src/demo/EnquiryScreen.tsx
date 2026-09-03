@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { replySummary, type AvailabilitySummary, type CatalogueItem } from '@papa/core'
+import type { AvailabilitySummary, CatalogueItem } from '@papa/core'
 import { Enquiry } from '../routes/Enquiry.tsx'
 import { NewJobSheet } from './NewJobSheet.tsx'
 import { go } from '../nav.ts'
@@ -49,8 +49,10 @@ export function EnquiryScreen({ store }: { store: DemoStore }) {
 
   const onCopyReply = useCallback(() => {
     if (!summary) return
-    void navigator.clipboard?.writeText(replySummary(summary)).catch(() => {})
-  }, [summary])
+    // The reply plus the indicative day-rate line — composed in the store so
+    // what is copied and what is previewed are the same text.
+    void navigator.clipboard?.writeText(store.replyText(summary)).catch(() => {})
+  }, [store, summary])
 
   // What the sheet will actually promise: resolved lines only. Said out loud
   // on the sheet, because a job that silently drops the two unresolved lines
@@ -70,7 +72,7 @@ export function EnquiryScreen({ store }: { store: DemoStore }) {
     <>
       <Enquiry
         summary={summary}
-        reply={summary ? replySummary(summary) : ''}
+        reply={summary ? store.replyText(summary) : ''}
         onPaste={onPaste}
         onResolve={onResolve}
         onCopyReply={onCopyReply}

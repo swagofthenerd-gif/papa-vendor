@@ -1,4 +1,5 @@
 import { Icon } from '@papa/icons'
+import { formatRupees, moneyLabel } from '@papa/core'
 import { SectionHead } from '../components/Shell.tsx'
 import { shortfall, type SessionSummary } from '../session-summary.ts'
 
@@ -37,6 +38,7 @@ export function Session({
   // number above and the list below cannot drift apart again.
   const outstanding = shortfall(summary)
   const coming = summary.mode === 'in'
+  const missingMoney = moneyLabel(summary.missingValue)
 
   return (
     <>
@@ -107,12 +109,30 @@ export function Session({
           <SectionHead
             icon={coming ? 'siren' : 'hourglass'}
             title={coming ? 'Did not come back' : 'Still on the shelf'}
-            sub={coming ? 'Went out on this job, not scanned in' : 'On the list, not in the van'}
+            // Money in the heading is what turns this list from a chore into
+            // a decision (PLAN.md's return-flow rule). The label carries its
+            // own honesty — 'Rs 43,000 +2 unpriced' — and when NOTHING here
+            // has a rate there is no number at all, never a made-up zero.
+            sub={
+              missingMoney
+                ? coming
+                  ? `${missingMoney} not back · went out on this job, not scanned in`
+                  : `${missingMoney} of day rate on the list, not in the van`
+                : coming
+                  ? 'Went out on this job, not scanned in'
+                  : 'On the list, not in the van'
+            }
           />
           <ul className="line-list">
             {summary.missing.map((l) => (
               <li key={l.key} className="line line-missing">
                 <span className="line-name">{l.name ?? 'Unknown item'}</span>
+                {/* Replacement value coming back, day rate going out — same
+                    rule the total is built from. 'no rate' is said plainly:
+                    the item still counts, it just cannot be priced. */}
+                <span className="line-note">
+                  {l.valueMinor !== null ? formatRupees(l.valueMinor) : 'no rate'}
+                </span>
                 <span className="line-code code">{l.code ?? '—'}</span>
               </li>
             ))}

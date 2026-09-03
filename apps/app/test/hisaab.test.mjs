@@ -190,14 +190,32 @@ describe('the WhatsApp copy', () => {
     assert.match(text, /Nothing scanned or photographed today\./)
   })
 
-  test('still-out lines carry the honest due label', () => {
+  test('still-out lines carry the honest due label, then the money', () => {
     const text = dayAccountText(dayAccount(db, Date.now()))
-    // Every still-out line ends in a due label — 'due today', 'N days late',
-    // 'back <day>', or the honest 'no date'.
+    // Every still-out line carries a due label — 'due today', 'N days late',
+    // 'back <day>', or the honest 'no date' — followed, when anything on the
+    // job is priced, by the replacement value of what it is holding.
     const lines = text.split('\n').filter((l) => l.startsWith('- '))
     assert.ok(lines.length > 0)
     for (const l of lines) {
-      assert.match(l, /items?, (due today|\d+ days? late|back \w{3} \d+ \w{3}|no date)$/)
+      assert.match(
+        l,
+        /items?, (due today|\d+ days? late|back \w{3} \d+ \w{3}|no date)(, Rs [\d,]+( \+\d+ unpriced)?)?$/,
+      )
     }
+    // The seed's one out camera (an FX6, Rs 2,200,000 replacement) prices
+    // its job's line — the figure is real data, not formatting accident.
+    assert.match(text, /Documentary — Walled City: 1 item, .*Rs 2,200,000$/m)
+  })
+
+  test('a job holding only unpriced gear gets no money, never Rs 0', () => {
+    // Send out gear that deliberately has no seeded rate (Sachdeva Tripod),
+    // on a job of its own.
+    db.exec(`insert into jobs (id, org_id, label, status) values ('job-x', 'demo-org', 'Unpriced Job', 'open')`)
+    db.exec(`update assets set presence = 'out', current_job_id = 'job-x' where id = 'asset-sachdeva-1'`)
+    const text = dayAccountText(dayAccount(db, Date.now()))
+    const line = text.split('\n').find((l) => l.includes('Unpriced Job'))
+    assert.ok(line, 'the unpriced job is still listed')
+    assert.doesNotMatch(line, /Rs/)
   })
 })
