@@ -187,6 +187,9 @@ export function ScanScreen({
           <QrCamera
             torchOn={torchOn}
             onDecode={onDecode}
+            // Default the lamp on in a dark room where the platform allows it;
+            // the header toggle still turns it back off.
+            onAutoTorch={() => setTorchOn(true)}
             paused={manualOpen || photoFor !== null || openCase !== null}
           />
         }

@@ -16,6 +16,12 @@ The scanner has no rejections, only annotations. The truck is already leaving; r
 **4. Zero *network* in the scan handler — but never zero *local* checks.**
 The device already knows this camera is checked out to a different job. Warn instantly from local data, require a reason, and still record the scan. Telling only the desk is not enough: at 06:14 the desk is closed and two trucks leave.
 
+The four principles govern the scan loop. The system-level counterparts —
+the **five steadiness principles** (evidence, distrust of the client, no
+silent data loss, one home per rule, machine-checked guarantees) — live in
+[`docs/principles.md`](docs/principles.md), each grounded in a real defect
+from the 2026-09-02 review. Walk both lists before merging.
+
 ## Hard rules
 
 - **All writes go through server RPC functions.** Never direct table writes from a client, even where the client library makes it easy. This is what keeps the phone from being trusted, and it is what makes the read-sync layer a contained swap later.

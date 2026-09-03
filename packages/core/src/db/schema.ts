@@ -73,6 +73,9 @@ create index if not exists asset_tags_asset_idx on asset_tags (asset_id);
  * permanent - welded to its parent. An FX9 handle genuinely cannot leave
  *             without the body, so scanning the body may record it too.
  * packed    - currently living in this case, expected back in it.
+ * subrented - living in this case but belonging to someone else. Same manifest
+ *             rule as packed, kept distinct because a dispute over it is a
+ *             dispute with a supplier, not a client.
  *
  * THAT DISTINCTION IS NOT COSMETIC. A case scan may emit implied events for
  * permanent children ONLY. For packed children it must open a MANIFEST of
@@ -86,6 +89,13 @@ create table if not exists asset_containment (
   parent_asset_id text not null,
   child_asset_id  text not null,
   kind            text not null,
+  -- The server-side tombstone, mirrored. A row with removed_at set is
+  -- HISTORY, not contents: it must never appear on a manifest, or the tech is
+  -- invited to confirm — as 'assumed', with their name on it — gear that was
+  -- pulled out weeks ago. Added while no installed phone exists; this schema
+  -- is create-if-not-exists (see the index comment above), so the NEXT column
+  -- needs a real migration path first.
+  removed_at      text,
   primary key (parent_asset_id, child_asset_id)
 );
 create index if not exists containment_child_idx on asset_containment (child_asset_id);

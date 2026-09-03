@@ -11,7 +11,7 @@ import assert from 'node:assert/strict'
 
 import { NodeSqliteDriver } from '../src/db/node-driver.ts'
 import { LOCAL_SCHEMA } from '../src/db/schema.ts'
-import { Outbox, syncStatus, MAX_ATTEMPTS } from '../src/outbox.ts'
+import { Outbox, syncStatus } from '../src/outbox.ts'
 import { ScanSession } from '../src/scan.ts'
 import { SyncEngine, TransportError } from '../src/sync.ts'
 
@@ -121,6 +121,61 @@ describe('duplicate scans', () => {
     session().scan('v1-a1')
     const second = session({ jobId: JOB_A }).scan('v1-a1')
     assert.notEqual(second.outcome, 'duplicate')
+  })
+
+  test('a check_out then a check_in of the same asset are BOTH recorded', () => {
+    // Keying the dedupe by asset alone swallowed the check_in as 'duplicate':
+    // gear that went out and came home in one session stayed 'out' forever.
+    // Same asset, same EVENT is the rescan case; same asset, different event
+    // is two real things happening to one camera.
+    const s = session()
+    assert.equal(s.scan('v1-a1').outcome, 'accepted')
+    const back = s.scan('v1-a1', 'check_in')
+    assert.equal(back.outcome, 'accepted')
+    assert.equal(new Outbox(db).pendingCount(), 2)
+
+    const rows = db.all(`select id, payload, depends_on from outbox order by seq`)
+    assert.equal(JSON.parse(rows[1].payload).event_type, 'check_in')
+    // The ordering edge is real, not implied: the check_in depends on the
+    // check_out, so a parked check_out cascades to it instead of letting it
+    // ship alone as "checked in before it was checked out".
+    assert.equal(rows[1].depends_on, rows[0].id)
+  })
+
+  test('the same asset and the same event type is still a duplicate', () => {
+    const s = session()
+    s.scan('v1-a1')
+    s.scan('v1-a1', 'check_in')
+    assert.equal(s.scan('v1-a1', 'check_in').outcome, 'duplicate')
+    assert.equal(new Outbox(db).pendingCount(), 2)
+  })
+})
+
+describe('retired and lost labels', () => {
+  test('a retired tag surfaces as its own outcome, not the old asset', () => {
+    // A retired tag keeps its asset_id — that is the historical record — but
+    // resolving it with full confidence means a peeled label found on the
+    // floor scans as whatever it USED to be stuck to, and the wrong camera
+    // goes out under the right name.
+    db.exec(`update asset_tags set status = 'retired' where tag_code = 'v1-a1'`)
+    const r = session().scan('v1-a1')
+
+    assert.equal(r.outcome, 'retired_tag')
+    assert.equal(r.assetId, undefined, 'must not resolve to the old asset')
+    assert.ok(r.message, 'the tech is told what they are holding')
+    assert.ok(r.outboxId, 'still recorded — the label is physically there')
+    assert.equal(
+      db.get(`select presence from assets where id = 'a1'`).presence,
+      'here',
+      'the old asset must not move',
+    )
+  })
+
+  test('a lost tag behaves the same way', () => {
+    db.exec(`update asset_tags set status = 'lost' where tag_code = 'v1-a1'`)
+    const r = session().scan('v1-a1')
+    assert.equal(r.outcome, 'retired_tag')
+    assert.equal(r.assetId, undefined)
   })
 })
 
@@ -262,11 +317,32 @@ describe('the outbox is a DAG — failure poisons the subtree', () => {
     assert.deepEqual(o.nextBatch(50, 1_000).map((r) => r.id), [])
   })
 
-  test('retries back off and eventually park the op', () => {
+  test('transient failures NEVER park the op — the backoff caps, not the attempts', () => {
+    // The captive-portal morning: ~40 minutes of Wi-Fi that answers TCP but
+    // delivers nothing, every flush a timeout. Under the old rule the eighth
+    // retry quietly became fail(), the failure cascaded through the DAG, and
+    // a full session of good scans was permanently parked over a network
+    // condition that fixes itself. Retryable means "the network had a
+    // moment" — that can never be a verdict on the op.
     const o = new Outbox(db)
     o.enqueue({ id: 'p', op: 'x', payload: {} })
-    for (let i = 0; i < MAX_ATTEMPTS; i++) o.retryLater('p', 'timeout', '', 0)
-    assert.equal(o.byId('p').state, 'failed')
+    for (let i = 0; i < 50; i++) o.retryLater('p', 'timeout', '', 0)
+
+    const row = o.byId('p')
+    assert.equal(row.state, 'pending', 'still queued, never failed')
+    assert.equal(row.attempts, 50, 'attempts keep counting — they are diagnostic')
+    assert.equal(row.next_retry_at, 1_800_000, 'the DELAY is what saturates')
+  })
+
+  test('a dependency travelling in the same batch does not stall the batch', () => {
+    // Batches are all-or-nothing and applied in seq order, so a dependency
+    // sent alongside its dependent is as settled as an acked one. Stopping at
+    // it would split every same-asset check_out/check_in pair across two
+    // flushes for no safety gain.
+    const o = new Outbox(db)
+    o.enqueue({ id: 'p', op: 'x', payload: {} })
+    o.enqueue({ id: 'c', op: 'x', payload: {}, dependsOn: 'p' })
+    assert.deepEqual(o.nextBatch(50).map((r) => r.id), ['p', 'c'])
   })
 })
 
@@ -338,6 +414,67 @@ describe('the flush loop', () => {
     const report = await engine.flush(true)
     assert.equal(report.failed.length, 1)
     assert.equal(new Outbox(db).failures().length, 1)
+  })
+
+  test('a poison op NAMED by the server is the one parked — not the head of the batch', async () => {
+    // submit_scan_batch is all-or-nothing, so the op the server refused can
+    // sit anywhere in the batch. Parking batch[0] parked an innocent op and
+    // left the real poison pending, to fail the next flush, forever.
+    const s = session()
+    s.scan('v1-a1'); s.scan('v1-a2'); s.scan('v1-a3')      // seqs 1, 2, 3
+
+    const engine = new SyncEngine(db, {
+      submitScanBatch: async () => {
+        throw new TransportError('op refused', 'bad_request', false, 2)
+      },
+    }, 'WH-01')
+
+    const report = await engine.flush(true)
+    const outbox = new Outbox(db)
+    assert.equal(report.failed.length, 1)
+    assert.equal(outbox.failures()[0].seq, 2, 'the op the server refused')
+    assert.equal(outbox.pendingCount(), 2, 'its innocent batchmates stay queued')
+  })
+
+  test('an UNNAMED poison op is isolated by bisection', async () => {
+    // When the server cannot say which op it refused, halve the batch and
+    // retry until one op stands alone. The good ops land; exactly one parks.
+    const s = session()
+    s.scan('v1-a1'); s.scan('v1-a2'); s.scan('v1-a3')      // seqs 1, 2, 3
+
+    const engine = new SyncEngine(db, {
+      submitScanBatch: async (_d, ops) => {
+        if (ops.some((o) => o.client_seq === 2)) {
+          throw new TransportError('rejected', 'bad_request', false)
+        }
+        return ops.map((o) => ({ client_seq: o.client_seq, event_id: 'e', outcome: 'accepted', alert_kind: null }))
+      },
+    }, 'WH-01')
+
+    const report = await engine.flush(true)
+    const outbox = new Outbox(db)
+    assert.equal(outbox.failures().length, 1, 'exactly one op parks')
+    assert.equal(outbox.failures()[0].seq, 2, 'and it is the poison one')
+    assert.equal(report.acked, 2, 'the good ops landed in the same flush')
+    assert.equal(outbox.pendingCount(), 0)
+  })
+
+  test('a check_in queued behind a parked check_out cascades with it', async () => {
+    // The DAG rule, end to end: the poison op's dependents must never ship
+    // without it. The edge comes from ScanSession, the cascade from fail().
+    const s = session()
+    s.scan('v1-a1')                     // seq 1, check_out
+    s.scan('v1-a1', 'check_in')         // seq 2, depends on seq 1
+
+    const engine = new SyncEngine(db, {
+      submitScanBatch: async () => {
+        throw new TransportError('op refused', 'bad_request', false, 1)
+      },
+    }, 'WH-01')
+
+    const report = await engine.flush(true)
+    assert.equal(report.failed.length, 2, 'the dependent parks with its prerequisite')
+    assert.equal(new Outbox(db).pendingCount(), 0, 'nothing ships around the gap')
   })
 
   test('an unacknowledged op stays queued rather than being lost', async () => {

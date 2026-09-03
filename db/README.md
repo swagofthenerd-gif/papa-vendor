@@ -15,8 +15,11 @@ add one.
 - UUIDv7 hand-written in plpgsql, deliberately avoiding an extension dependency
 - a `papa_app` role owned by this repo (`NOSUPERUSER NOBYPASSRLS`, no DELETE)
 - identity read from `current_setting()`, with a vendor-free `papa.*` fallback
-  that every one of the 241 assertions uses
-- `SECURITY INVOKER` everywhere except three argued exceptions
+  that every one of the 395 assertions uses
+- `SECURITY INVOKER` everywhere except the argued exceptions (the public tag
+  resolver, the watermark/audit/limiter internals, and — since 0015 — the
+  scan-projection pipeline and the dispatch RPCs, each with explicit org
+  checks and a pinned `search_path`)
 
 `run-tests.sh` proves it on every push: it applies every migration and runs the
 whole suite against stock `postgres:16-bookworm` in a container. **That is a

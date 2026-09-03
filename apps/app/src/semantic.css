@@ -35,6 +35,13 @@
   --tap-gap-glove: 12px;
   --tap-gap-danger: 24px;   /* destructive vs non-destructive */
 
+  /* Sub-token gaps that sit below the --sp-* scale: the hair of space
+     between two stacked lines of the same block, and the tight gap between
+     an inline icon and its label. Named so the two values are not scattered
+     as bare pixels across the component sheet. */
+  --gap-tight: 6px;         /* icon-to-label, inline */
+  --gap-hair: 2px;          /* stacked lines within one block */
+
   /* ---- Density ----------------------------------------------
      The sibling's --r-lg (20px) card with a layered shadow is right
      for a consumer grid of eight items and pure noise on a 40-row

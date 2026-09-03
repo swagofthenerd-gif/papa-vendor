@@ -39,7 +39,10 @@ const MIRROR_COLUMNS: Record<string, string[]> = {
   ],
   asset_tags: ['tag_code', 'asset_id', 'status'],
   locations: ['id', 'org_id', 'name', 'kind', 'path', 'code'],
-  jobs: ['id', 'org_id', 'label', 'contact', 'expected_back', 'status'],
+  // No `contact` here: it is a phone number, and the server's PII sync guard
+  // (0009/0015) excludes it from pull_changes. The local column still exists
+  // for the demo seed; on a real device it simply stays null.
+  jobs: ['id', 'org_id', 'label', 'expected_back', 'status'],
 }
 
 /** The primary key each mirror is keyed on locally. */

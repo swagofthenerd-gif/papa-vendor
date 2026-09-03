@@ -82,8 +82,8 @@ out=$(run_migrate t1) && rc=0 || rc=$?
 is "$rc" "0" "the runner succeeds on an empty database"
 is "$(q t1 'select count(*) from schema_migrations')" "$file_count" \
    "every migration file is recorded as applied"
-is "$(q t1 "select count(*) from pg_tables where schemaname='public'")" "29" \
-   "the 28 schema tables exist, plus the bookkeeping table itself"
+is "$(q t1 "select count(*) from pg_tables where schemaname='public'")" "30" \
+   "the 29 schema tables exist, plus the bookkeeping table itself"
 
 # ---------------------------------------------------------------------------
 # Running it again does nothing — the property the whole thing exists for

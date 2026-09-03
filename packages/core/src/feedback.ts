@@ -86,6 +86,23 @@ export const FEEDBACK: Record<ScanOutcome | 'complete', FeedbackSpec> = {
   },
 
   /**
+   * A retired or lost label — revoked, but still physically on gear.
+   *
+   * Amber like the other annotations, but its follow-up differs from BOTH:
+   * an unknown tag resolves itself on sync and an unexpected item needs a
+   * decision, while a revoked label means the LABEL ITSELF is wrong and the
+   * item needs its real one found or a manual add. Two mid-length buzzes and
+   * a falling low pair — related to unknown_tag's single low tone by pitch,
+   * separated from everything by feel.
+   */
+  retired_tag: {
+    haptic: [90, 60, 90],
+    tones: [[494, 90], [392, 140]],
+    visual: 'insert-amber',
+    counts: false,
+  },
+
+  /**
    * Already out to a different job.
    *
    * Deliberately the most distinct pattern in the set — a long buzz and a low
