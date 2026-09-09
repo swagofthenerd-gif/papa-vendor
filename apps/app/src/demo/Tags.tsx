@@ -3,6 +3,7 @@ import QRCode from 'qrcode'
 import { Icon } from '@papa/icons'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
+import { getLang, setLang, type Lang } from '../lang.ts'
 
 /**
  * The labels, on screen, so there is something to actually scan.
@@ -78,6 +79,7 @@ export function Tags({ store }: { store: DemoStore }) {
           <Icon name="scroll" size={18} /> {waiting ? STR.labelsDrawingLabels : STR.labelsPrintTheLabels}
         </button>
       </div>
+      <LanguageRow />
       {[...byShelf.entries()].map(([shelf, items]) => (
         <section key={shelf} className="tag-shelf">
           <h2 className="tag-shelf-name">{shelf}</h2>
@@ -96,6 +98,46 @@ export function Tags({ store }: { store: DemoStore }) {
           </ul>
         </section>
       ))}
+    </div>
+  )
+}
+
+/**
+ * The language switch — English / Roman Urdu (docs/PLAN.md's Urdu decision;
+ * assumptions #8–#9). It lives on this screen because the settings route IS
+ * this screen, and it sits above the label grid so it is findable without
+ * scrolling eighty QR codes.
+ *
+ * Both option names render in their own language deliberately: whichever
+ * table is active, the way back is readable. Choosing persists ('papa-lang')
+ * and reloads — see lang.ts for why a reload beats threading state through
+ * every screen. The chips are the family's pill toggles (.filter-chip), which
+ * already carry the glove-sized hit targets.
+ */
+function LanguageRow() {
+  const lang = getLang()
+  const choose = (next: Lang) => {
+    if (next !== lang) setLang(next)
+  }
+  const options: { value: Lang; label: string }[] = [
+    { value: 'en', label: STR.commonLanguageEnglish },
+    { value: 'ur', label: STR.commonLanguageRomanUrdu },
+  ]
+  return (
+    <div className="tags-bar" role="group" aria-label={STR.commonLanguage}>
+      <p className="tags-hint">{STR.commonLanguage}</p>
+      <div className="chip-row">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            className={`filter-chip${lang === o.value ? ' active' : ''}`}
+            aria-pressed={lang === o.value}
+            onClick={() => choose(o.value)}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

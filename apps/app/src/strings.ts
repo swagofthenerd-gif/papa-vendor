@@ -2,13 +2,19 @@
  * Every word the app's chrome says, in one place.
  *
  * WHY THIS EXISTS. The Roman-Urdu decision is settled (docs/PLAN.md's Urdu
- * decision; docs/assumptions.md #8–#9): the scanner will speak Roman Urdu in
+ * decision; docs/assumptions.md #8–#9): the scanner speaks Roman Urdu in
  * Latin script, because Nastaliq breaks the font stack and the row heights,
- * and Roman Urdu is how the staff already type to each other. Translation is
- * NOT done yet — this table is the seam that makes it cheap. A second table
- * (STR_UR) will mirror this exact shape later; until then, extracting every
- * hardcoded English string here is what stops each new commit making the
- * retrofit more expensive.
+ * and Roman Urdu is how the staff already type to each other. The second
+ * table lives in strings-ur.ts and mirrors this exact shape — the annotation
+ * on STR_UR makes a missing or misshapen key a compile error, not a blank
+ * label found in the warehouse.
+ *
+ * THE EXPORTED `STR` IS THE ACTIVE TABLE, chosen once at module load from the
+ * persisted choice (lang.ts). Nothing else about the seam changed: components
+ * keep importing STR exactly as before, and a language switch re-evaluates the
+ * app (a reload) rather than threading state through every screen. English is
+ * the default, so every test that asserts literal English text is asserting
+ * the table a fresh install actually shows.
  *
  * ONE HONEST RULE: keys mirror the CURRENT English text exactly. This file is
  * an extraction, not a rewording — if a sentence reads oddly, it read oddly
@@ -29,10 +35,19 @@
  * gear*, enquiry*, hisaab*, labels*, common*.
  */
 
+import { getLang } from './lang.ts'
+import { STR_UR } from './strings-ur.ts'
+
 /** 's' when a count is not one — the English plural rule, named once. */
 const s = (n: number): string => (n === 1 ? '' : 's')
 
-export const STR = {
+/**
+ * The English table. NOT `as const`: the literal types would make every other
+ * language table a type error, and nothing consumes the literals. What the
+ * annotation on STR_UR needs is exactly what this widened shape provides —
+ * same keys, same function signatures.
+ */
+const STR_EN = {
   // ---------------------------------------------------------------- common
   // Chrome shared across screens: the tab bar, boot states, and the words
   // more than one screen uses for the same fact.
@@ -49,6 +64,12 @@ export const STR = {
   commonItemsStillOut: (n: number): string => `${n} item${s(n)} still out`,
   commonPressAndHoldAria: (label: string): string => `${label} — press and hold`,
   commonAppName: 'Papa Vendor',
+  // The language row on the settings surface. The two option names are
+  // deliberately the same words in both tables — each choice must be readable
+  // in the language the screen is currently NOT in.
+  commonLanguage: 'Language',
+  commonLanguageEnglish: 'English',
+  commonLanguageRomanUrdu: 'Roman Urdu',
 
   // ---------------------------------------------------------------- today
   // The board: counters, the going-out list, coming back, the quick grid,
@@ -382,4 +403,21 @@ export const STR = {
     'Your names are now what the kit-list reader matches a client’s message against.',
   labelsSeeTheGear: 'See the gear',
   labelsLoadAnotherList: 'Load another list',
-} as const
+}
+
+/**
+ * The shape every language table must satisfy: the English table's keys and
+ * signatures, with the strings widened. strings-ur.ts annotates with this, so
+ * dropping a key, adding a stray one, or changing a function's arity is a
+ * compile error in the translation file, not a runtime surprise.
+ */
+export type StrTable = typeof STR_EN
+
+/**
+ * The active table, picked once per boot. setLang() (lang.ts) reloads the
+ * page, which re-runs this module — there is deliberately no live rebinding.
+ */
+export const STR: StrTable = getLang() === 'ur' ? STR_UR : STR_EN
+
+/** The English table by name, for tests that compare tables. */
+export { STR_EN }
