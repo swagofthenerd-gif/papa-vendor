@@ -107,6 +107,10 @@ export function Session({
           <SectionHead
             icon={coming ? 'siren' : 'hourglass'}
             title={coming ? STR.sessionDidNotComeBack : STR.sessionStillOnTheShelf}
+            // Coming back with a gap is the one heading that demands a
+            // person today — it gets the stamp. Going out, the rest can
+            // follow at 2pm, so that heading stays quiet ink.
+            stamp={coming}
             // Money in the heading is what turns this list from a chore into
             // a decision (PLAN.md's return-flow rule). The label carries its
             // own honesty — 'Rs 43,000 +2 unpriced' — and when NOTHING here
