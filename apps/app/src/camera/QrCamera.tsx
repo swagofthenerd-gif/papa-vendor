@@ -120,6 +120,16 @@ export function QrCamera({
     let stopped = false
     let raf = 0
 
+    // The one post-decode handler, shared by all three paths (native ML Kit,
+    // BarcodeDetector, jsQR). Stamps the perf instrument the instant a value
+    // reaches JS, then hands it downstream — synchronously, no await. A
+    // falsy value (an empty frame, a barcode with no rawValue) is a no-op.
+    function emitDecode(value: string | null | undefined) {
+      if (!value) return
+      markDecode()
+      decodeRef.current(value)
+    }
+
     // The native path. The plugin owns the camera; this component only
     // relays decodes and manages the transparent hole + torch.
     function stopNative() {
@@ -153,11 +163,7 @@ export function QrCamera({
       await BarcodeScanner.addListener('barcodesScanned', (event) => {
         if (pausedRef.current) return
         for (const barcode of event.barcodes) {
-          const value = barcode.rawValue ?? barcode.displayValue
-          if (value) {
-            markDecode()
-            decodeRef.current(value)
-          }
+          emitDecode(barcode.rawValue ?? barcode.displayValue)
         }
       })
       await BarcodeScanner.addListener('scanError', (event) => {
@@ -281,10 +287,7 @@ export function QrCamera({
           const found = jsQR(frame.data, frame.width, frame.height, {
             inversionAttempts: 'dontInvert',
           })
-          if (found?.data) {
-            markDecode()
-            decodeRef.current(found.data)
-          }
+          emitDecode(found?.data)
           busy = false
           return
         }
@@ -292,12 +295,7 @@ export function QrCamera({
         detector
           .detect(canvas)
           .then((codes) => {
-            for (const c of codes) {
-              if (c.rawValue) {
-                markDecode()
-                decodeRef.current(c.rawValue)
-              }
-            }
+            for (const c of codes) emitDecode(c.rawValue)
           })
           .catch(() => {})
           .finally(() => { busy = false })
