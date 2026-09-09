@@ -3,6 +3,7 @@ import { Icon } from '@papa/icons'
 import { FEEDBACK, SameTagDebounce, type ScanResult } from '@papa/core'
 import { Scan } from '../routes/Scan.tsx'
 import { QrCamera } from '../camera/QrCamera.tsx'
+import { playFeedback } from '../camera/feedback-player.ts'
 import { ManualAdd } from './ManualAdd.tsx'
 import { PhotoCapture, type CapturedPhoto } from '../camera/PhotoCapture.tsx'
 import { CaseManifestSheet } from './CaseManifest.tsx'
@@ -78,11 +79,12 @@ function SessionScanScreen({
       ])
       setTick((t) => t + 1)
 
-      // Haptics from the shared vocabulary, so the demo teaches the same
-      // rhythms the real scanner will. A phone with no vibration motor simply
-      // ignores this.
+      // Haptics AND tones from the shared vocabulary, so the demo teaches
+      // the same rhythms the real scanner will. The player picks the motor:
+      // @capacitor/haptics inside the Android shell, navigator.vibrate on
+      // the web; a machine with neither simply stays silent.
       const spec = FEEDBACK[result.outcome]
-      if (spec && typeof navigator.vibrate === 'function') navigator.vibrate(spec.haptic)
+      if (spec) playFeedback(spec)
     },
     [],
   )
@@ -280,7 +282,7 @@ function LookupScreen({ store }: { store: DemoStore }) {
       if (found.kind === 'found') {
         // The answer IS the asset page — one gesture from label to "on Job
         // 482 since 3 Apr", with the scan recorded nowhere.
-        if (typeof navigator.vibrate === 'function') navigator.vibrate(FEEDBACK.accepted.haptic)
+        playFeedback(FEEDBACK.accepted)
         go({ name: 'asset', assetId: found.assetId })
         return
       }
@@ -308,7 +310,7 @@ function LookupScreen({ store }: { store: DemoStore }) {
         ...prev,
       ])
       const spec = FEEDBACK[result.outcome]
-      if (spec && typeof navigator.vibrate === 'function') navigator.vibrate(spec.haptic)
+      if (spec) playFeedback(spec)
     },
     [store],
   )

@@ -1,0 +1,41 @@
+/* The scan-speed instrument (PerfOverlay.tsx). Dev chrome: fixed, dark,
+   monospace, and transparent to every pointer — it must never add a tap
+   target to the scan loop it is measuring. */
+
+.perf-overlay {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 52px);
+  right: var(--sp-3);
+  z-index: 60;
+  min-width: 200px;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  background: rgb(10 12 16 / 0.82);
+  color: #e8f0e8;
+  font-family: var(--ff-code, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  pointer-events: none;
+  user-select: none;
+}
+
+.perf-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  white-space: nowrap;
+}
+
+.perf-title {
+  font-weight: 700;
+  color: #9fd49f;
+}
+
+.perf-clock { color: #e8f0e8; }
+
+.perf-big { font-size: 14px; font-weight: 700; }
+
+/* p95 over the 100ms budget — the number the kill-shot test is about. */
+.perf-over { color: #ffb3a7; }
+
+.perf-dim { opacity: 0.6; }

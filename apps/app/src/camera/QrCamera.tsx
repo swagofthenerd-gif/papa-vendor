@@ -1,24 +1,50 @@
 import { useEffect, useRef, useState } from 'react'
 import jsQR from 'jsqr'
+import { Capacitor } from '@capacitor/core'
 import { STR } from '../strings.ts'
+import { markDecode, perfOverlayEnabled, setPerfOverlayEnabled } from './scan-perf.ts'
+import { PerfOverlay } from './PerfOverlay.tsx'
+import './native-scan.css'
 
 /**
- * The camera preview and QR decoder.
+ * The camera preview and QR decoder — a three-step fallback chain.
  *
- * Prefers the browser's built-in BarcodeDetector, which on Android Chrome is
- * the same native decoder ML Kit wraps — so on the target device the demo's
- * decode speed is close to what the real scanner will feel.
+ * 1. NATIVE (the Android shell): ML Kit through
+ *    @capacitor-mlkit/barcode-scanning. The plugin owns the camera and
+ *    renders its preview BEHIND the WebView; native-scan.css punches a
+ *    transparent hole where the camera frame sits so the layout survives.
+ *    This is the path the <100ms scan budget is measured against.
  *
- * FALLS BACK TO jsQR, because BarcodeDetector DOES NOT EXIST in Chrome on
- * Linux or Windows desktop — it ships on Android, ChromeOS and macOS only.
- * Without the fallback the demo shows a live picture and decodes nothing on
- * the very machine it is being demonstrated from, which is indistinguishable
- * from every tag being broken. jsQR is slower and that is the honest trade:
- * it is the desk fallback, not the number the scan budget is measured against.
+ * 2. BarcodeDetector, which on Android Chrome is the same native decoder
+ *    ML Kit wraps — so in a browser on the target device the demo's decode
+ *    speed is close to what the real scanner will feel.
  *
- * NOTHING HERE AWAITS ON BEHALF OF A SCAN. The decode loop calls `onDecode`
- * synchronously; the scan handler downstream never waits on this component.
+ * 3. jsQR, because BarcodeDetector DOES NOT EXIST in Chrome on Linux or
+ *    Windows desktop — it ships on Android, ChromeOS and macOS only.
+ *    Without the fallback the demo shows a live picture and decodes nothing
+ *    on the very machine it is being demonstrated from, which is
+ *    indistinguishable from every tag being broken. jsQR is slower and that
+ *    is the honest trade: it is the desk fallback, not the number the scan
+ *    budget is measured against.
+ *
+ * NOTHING HERE AWAITS ON BEHALF OF A SCAN. All three paths call `onDecode`
+ * synchronously the moment a value reaches JavaScript; the scan handler
+ * downstream never waits on this component. Each decode is also stamped on
+ * the perf instrument (markDecode) so decode→feedback is measurable.
  */
+
+type MlkitModule = typeof import('@capacitor-mlkit/barcode-scanning')
+
+// One shared module promise: start, stop and the torch all need the plugin,
+// and the chunk should load once, at camera start, never per scan.
+let mlkitModule: Promise<MlkitModule> | null = null
+function mlkit(): Promise<MlkitModule> {
+  mlkitModule ??= import('@capacitor-mlkit/barcode-scanning')
+  return mlkitModule
+}
+
+/** How long a finger holds the camera view to toggle the perf instrument. */
+const PERF_TOGGLE_HOLD_MS = 700
 
 interface DetectedBarcode {
   rawValue: string
@@ -71,9 +97,14 @@ export function QrCamera({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const trackRef = useRef<MediaStreamTrack | null>(null)
+  // True while the ML Kit plugin owns the camera. A ref, not state: the
+  // torch effect and the cleanup read it without re-rendering the preview.
+  const nativeScanRef = useRef(false)
+  const perfHoldRef = useRef<number | null>(null)
   const [state, setState] = useState<CameraState>('starting')
   const [detail, setDetail] = useState<string>('')
   const [native, setNative] = useState(true)
+  const [perfOn, setPerfOn] = useState(perfOverlayEnabled)
 
   // Held in a ref so changing the handler never restarts the camera. A restart
   // costs ~400ms of black screen, and the scan screen rebuilds this callback
@@ -89,7 +120,91 @@ export function QrCamera({
     let stopped = false
     let raf = 0
 
+    // The one post-decode handler, shared by all three paths (native ML Kit,
+    // BarcodeDetector, jsQR). Stamps the perf instrument the instant a value
+    // reaches JS, then hands it downstream — synchronously, no await. A
+    // falsy value (an empty frame, a barcode with no rawValue) is a no-op.
+    function emitDecode(value: string | null | undefined) {
+      if (!value) return
+      markDecode()
+      decodeRef.current(value)
+    }
+
+    // The native path. The plugin owns the camera; this component only
+    // relays decodes and manages the transparent hole + torch.
+    function stopNative() {
+      nativeScanRef.current = false
+      document.body.classList.remove('papa-native-scan')
+      void mlkit()
+        .then(async ({ BarcodeScanner }) => {
+          await BarcodeScanner.removeAllListeners()
+          await BarcodeScanner.stopScan()
+        })
+        .catch(() => {})
+    }
+
+    async function startNative() {
+      const { BarcodeScanner, BarcodeFormat, LensFacing } = await mlkit()
+
+      let granted = false
+      try {
+        const perm = await BarcodeScanner.requestPermissions()
+        granted = perm.camera === 'granted' || perm.camera === 'limited'
+      } catch {
+        granted = false
+      }
+      if (stopped) return
+      if (!granted) {
+        setState('denied')
+        return
+      }
+
+      await BarcodeScanner.removeAllListeners()
+      await BarcodeScanner.addListener('barcodesScanned', (event) => {
+        if (pausedRef.current) return
+        for (const barcode of event.barcodes) {
+          emitDecode(barcode.rawValue ?? barcode.displayValue)
+        }
+      })
+      await BarcodeScanner.addListener('scanError', (event) => {
+        setState('error')
+        setDetail(event.message)
+      })
+      if (stopped) {
+        void BarcodeScanner.removeAllListeners()
+        return
+      }
+
+      document.body.classList.add('papa-native-scan')
+      nativeScanRef.current = true
+      try {
+        await BarcodeScanner.startScan({
+          formats: [BarcodeFormat.QrCode],
+          lensFacing: LensFacing.Back,
+        })
+      } catch (err) {
+        stopNative()
+        setState('error')
+        setDetail(err instanceof Error ? err.message : String(err))
+        return
+      }
+      if (stopped) {
+        stopNative()
+        return
+      }
+      // Counts as the native decoder for the on-screen note — it IS ML Kit.
+      setNative(true)
+      setState('live')
+      // No luma sampling on this path (the frames never reach JS), so the
+      // auto-torch stays a web-path behaviour; the header toggle drives the
+      // real lamp below.
+    }
+
     async function start() {
+      if (Capacitor.isNativePlatform()) {
+        await startNative()
+        return
+      }
       // getUserMedia only exists on a secure page. Over plain http on a phone
       // it is simply absent, which reads as "camera broken" unless we say so.
       if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
@@ -172,7 +287,7 @@ export function QrCamera({
           const found = jsQR(frame.data, frame.width, frame.height, {
             inversionAttempts: 'dontInvert',
           })
-          if (found?.data) decodeRef.current(found.data)
+          emitDecode(found?.data)
           busy = false
           return
         }
@@ -180,7 +295,7 @@ export function QrCamera({
         detector
           .detect(canvas)
           .then((codes) => {
-            for (const c of codes) if (c.rawValue) decodeRef.current(c.rawValue)
+            for (const c of codes) emitDecode(c.rawValue)
           })
           .catch(() => {})
           .finally(() => { busy = false })
@@ -194,6 +309,7 @@ export function QrCamera({
       cancelAnimationFrame(raf)
       trackRef.current?.stop()
       trackRef.current = null
+      if (nativeScanRef.current) stopNative()
     }
   }, [])
 
@@ -201,15 +317,51 @@ export function QrCamera({
   // no lamp, so a failure here is expected and must stay silent rather than
   // throwing into the scan screen.
   useEffect(() => {
+    if (nativeScanRef.current) {
+      // On the native path the plugin owns the lamp.
+      void mlkit()
+        .then(({ BarcodeScanner }) =>
+          torchOn ? BarcodeScanner.enableTorch() : BarcodeScanner.disableTorch(),
+        )
+        .catch(() => {})
+      return
+    }
     const track = trackRef.current
     if (!track) return
     const constraints = { advanced: [{ torch: torchOn }] } as unknown as MediaTrackConstraints
     void track.applyConstraints(constraints).catch(() => {})
   }, [torchOn, state])
 
+  // A long hold on the camera view toggles the scan-speed instrument —
+  // dev-flag chrome for the 30-minute thermal test, reachable on a device
+  // with no URL bar. Deliberately long enough that no scanning gesture
+  // trips it, and it adds zero elements to the loop when off.
+  const perfHoldStart = () => {
+    perfHoldRef.current = window.setTimeout(() => {
+      perfHoldRef.current = null
+      setPerfOn((on) => {
+        setPerfOverlayEnabled(!on)
+        return !on
+      })
+    }, PERF_TOGGLE_HOLD_MS)
+  }
+  const perfHoldEnd = () => {
+    if (perfHoldRef.current !== null) {
+      clearTimeout(perfHoldRef.current)
+      perfHoldRef.current = null
+    }
+  }
+
   return (
-    <div className="qr-camera">
+    <div
+      className="qr-camera"
+      onPointerDown={perfHoldStart}
+      onPointerUp={perfHoldEnd}
+      onPointerCancel={perfHoldEnd}
+      onPointerLeave={perfHoldEnd}
+    >
       <video ref={videoRef} playsInline muted autoPlay className="qr-video" />
+      {perfOn ? <PerfOverlay /> : null}
       {/* Named, not hidden. The desk decoder is slower than the phone's, and
           a tech comparing the two must know which one they are holding. */}
       {state === 'live' && !native ? (

@@ -11,6 +11,11 @@
     "dev:https": "PAPA_HTTPS=1 vite"
   },
   "dependencies": {
+    "@capacitor-mlkit/barcode-scanning": "^8.1.1",
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/device": "^8.0.3",
+    "@capacitor/haptics": "^8.0.2",
     "@papa/core": "*",
     "@papa/design": "github:swagofthenerd-gif/papa-design#v0.1.1",
     "@papa/icons": "*",
@@ -21,6 +26,7 @@
     "sql.js": "^1.14.2"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.1",
     "@types/qrcode": "^1.5.6",
     "@types/sql.js": "^1.4.11",
     "@vitejs/plugin-basic-ssl": "^1.2.0",

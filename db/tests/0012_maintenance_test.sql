@@ -27,8 +27,8 @@ select fixture_rls_on();
 -- ---------------------------------------------------------------------------
 select is(
   (select count(*)::int from maintenance_health where overdue),
-  3,
-  'before anything runs, every task reports overdue');
+  4,
+  'before anything runs, every task reports overdue (0016 added prune_otp_challenges)');
 
 select is(
   (select last_run_at from maintenance_health where task = 'prune_rate_limits'),
@@ -38,8 +38,8 @@ select is(
 -- ---------------------------------------------------------------------------
 -- A run clears it
 -- ---------------------------------------------------------------------------
-select is((select count(*)::int from run_maintenance()), 3,
-          'run_maintenance reports on all three tasks');
+select is((select count(*)::int from run_maintenance()), 4,
+          'run_maintenance reports on all four tasks');
 
 select is(
   (select count(*)::int from maintenance_health where overdue),
@@ -48,7 +48,7 @@ select is(
 
 select is(
   (select count(*)::int from maintenance_runs where ok),
-  3,
+  4,
   'each task recorded a successful run');
 
 select ok(
@@ -79,8 +79,8 @@ select is(
 
 select is(
   (select count(*)::int from run_maintenance() where ok),
-  2,
-  'and the other two still run');
+  3,
+  'and the other three still run');
 
 select isnt(
   (select error from maintenance_runs
