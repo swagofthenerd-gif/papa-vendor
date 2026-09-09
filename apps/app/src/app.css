@@ -32,20 +32,20 @@ body {
 
 .muted { color: var(--muted); }
 
-/* One micro-label voice for every small caption in the app — section
-   headers, stat labels, field captions. One rule, so the treatment
-   cannot drift apart the way the marketplace's headers did. */
+/* One caption voice for every small label in the app — stat labels,
+   field captions, photo-compare labels. Quiet sentence case in diluted
+   ink: in a counter book the printed captions are small and plain, and
+   the ENTRIES are what carry weight. (The tracked-uppercase micro-label
+   treatment is gone on purpose — the only uppercase left in this app
+   is the rubber stamp, which earns it.) */
 .stat-label,
-.section-head h2,
 .result-count,
 .compare-label,
 .fact dt,
 .tag-shelf-name,
 .field-label {
-  font-size: var(--fs-micro);
+  font-size: var(--fs-xs);
   font-weight: 700;
-  letter-spacing: var(--ls-micro);
-  text-transform: uppercase;
   color: var(--muted);
 }
 
@@ -56,16 +56,27 @@ body {
   outline-offset: 2px;
 }
 
-/* The one motion voice: 140ms ease-out on the properties an interactive
-   element actually changes. Reduced-motion kills it globally below. */
+/* The one motion voice, with the family's spring in it: colour and
+   borders keep the quiet 140ms ease-out, but transform RELEASES on the
+   sibling's --ease-spring — press in fast, let go with a small bounce.
+   The :active rule below swaps transform back to the fast curve so the
+   press-in itself never lags a gloved thumb. Reduced-motion kills all
+   of it globally below. */
 .btn, .icon-btn, .stat, .quick, .job-card, .filter-chip, .nav-tab,
-.gear-unit, .sheet-row, .row-photo, .search-clear, .torch-btn {
+.gear-unit, .sheet-row, .row-photo, .search-clear, .torch-btn,
+.pressable {
   transition:
-    transform var(--dur-fast) var(--ease-out),
+    transform var(--dur) var(--ease-spring),
     background-color var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out),
     color var(--dur-fast) var(--ease-out),
     box-shadow var(--dur-fast) var(--ease-out);
+}
+:where(.btn, .icon-btn, .stat, .quick, .job-card, .filter-chip, .nav-tab,
+.gear-unit, .sheet-row, .row-photo, .search-clear, .torch-btn,
+.pressable):active {
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
 }
 
 /* Hover states exist only where a pointer does. */
@@ -97,8 +108,10 @@ body {
   display: inline-flex; align-items: center; justify-content: center;
   gap: var(--sp-2);
   min-height: var(--tap);
-  padding: 13px 18px;
-  border: none; border-radius: var(--r-sm);
+  padding: 13px 20px;
+  /* Pills, like the sibling's every button and chip. The glove sizes
+     are untouched — only the corners changed. */
+  border: none; border-radius: var(--r-pill);
   font: inherit; font-weight: 700; font-size: var(--fs-base);
   color: var(--ink); background: var(--card-2);
   cursor: pointer;
@@ -117,7 +130,7 @@ body {
   color: var(--accent-strong);
 }
 .btn-ghost { background: transparent; border: var(--line-w) solid var(--line); }
-.btn-sm { min-height: 40px; padding: 8px 12px; font-size: var(--fs-sm); }
+.btn-sm { min-height: 40px; padding: 8px 14px; font-size: var(--fs-sm); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .icon-btn {
@@ -139,9 +152,14 @@ body {
   min-height: var(--tap-glove);
   padding: var(--sp-3) var(--sp-4);
   border: var(--line-w) solid var(--line);
+  /* A slip of paper on the ledger: 16px corners (a job card is a working
+     document, not the sibling's 20px consumer card) and the soft layered
+     shadow of a page that lifts slightly off the book. The border stays —
+     in sun mode it is the 2px black line that keeps the card's edge when
+     the shadow token goes to `none`. */
   border-radius: var(--r-md);
   background: var(--card);
-  box-shadow: var(--shadow-xs);
+  box-shadow: var(--shadow-sm);
   color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
 .job-card:active { transform: scale(0.99); }
@@ -153,7 +171,11 @@ body {
 }
 .job-contact { color: var(--muted); font-size: var(--fs-sm); }
 .job-meta { display: flex; align-items: center; gap: var(--sp-3); flex-shrink: 0; }
-.job-time { color: var(--muted); font-size: var(--fs-sm); font-weight: 700; }
+/* Departure time in the typewritten voice (the markup adds .code):
+   times, codes, counts and money are the ENTRIES in this book, and
+   they all speak mono. No tracking, no separators — an entry, not
+   set dressing. */
+.job-time { color: var(--muted); font-size: var(--fs-sm); font-weight: 600; }
 .job-progress { display: flex; align-items: center; gap: var(--sp-2); font-weight: 700; }
 .job-progress.is-ready { color: var(--status-here); }
 
@@ -168,15 +190,9 @@ body {
    one -- and every action keeps the 40px btn-sm floor with the glove gap
    between neighbours. */
 .job-block { display: flex; flex-direction: column; gap: var(--sp-1); }
-/* Overdue is a rail, not a box: a 3px leading edge in the status colour
-   reads at a glance without turning the whole card red. It rides INSIDE
-   the border so the card's geometry never shifts, and it survives sun
-   mode because it is solid status colour, not a tint. */
-.job-block.is-overdue .job-card {
-  /* Not layered with --shadow-xs: in sun mode that token is the word
-     `none`, which would invalidate the whole list and delete the rail. */
-  box-shadow: inset 3px 0 0 var(--red);
-}
+/* Overdue used to add a red rail on the card's leading edge. The rubber
+   stamp on the due badge now carries that alarm alone — beside the
+   page's red margin rule, a second red vertical read as clutter. */
 .job-actions {
   display: flex; flex-wrap: wrap; align-items: center;
   gap: var(--sp-2) var(--tap-gap-glove);
@@ -187,9 +203,22 @@ body {
 
 .empty {
   flex: 1; display: grid; place-content: center; justify-items: center;
-  gap: var(--sp-2); padding: var(--sp-8); text-align: center; color: var(--muted);
+  gap: var(--sp-3); padding: var(--sp-8); text-align: center; color: var(--muted);
 }
 .empty p { margin: 0; }
+/* An empty state is where the hand-drawn set gets shown off, the way
+   the marketplace shows its glyphs large in the category chips: the
+   duotone glyph big in a warm tinted circle. The ring keeps the circle
+   in sun mode, where --accent-soft collapses to white. */
+.empty > svg:first-child {
+  width: 34px; height: 34px; padding: 15px;
+  box-sizing: content-box;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border: var(--line-w) solid
+    color-mix(in srgb, currentColor var(--tint-border), transparent);
+  border-radius: var(--r-pill);
+}
 
 /* ---- the scan screen --------------------------------------- */
 .scan-screen { background: var(--bg); }
@@ -305,7 +334,7 @@ body {
 .hold-btn {
   position: relative; flex: 1;
   min-height: var(--row-h-glove);
-  border: none; border-radius: var(--r-sm);
+  border: none; border-radius: var(--r-pill);
   background: var(--card-2); color: var(--ink);
   font: inherit; font-weight: 800; font-size: var(--fs-md);
   overflow: hidden; cursor: pointer;
@@ -362,6 +391,9 @@ body {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
+    /* Delays too, or a delayed `backwards` animation (the stamp) would
+       hold its first frame for the length of the dead delay. */
+    animation-delay: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
 }
@@ -385,13 +417,29 @@ body {
   position: fixed; inset: 0; z-index: 20;
   display: flex; align-items: flex-end;
   background: rgb(0 0 0 / 0.5);
+  animation: backdrop-in var(--dur) var(--ease-out);
 }
+@keyframes backdrop-in { from { opacity: 0; } }
+/* Sheets arrive the way the sibling's do: generous 28px shoulders, the
+   deep layered shadow, and a slide-up that settles on the spring. */
 .sheet {
   display: flex; flex-direction: column;
   width: 100%; max-height: 82dvh;
   padding: var(--sp-4);
-  border-radius: var(--r-md) var(--r-md) 0 0;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
   background: var(--card); color: var(--ink);
+  box-shadow: var(--shadow-lg);
+  animation: sheet-in var(--dur-slow) var(--ease-spring);
+}
+@keyframes sheet-in { from { transform: translateY(56px); opacity: 0; } }
+/* The drag handle: both sheets are flex columns, so the pseudo-element
+   is simply the first flex item — no markup needed. */
+.sheet::before, .photo-sheet::before {
+  content: '';
+  align-self: center; flex: none;
+  width: 36px; height: 4px; margin-bottom: var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--line-strong);
 }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; }
 .sheet-title { font-size: var(--fs-md); font-weight: 800; }
@@ -423,7 +471,7 @@ body {
      misses adjacent ones worse. */
   min-height: var(--tap-glove);
   padding: 0 var(--sp-3);
-  border: none; border-bottom: var(--line-w) solid var(--hairline);
+  border: none; border-bottom: var(--line-w) solid var(--rule-feint);
   background: transparent; color: var(--ink);
   font-size: var(--fs-sm); font-weight: 700; text-align: left; cursor: pointer;
 }
@@ -491,7 +539,22 @@ body {
   border-bottom: var(--line-w) solid var(--line);
   background: var(--bg);
 }
-.topbar-main { min-width: 0; }
+/* Grows to fill: with the brand mark ahead of it, the title block must
+   take the slack or space-between would float it to the centre. */
+.topbar-main { min-width: 0; flex: 1; }
+/* The family mark: the same cine-camera the marketplace wears as its
+   logo, small in an accent-soft circle beside the screen title. Icon
+   only — the title keeps its room. The ring holds the circle in sun
+   mode, where accent-soft collapses to white. */
+.brand-mark {
+  display: grid; place-items: center; flex: none;
+  width: 38px; height: 38px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: var(--line-w) solid
+    color-mix(in srgb, var(--accent-strong) var(--tint-border), transparent);
+  border-radius: var(--r-pill);
+}
 .topbar-title {
   margin: 0;
   font-size: var(--fs-2xl); font-weight: 800; letter-spacing: -0.4px;
@@ -514,6 +577,13 @@ body {
      it — without this the closing sentence sits flush against the bar and
      reads as cut off. */
   padding: 0 var(--sp-4) var(--sp-8);
+  /* The challan page's red margin rule, running down the gutter just
+     left of the text edge on every desk surface. `local` so it scrolls
+     with the entries like printing on the page, not chrome over it.
+     The scan screen has no .app-main, so the scan loop stays clean. */
+  background:
+    linear-gradient(var(--rule-margin), var(--rule-margin))
+    7px 0 / 1.5px 100% no-repeat local;
 }
 
 .bottom-nav {
@@ -532,15 +602,31 @@ body {
   color: var(--muted); font: inherit; font-size: var(--fs-xs); font-weight: 700;
   cursor: pointer;
 }
-/* The active place: accent tint under the tab, a 2px rail meeting the
-   top hairline, and the AA-safe accent alias on icon and label. This is
-   one of the two places accent is allowed to live. */
+/* The icon rides in a capsule, like the sibling's nav. Inactive it is
+   invisible; active it takes the accent tint and pops in on the spring.
+   The tint moved from the whole tab into the capsule — same amount of
+   accent, drawn smaller and warmer. */
+.nav-ico {
+  display: inline-flex; line-height: 0;
+  padding: 4px 14px;
+  border-radius: var(--r-pill);
+  border: var(--line-w) solid transparent;
+}
+/* The active place: the capsule glows accent-soft, a 2px rail meets the
+   top hairline, and the AA-safe accent alias inks icon and label. This
+   is one of the two places accent is allowed to live. The ring keeps
+   the capsule visible in sun mode, where accent-soft is white. */
 .nav-tab.is-active {
   color: var(--accent-strong);
-  background: var(--accent-soft);
   box-shadow: inset 0 2px 0 var(--accent-strong);
   font-weight: 800;
 }
+.nav-tab.is-active .nav-ico {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, currentColor var(--tint-border), transparent);
+  animation: pop-in 0.35s var(--ease-spring);
+}
+@keyframes pop-in { from { transform: scale(0.85); } }
 .nav-tab:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: -3px; }
 
 /* ---- motion ------------------------------------------------ */
@@ -558,18 +644,29 @@ body {
 .pressable:active { transform: scale(0.985); }
 
 /* ---- sections ---------------------------------------------- */
-/* Space over borders: sections separate by breathing room, and the
-   header drops to a micro-label so the CONTENT — jobs, numbers — is the
-   loudest thing in each band, not its caption. */
+/* Space over borders: sections separate by breathing room. */
 .section { margin-top: var(--sp-8); }
+/* A section header is the heading line of a ledger block: sentence-case
+   ink at a real scale step, sitting ON a feint rule the way a written
+   heading sits on the printed line. The rule belongs to the paper, so
+   it runs the full column, under the action button too. */
 .section-head {
-  display: flex; align-items: baseline; justify-content: space-between;
+  display: flex; align-items: flex-end; justify-content: space-between;
   gap: var(--sp-2); margin-bottom: var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: var(--line-w) solid var(--rule-feint);
 }
+.section-head > div:first-child { flex: 1; min-width: 0; }
 .section-head h2 {
   margin: 0; display: flex; align-items: center; gap: 7px;
-  /* Face and colour come from the shared micro-label rule up top. */
-  line-height: 1.4;
+  font-size: var(--fs-md); font-weight: 800; letter-spacing: -0.2px;
+  line-height: 1.3;
+}
+/* A stamped heading marks a money section — under its total line the
+   feint rule becomes the accountant's double rule: two close-set inked
+   lines that say "this figure is the account". */
+.section-head:has(h2.stamp) {
+  border-bottom: 4px double var(--ink);
 }
 /* Section icons are wayfinding, not the primary action — no accent. */
 .h-ico { color: var(--muted); }
@@ -579,76 +676,119 @@ body {
 /* Four numbers, each a link to the thing it counts. A number you cannot act
    on is a decoration, and decorations on an operations screen train people
    to stop reading it. */
-/* No boxes. Four quantities separated by hairlines, each a large light
-   numeral over a micro-label — the morning numbers read as an instrument
-   panel, not as four competing cards. Status colour appears ONLY when a
-   count demands action, as a thin top rail plus a coloured numeral. */
+/* Not a card — the TOTALS ROW of the day's page. Four quantities
+   written straight on the paper in the typewritten voice, columns
+   separated by feint rules, and the whole strip closed underneath by
+   the accountant's double rule: the mark that says "these figures are
+   the account". Status colour appears only when a count demands
+   action. */
 .stat-strip {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
   margin-top: var(--sp-5);
+  padding-bottom: var(--sp-1);
+  border-bottom: 4px double var(--ink);
 }
 .stat {
   display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1);
   padding: var(--sp-3) var(--sp-3) var(--sp-2);
   border: none; border-radius: var(--r-row);
-  /* Every stat reserves the rail track so a count turning bad never
-     shifts its neighbours. */
-  border-top: 3px solid transparent;
   background: transparent; color: var(--ink);
   font: inherit; text-align: left; cursor: pointer;
 }
-.stat + .stat { border-left: var(--line-w) solid var(--hairline); }
+.stat + .stat { border-left: var(--line-w) solid var(--rule-feint); }
 .stat-n {
-  font-size: var(--fs-stat); font-weight: 300; line-height: 1;
+  font-size: var(--fs-stat); font-weight: 400; line-height: 1;
   letter-spacing: -0.02em;
 }
 .stat-label { line-height: 1.3; }
-.stat.is-warn { border-top-color: var(--status-attention); }
+/* A bad count colours the FIGURE, and overdue also stamps its caption
+   (the stamp rule below). The old coloured top rail is gone: numeral +
+   stamp + rail was three marks for one fact. */
 .stat.is-warn .stat-n { color: var(--status-attention); font-weight: 500; }
-.stat.is-bad { border-top-color: var(--red); }
 .stat.is-bad .stat-n { color: var(--red); font-weight: 500; }
+/* The overdue count's caption is stamped — see the rubber stamp rule. */
+.stat.is-bad .stat-label { margin-top: 2px; }
 
 /* ---- badges ------------------------------------------------ */
-/* Informational badges are dot+text, not filled pills: colour appears as
-   a small solid marker plus coloured text, so a card carries at most one
-   quiet mark instead of three competing chips. Overdue keeps the pill —
-   it is work, and it must still pop on a loading dock. */
+/* Informational badges are the family's soft tinted pills again — the
+   sibling's --green-soft/--green-ink pattern, always with the AA ink on
+   the matching tint, never raw hue on tint. The currentColor ring is
+   what keeps a pill's edge honest: 28% indoors, solid in sun where a
+   tint is a rumour. One card still carries at most one or two quiet
+   marks — the restraint stays, the warmth returns. */
 .badge {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 0; border-radius: var(--r-pill);
-  background: transparent; color: var(--muted);
+  padding: 2px 9px; border-radius: var(--r-pill);
+  background: var(--card-2); color: var(--muted);
+  border: var(--line-w) solid
+    color-mix(in srgb, currentColor var(--tint-border), transparent);
   font-size: var(--fs-xs); font-weight: 700;
 }
-.badge-green { color: var(--green-ink); }
-.badge-orange { color: var(--accent-strong); }
-/* The dot: solid currentColor, so it survives sun mode the way the
-   status fills do. badge-green already carries a check icon; the dot
-   marks the iconless ones. */
-.badge-orange::before {
-  content: ''; width: 6px; height: 6px; flex: none;
-  border-radius: 50%; background: currentColor;
+.badge-green { background: var(--green-soft); color: var(--green-ink); }
+.badge-orange { background: var(--accent-soft); color: var(--accent-strong); }
+
+/* ---- the rubber stamp -------------------------------------- */
+/* The one bold thing in the book. A status that DEMANDS a person —
+   '2 days late', the overdue counter, DID NOT COME BACK — is not a
+   pill, it is a rubber stamp pressed onto the page: margin-red ink, a
+   2px frame, uppercase, set slightly crooked the way a real stamp
+   always lands. The faint inner ring is the second strike of a worn
+   stamp — mis-registered on purpose, and quietly. Informational
+   badges above stay quiet tinted pills; the solid status fills in
+   semantic.css are a different instrument and stay untouched. */
+.badge-red,
+.stamp,
+.stat.is-bad .stat-label {
+  display: inline-flex; align-items: center; gap: 5px;
+  width: max-content;
+  padding: 2px 8px;
+  border: 2px solid var(--stamp-edge);
+  border-radius: 3px;
+  background: var(--stamp-bg);
+  color: var(--stamp-ink);
+  font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  transform: rotate(-2.5deg);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, currentColor 28%, transparent);
+  /* The one deliberate moment of load motion in the app: the stamp
+     LANDS — a fast press from slightly above, settling into its
+     crooked rest. Nothing else animates on load. */
+  animation: stamp-in 0.18s var(--ease-out) 0.12s backwards;
 }
-/* Overdue. Ink on the card tint plus a real border, following the stat
-   strip's is-bad pattern rather than red-on-red-soft, which has the same
-   sub-AA contrast problem the green-ink token comment documents. */
-.badge-red {
-  background: var(--card-2); color: var(--red);
-  border: 1px solid var(--red);
-  padding: 2px 8px; font-weight: 800;
+@keyframes stamp-in {
+  from { transform: rotate(-0.5deg) scale(1.15); opacity: 0.3; }
+  to { transform: rotate(-2.5deg) scale(1); opacity: 1; }
 }
+.badge-red { font-size: var(--fs-xs); }
+h2.stamp { padding: 3px 10px; letter-spacing: 0.04em; }
+/* A rubber stamp is WORDS. The wayfinding icon a normal heading wears
+   would turn the stamp into a sticker, so it stays off the stamp. */
+h2.stamp .h-ico { display: none; }
+.stat.is-bad .stat-label { font-size: var(--fs-xs); }
 
 /* ---- quick actions ----------------------------------------- */
-.quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
 .quick {
   display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
-  min-height: 92px; padding: var(--sp-3);
+  min-height: 96px; padding: var(--sp-3);
   border: var(--line-w) solid var(--line); border-radius: var(--r-md);
   background: var(--card); color: var(--ink);
+  box-shadow: var(--shadow-xs);
   font: inherit; text-align: left; cursor: pointer;
 }
-/* Ink, not accent: five orange icons in a grid is decoration, and
-   decoration in accent teaches the eye to stop trusting accent. */
-.quick svg { color: var(--ink); opacity: 0.75; margin-bottom: 2px; }
+/* The hand-drawn glyph worn proudly, the way the sibling's category
+   chips wear theirs large — a full-strength duotone mark on a warm
+   tile. Still ink, not accent: five orange icons in a grid is
+   decoration, and decoration in accent teaches the eye to stop
+   trusting accent. The tile and size do the showing off. */
+.quick > svg {
+  width: 26px; height: 26px; padding: 8px; margin-bottom: 4px;
+  box-sizing: content-box;
+  color: var(--ink);
+  background: var(--card-2);
+  border-radius: var(--r-sm);
+}
 .quick-t { font-size: var(--fs-sm); font-weight: 800; }
 .quick-s { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; }
 
@@ -690,6 +830,9 @@ body {
    primary action. Inverting to the ink colour reads instantly in all
    three themes and leaves accent meaning exactly one thing. */
 .filter-chip.active { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+/* A chip toggle presses in and springs back — the release curve comes
+   from the shared motion rule above. */
+.filter-chip:active { transform: scale(0.94); }
 
 .result-count {
   /* Voice comes from the shared micro-label rule up top. */
@@ -703,11 +846,12 @@ body {
   margin-top: var(--sp-3);
   border: var(--line-w) solid var(--line); border-radius: var(--r-md);
   background: var(--card); overflow: hidden;
+  box-shadow: var(--shadow-xs);
 }
 .gear-group-head {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--sp-2); padding: var(--sp-3);
-  border-bottom: var(--line-w) solid var(--hairline);
+  border-bottom: var(--line-w) solid var(--rule-feint);
 }
 .gear-group-name { font-size: var(--fs-sm); font-weight: 800; }
 .gear-group-count {
@@ -720,7 +864,7 @@ body {
   align-items: center; gap: var(--sp-3);
   width: 100%; min-height: var(--row-h-glove);
   padding: 0 var(--sp-3);
-  border: none; border-top: var(--line-w) solid var(--hairline);
+  border: none; border-top: var(--line-w) solid var(--rule-feint);
   background: transparent; color: var(--ink);
   font: inherit; text-align: left; cursor: pointer;
 }
@@ -757,7 +901,7 @@ body {
   position: relative;
   display: flex; gap: var(--sp-3);
   padding: var(--sp-3) 0 var(--sp-3) var(--sp-1);
-  border-bottom: var(--line-w) solid var(--hairline);
+  border-bottom: var(--line-w) solid var(--rule-feint);
 }
 .hist-dot {
   flex: none; width: 9px; height: 9px; margin-top: 6px;
@@ -773,12 +917,16 @@ body {
 .hist-meta { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; }
 
 /* ---- the handover summary ---------------------------------- */
-.tally {
-  margin-top: var(--sp-4); padding: var(--sp-4);
-  border: var(--line-w) solid var(--line); border-radius: var(--r-md);
-  background: var(--card);
+/* Not a card — the totals line of the challan, written on the page
+   itself. The figures line closes with the accountant's double rule
+   (two close-set inked lines under the total: "this is the account"),
+   and the note beneath sits under the rule like an annotation. */
+.tally { margin-top: var(--sp-4); }
+.tally-line {
+  margin: 0; font-size: var(--fs-lg); font-weight: 600; line-height: 1.5;
+  padding-bottom: var(--sp-2);
+  border-bottom: 4px double var(--ink);
 }
-.tally-line { margin: 0; font-size: var(--fs-lg); font-weight: 600; line-height: 1.5; }
 .tally-line strong { font-weight: 800; }
 .tally-short { color: var(--status-attention); }
 .tally-sub { margin: var(--sp-2) 0 0; color: var(--muted); font-size: var(--fs-sm); font-weight: 600; }
@@ -797,7 +945,7 @@ body {
   display: grid; grid-template-columns: 1fr auto;
   align-items: center; gap: var(--gap-hair) var(--sp-3);
   padding: var(--sp-3) 0;
-  border-bottom: var(--line-w) solid var(--hairline);
+  border-bottom: var(--line-w) solid var(--rule-feint);
 }
 .line-name { font-size: var(--fs-sm); font-weight: 700; }
 .line-code { grid-row: 1 / span 2; color: var(--muted); font-size: var(--fs-xs); font-weight: 700; }
@@ -832,6 +980,7 @@ body {
   margin-top: var(--sp-3); padding: var(--sp-4);
   border: var(--line-w) solid var(--line); border-radius: var(--r-md);
   background: var(--card);
+  box-shadow: var(--shadow-xs);
 }
 .enquiry-verdict.is-ok { border-color: var(--green); }
 .enquiry-verdict.is-partial { border-color: var(--status-attention); }
@@ -845,7 +994,7 @@ body {
   display: grid; grid-template-columns: auto 1fr; align-items: start;
   gap: var(--sp-3);
   padding: var(--sp-3) 0;
-  border-bottom: var(--line-w) solid var(--hairline);
+  border-bottom: var(--line-w) solid var(--rule-feint);
 }
 .enquiry-row > svg { margin-top: 2px; }
 /* Worst first, and the tone carries in the glyph's colour as well as the
@@ -880,8 +1029,10 @@ body {
   display: flex; flex-direction: column; gap: var(--sp-3);
   width: 100%; max-height: 92dvh;
   padding: var(--sp-4) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom));
-  border-radius: var(--r-md) var(--r-md) 0 0;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
   background: var(--card); color: var(--ink);
+  box-shadow: var(--shadow-lg);
+  animation: sheet-in var(--dur-slow) var(--ease-spring);
 }
 .photo-side { margin: 2px 0 0; color: var(--muted); font-size: var(--fs-sm); font-weight: 600; }
 .photo-view {
@@ -961,7 +1112,9 @@ body {
   /* Paper is white whatever theme the screen is in, and a QR inverted by dark
      mode is unreadable to every decoder. */
   .app-shell { display: block; height: auto; }
-  .app-main { overflow: visible; padding: 0; }
+  /* No margin rule on printed label sheets — the ledger grammar is for
+     the screen; the printout is the vendor's own paper. */
+  .app-main { overflow: visible; padding: 0; background: none; }
   .topbar, .bottom-nav, .tags-bar, .sync-strip { display: none !important; }
   .tag-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
   .tag-shelf-name { color: #000; }
@@ -977,7 +1130,7 @@ body {
   display: grid; grid-template-columns: auto 1fr auto auto;
   align-items: center; gap: var(--sp-3);
   min-height: 44px; padding: 0 2px;
-  border-bottom: var(--line-w) solid var(--hairline);
+  border-bottom: var(--line-w) solid var(--rule-feint);
   font-size: var(--fs-sm); font-weight: 600;
 }
 /* Unconfirmed reads as a QUESTION, not as a problem. It is the normal state of
@@ -1008,11 +1161,21 @@ body {
   gap: var(--sp-4); padding: var(--sp-5);
   background: #ffffff; color: #000000;
   text-align: center; cursor: pointer;
+  /* It IS the page torn out of the challan book, so it carries the
+     book's red margin rule — hard-coded like everything else here,
+     because this surface never softens for any theme. */
+  background-image: linear-gradient(#c03a2b, #c03a2b);
+  background-repeat: no-repeat;
+  background-position: 14px 0;
+  background-size: 2px 100%;
 }
 /* The guard reads the label before any phone reads the code. */
 .parchi-job {
   margin: 0; max-width: 92vw;
   font-size: var(--fs-xl); font-weight: 800; line-height: 1.25;
+  padding-bottom: var(--sp-2);
+  /* The double rule under the header: this challan is the total. */
+  border-bottom: 4px double #000000;
 }
 .parchi-qr {
   width: min(88vw, 62vh); height: auto; aspect-ratio: 1;
@@ -1025,10 +1188,16 @@ body {
 }
 
 /* ---- din ka hisaab ----------------------------------------- */
+/* The most literal ledger page in the app — it IS the day's account,
+   so the book grammar leans in: each entries block opens with a small
+   heading written on its own feint rule, and the rows rule themselves
+   below it. */
 .hisaab-bar { margin-top: var(--sp-3); }
 .hisaab-list { margin-top: var(--sp-3); }
 .hisaab-sub {
-  margin: 0; font-size: var(--fs-sm); font-weight: 800;
+  margin: 0; padding-bottom: var(--gap-tight);
+  font-size: var(--fs-sm); font-weight: 800;
+  border-bottom: var(--line-w) solid var(--rule-feint);
 }
 .hisaab-trust-count { color: var(--accent-strong); }
 /* Trust is a belief, not an observation: the row says so in words (the

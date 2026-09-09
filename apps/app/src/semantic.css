@@ -12,6 +12,43 @@
    ============================================================ */
 
 :root {
+  /* ---- The challan book -------------------------------------
+     The app is a digital counter book — the carbon-copy challan
+     pad every Lahore rental house already trusts. The page is
+     ledger cream, the writing is blue-black ink, rows sit on
+     feint ruled lines, one thin red rule runs down the margin,
+     and the only shouting allowed is a rubber stamp.
+
+     Paper, deliberately creamier than the sibling's #fdfbf8 —
+     same warmth family, but this one must read as LEDGER PAPER,
+     not as a softened white. */
+  --bg: #f9f4e7;
+  --card: #fffdf6;          /* a fresh page lifts off the book */
+  --card-2: #f1ebda;
+  --ink: #1f2933;           /* blue-black writing ink, not gray */
+  --muted: #5b6670;         /* diluted ink — warms toward --ink, never gray.
+                               5.3:1 on the page, 5.8:1 on a card. */
+  --line: #e3dbc6;
+  --line-strong: #cdc3a9;
+
+  /* The feint rule — the pale blue-gray line printed across a
+     ledger page. ROW SEPARATORS ONLY: it is what makes a list
+     read as ruled paper, and using it anywhere else turns the
+     book into a wireframe. */
+  --rule-feint: #c9d3da;
+
+  /* Margin red — the one thin vertical rule down the left of a
+     challan page, and the rubber stamps. 4.9:1 on the page, so
+     a stamp's word is readable, not just loud. */
+  --margin-red: #c03a2b;
+  --rule-margin: var(--margin-red);
+
+  /* The rubber stamp, tokenised so sun mode can turn it into a
+     solid block without the component knowing. */
+  --stamp-ink: var(--margin-red);
+  --stamp-bg: transparent;
+  --stamp-edge: currentColor;
+
   /* ---- Type -------------------------------------------------
      Asset codes get their own face. "FX9-02" vs "FX9-O2" and
      "BAT-1I5" vs "BAT-115" are read at arm's length in bad light by
@@ -99,15 +136,20 @@
      stays on the @papa/design --fs-* scale. */
   --fs-stat: 34px;
 
-  /* Micro-label: small letterspaced uppercase for section headers
-     and field captions. One pair of values, referenced everywhere,
-     so the treatment cannot drift. */
-  --fs-micro: 11px;
-  --ls-micro: 0.08em;
+  /* How loud a tinted element's currentColor ring is. Indoors a soft
+     28% ring is enough to hold a pill's edge; sun mode overrides this
+     to 100% because a low-alpha ring dies in direct light exactly the
+     way the shadows and hairlines above do. Used with color-mix:
+       border: var(--line-w) solid
+         color-mix(in srgb, currentColor var(--tint-border), transparent) */
+  --tint-border: 28%;
 }
 
 /* ============================================================
    TRUCK — the dark theme, for a van at 05:00 and an unlit store.
+   In the challan book this is THE CARBON COPY: the duplicate page
+   under the carbon paper — deep blue-black instead of the light
+   theme's warm cream, pale carbon-blue ink instead of blue-black.
 
    @papa/design already ships dark under [data-theme='dark']. These
    values are raised because the marketplace's dark is a cozy,
@@ -120,23 +162,38 @@
    luminances the +0.05 term in the WCAG ratio dominates, so pushing
    both ends down moves them CLOSER in ratio terms. The separation has
    to come from raising the card. The first version of this file made
-   exactly that mistake and the contrast test caught it.
+   exactly that mistake and the contrast test caught it. The carbon
+   hue shift keeps that floor: card/bg is 1.41, above the previously
+   shipped 1.32.
 
    Ratios (see test/contrast.test.mjs, which recomputes them):
-     card/bg 1.32 · line/card 1.74 · line-strong/card 2.43
-     ink/card 12.9 · muted/card 5.8
+     card/bg 1.41 · line/card 1.81
+     ink/card 9.2 · muted/card 5.1 · stamp/card 4.8
    ============================================================ */
 :root[data-theme='dark'] {
-  --bg: #0f0d0b;            /* deeper than the sibling's #161310 */
-  --card: #2e271f;          /* RAISED — this is what buys the separation */
-  --card-2: #3a3229;
-  --line: #544c41;
-  --line-strong: #6b6154;
+  --bg: #0c0e12;            /* carbon blue-black, deeper than the sibling */
+  --card: #272e39;          /* RAISED — this is what buys the separation */
+  --card-2: #313845;
+  --ink: #c9d6e2;           /* pale carbon-blue ink on the duplicate page */
+  --muted: #8fa0af;
+  --line: #4c5561;
+  --line-strong: #626d7c;
   --accent-strong: #ff9563; /* on dark, accent-as-text goes lighter, not darker */
   --status-ink: #0f0d0b;    /* dark ink on the lighter dark-theme fills */
   /* A 14%-ink hairline vanishes beside a live viewfinder; in the dark
      theme dividers stay on the raised --line value instead. */
   --hairline: var(--line);
+
+  /* The feint rule pressed through carbon: still the quietest line
+     on the page, but solid — a low-alpha rule dies beside the
+     viewfinder for the same reason the hairline above does. */
+  --rule-feint: #39424e;
+
+  /* Stamps must stay legible through the carbon: 4.8:1 on the card.
+     The margin rule stays quieter than the stamp — it is printing,
+     not shouting. */
+  --margin-red: #eb7863;
+  --rule-margin: color-mix(in srgb, var(--margin-red) 55%, transparent);
 }
 
 /* ============================================================
@@ -193,6 +250,21 @@
 
   /* Translucent dividers die in sunlight the same way shadows do. */
   --hairline: #000000;
+
+  /* Tinted pills keep their shape in sun by ring, not by wash: the
+     28% currentColor ring goes solid, same reasoning as the hairline. */
+  --tint-border: 100%;
+
+  /* The challan grammar goes solid with everything else: the feint
+     rule and the margin rule become hard black printing, and the
+     rubber stamp becomes a solid attention block with white ink —
+     an outline stamp is a tint by another name in direct light. */
+  --rule-feint: #000000;
+  --rule-margin: #000000;
+  --margin-red: #b91c1c;
+  --stamp-ink: #ffffff;
+  --stamp-bg: var(--status-attention);
+  --stamp-edge: var(--status-attention);
 }
 
 /* Default border width, overridden to 2px in sun mode. */
@@ -207,8 +279,14 @@
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
 }
+
+/* Native UI (scrollbars, form controls) follows the chosen theme, not the
+   OS: light is the app's default face; dark/sun opt in via data-theme. */
+:root { color-scheme: light; }
+:root[data-theme='dark'] { color-scheme: dark; }

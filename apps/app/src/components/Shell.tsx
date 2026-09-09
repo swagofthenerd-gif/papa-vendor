@@ -50,6 +50,12 @@ export function Shell({
   return (
     <div className="app-shell">
       <header className="topbar">
+        {/* The family mark — the marketplace's cine-camera, worn small.
+            Decorative: the title beside it names the screen, and the
+            document title already carries the product name. */}
+        <span className="brand-mark" aria-hidden="true">
+          <Icon name="camera" size={20} />
+        </span>
         <div className="topbar-main">
           <h1 className="topbar-title">{title}</h1>
           {subtitle ? <p className="topbar-sub">{subtitle}</p> : null}
@@ -69,7 +75,11 @@ export function Shell({
               aria-current={active ? 'page' : undefined}
               onClick={() => go(tab.view)}
             >
-              <Icon name={tab.icon} size={22} />
+              {/* The capsule the accent tint lives in when the tab is
+                  active — see .nav-ico in app.css. */}
+              <span className="nav-ico">
+                <Icon name={tab.icon} size={22} />
+              </span>
               <span>{tab.label}</span>
             </button>
           )
@@ -90,16 +100,21 @@ export function SectionHead({
   title,
   sub,
   action,
+  stamp = false,
 }: {
   icon?: AnyIconName
   title: ReactNode
   sub?: ReactNode
   action?: ReactNode
+  /** Render the title as a rubber stamp — ONLY for a heading that
+   *  demands a person act (the handover's did-not-come-back list).
+   *  See .stamp in app.css. */
+  stamp?: boolean
 }) {
   return (
     <div className="section-head">
       <div>
-        <h2>
+        <h2 className={stamp ? 'stamp' : undefined}>
           {icon ? <Icon name={icon} size={16} className="h-ico" /> : null}
           {title}
         </h2>
