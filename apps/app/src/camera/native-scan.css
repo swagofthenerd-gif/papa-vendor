@@ -1,0 +1,37 @@
+/* Native ML Kit scanning (Android shell only).
+
+   The @capacitor-mlkit/barcode-scanning plugin renders the camera preview
+   BEHIND the WebView, full-screen. While a native scan is running, QrCamera
+   puts `papa-native-scan` on <body> and these rules punch a transparent
+   hole exactly where the web layout keeps its camera frame — every other
+   section paints its own opaque background, so the screen keeps the
+   challan-book layout (job header, progress, session list) with live camera
+   showing through the frame.
+
+   None of this applies on the web: the class is only ever added on the
+   native platform, where <video> is hidden and the preview behind the
+   WebView is the picture. */
+
+body.papa-native-scan,
+body.papa-native-scan #root {
+  background: transparent;
+}
+
+body.papa-native-scan .screen {
+  background: transparent;
+}
+
+/* Each sibling of the camera frame carries the page background itself. */
+body.papa-native-scan .scan-screen > :not(.camera-frame) {
+  background: var(--bg);
+}
+
+body.papa-native-scan .camera-frame {
+  background: transparent;
+}
+
+/* The idle <video> element would paint nothing, but keep it out of the way
+   so no styling ever occludes the native preview. */
+body.papa-native-scan .qr-video {
+  display: none;
+}
