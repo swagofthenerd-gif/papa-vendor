@@ -442,6 +442,7 @@ export const STR_UR: StrTable = {
   labelsRemoveQr: 'QR hatayein',
   labelsQrStored: 'Sirf isi device par rehta hai.',
   labelsSave: 'Save karein',
+  labelsSaved: 'Save ho gaya',
 
   // ------------------------------------------------------------- customer
   customerKhata: 'Khata',

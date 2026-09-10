@@ -472,6 +472,7 @@ const STR_EN = {
   labelsRemoveQr: 'Remove the QR',
   labelsQrStored: 'Stored on this device only.',
   labelsSave: 'Save',
+  labelsSaved: 'Saved',
 
   // ------------------------------------------------------------- customer
   // The khata page, the owed list, and the two money documents (the

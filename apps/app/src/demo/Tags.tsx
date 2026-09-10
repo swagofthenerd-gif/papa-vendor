@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import QRCode from 'qrcode'
 import { Icon } from '@papa/icons'
 import type { DemoStore } from './store.ts'
@@ -80,6 +80,8 @@ export function Tags({ store }: { store: DemoStore }) {
         </button>
       </div>
       <LanguageRow />
+      <BackedUpRow store={store} />
+      <PaymentRow store={store} />
       {[...byShelf.entries()].map(([shelf, items]) => (
         <section key={shelf} className="tag-shelf">
           <h2 className="tag-shelf-name">{shelf}</h2>
@@ -99,6 +101,123 @@ export function Tags({ store }: { store: DemoStore }) {
         </section>
       ))}
     </div>
+  )
+}
+
+/**
+ * The backed-up chip — the khata apps sell backup as a headline, and the
+ * reassurance is worth a line on the settings surface. But this is the DEMO:
+ * nothing actually leaves the device, and the wording says exactly that
+ * rather than wearing a green tick it has not earned. On a real install the
+ * same line reports the real outbox — the number is already the real queue.
+ */
+function BackedUpRow({ store }: { store: DemoStore }) {
+  const counts = store.outboxCounts()
+  return (
+    <div className="tags-bar">
+      <p className="tags-hint">
+        <strong>{STR.labelsBackedUpHeading}</strong>{' '}
+        {STR.labelsQueueStatus(counts.pending)}
+      </p>
+      <span className="badge">
+        <Icon name="clipboard-check" size={12} /> {counts.pending}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * Getting paid — the JazzCash/Easypaisa line and the payment QR the money
+ * documents carry. The line is appended under every balance card and
+ * statement ONCE SET (ledger.ts leaves it off a card that owes nothing);
+ * the QR is stored on this device only, as the hint says out loud.
+ */
+function PaymentRow({ store }: { store: DemoStore }) {
+  const [line, setLine] = useState(store.paymentLine() ?? '')
+  const [saved, setSaved] = useState(false)
+  const [qr, setQr] = useState(store.paymentQr())
+  const fileRef = useRef<HTMLInputElement>(null)
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const onSave = () => {
+    store.setPaymentLine(line.trim() || null)
+    setSaved(true)
+    if (savedTimer.current) clearTimeout(savedTimer.current)
+    savedTimer.current = setTimeout(() => setSaved(false), 1500)
+  }
+
+  const onAttach = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const url = typeof reader.result === 'string' ? reader.result : null
+      if (!url) return
+      store.setPaymentQr(url)
+      setQr(url)
+    }
+    reader.readAsDataURL(file)
+    // The same file chosen twice must fire change twice.
+    e.target.value = ''
+  }
+
+  return (
+    <section className="tag-shelf">
+      <h2 className="tag-shelf-name">{STR.labelsPaymentHeading}</h2>
+
+      <label className="field-label" htmlFor="payment-line">
+        {STR.labelsPaymentLineLabel}
+      </label>
+      <input
+        id="payment-line"
+        className="sheet-search"
+        value={line}
+        onChange={(e) => setLine(e.target.value)}
+        placeholder={STR.labelsPaymentLinePlaceholder}
+        autoCorrect="off"
+        spellCheck={false}
+      />
+      <p className="tags-hint">{STR.labelsPaymentLineHint}</p>
+      <button className="btn btn-outline" onClick={onSave}>
+        {saved ? STR.labelsSaved : STR.labelsSave}
+      </button>
+
+      <label className="field-label">{STR.labelsPaymentQrLabel}</label>
+      {qr ? (
+        <div className="tags-bar">
+          <img
+            className="tag-qr"
+            src={qr}
+            alt={STR.labelsPaymentQrLabel}
+            width={160}
+            height={160}
+          />
+          <button
+            className="btn btn-ghost"
+            onClick={() => {
+              store.setPaymentQr(null)
+              setQr(null)
+            }}
+          >
+            {STR.labelsRemoveQr}
+          </button>
+        </div>
+      ) : (
+        <div className="tags-bar">
+          <button className="btn btn-outline" onClick={() => fileRef.current?.click()}>
+            <Icon name="camera" size={18} /> {STR.labelsAttachQr}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={onAttach}
+          />
+        </div>
+      )}
+      <p className="tags-hint">{STR.labelsQrStored}</p>
+    </section>
   )
 }
 
