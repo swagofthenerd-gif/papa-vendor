@@ -54,14 +54,16 @@ mechanism exists via `store.voidScan`.)
 ### 4. The debt clock resets on a bounced cheque — FIXED
 
 Was `debt-age-resets-on-bounce`. The ledger now has a `reversal` kind
-that NAMES the entry it voids (`reversal_of`, client-side column;
-**server-side ledger needs the same column in a follow-up migration**).
-`oldestUnpaidMs` skips a reversal and its target as a pair — they cancel
-in time as well as in money — so "owed since" keeps pointing at the
-original charge, and the statement prints *reversed*, never *adjustment*,
-for a bounce the house did not cause. (MAY block pins the surviving
-clock.) The `no-adjustment-door` finding stands: no screen writes a
-reversal yet.
+that NAMES the entry it voids (`reversal_of` — client-side column, and
+as of migration 0018 the server ledger too: same-org/customer validated,
+exact-negation enforced, once per target, mutually exclusive with
+`corrects_entry_id`). `oldestUnpaidMs` skips a reversal and its target
+as a pair — they cancel in time as well as in money — so "owed since"
+keeps pointing at the original charge, and the statement prints
+*reversed*, never *adjustment*, for a bounce the house did not cause.
+(MAY block pins the surviving clock; `0018_jobs_meet_customers_test.sql`
+pins the server rules.) The `no-adjustment-door` finding stands: outside
+the charged-then-returned notice, no screen writes a reversal yet.
 
 ### 5. The payback bar counts damage recovery as earnings — FIXED
 
@@ -69,10 +71,11 @@ Was `payback-counts-damage`. `assetEarnings` now sums rental money only
 (`charge + late_fee`); damage stays on the customer's khata but never
 inflates the asset's bar, and — POLICY (owner may overrule) — a charge a
 `reversal` later voided stops counting too, so a charged-then-returned
-item keeps no phantom earnings. **The server's `asset_earnings` view
-(`db/migrations/0017_money_book.sql`) still sums `damage_charge` and
-knows no reversals — follow-up migration needed to match.** (JAN and MAR
-blocks pin the honest figure; `khata.test.mjs` pins both exclusions.)
+item keeps no phantom earnings. The server's `asset_earnings` view
+matches since migration 0018: `damage_charge` is out, and so is anything
+corrected or reversed — one figure, both sides. (JAN and MAR blocks pin
+the honest figure; `khata.test.mjs` and the 0018 pgTAP suite pin the
+exclusions on their respective sides.)
 
 ### 6. Same-millisecond ledger ties can flip the running balance — FIXED
 
@@ -110,8 +113,8 @@ tests pin the default instead of the accident.
   NEEDS-A-DECISION notice ("Charged Rs X for FX9-02 on Job Y — it came
   back. Reverse?") with a one-tap correction draft behind a confirm tap —
   **never an auto-reverse** ("we keep the money anyway" is a real
-  answer). Reversed charges are also out of asset earnings client-side;
-  the server's `asset_earnings` view needs a follow-up migration.
+  answer). Reversed charges are out of asset earnings on BOTH sides now
+  (client `assetEarnings`; server `asset_earnings` since 0018).
   (`chargedButReturned` / `recordReversalOf` in `demo/khata.ts`; pinned
   in `stress-money.test.mjs`.)
 
@@ -142,30 +145,25 @@ tests pin the default instead of the accident.
 Ranked by number of months the simulation ran into the wall, worst first.
 Phase letters refer to `vendor-dream-plan.md`.
 
-### 1. Jobs cannot be closed, and desk jobs have no customer — every single month
-`no-close-job`, `no-customer-on-desk-job`, `no-add-customer`
+### 1. Jobs cannot be closed, and desk jobs have no customer — SHIPPED as B0
 
-Thirty-one jobs were created over the year. **Every one** needed direct SQL
-to (a) get a customer attached and (b) get closed when done. Without the
-workarounds:
-
-- `createJobFromLines` takes no customer, so **every job born at the desk
-  is unchargeable forever** — `chargeClient`, `recordLateFee`, the deposit
-  flow and the khata link all dead-end on `customerForJob → null`. Only
-  the four seeded customers' seeded jobs can ever take a charge. This
-  makes Phase B's money loop unreachable from Phase B's own front door.
-- No API sets `status='closed'`, so the Today board accumulates every job
-  ever made, and — pinned in SEP — a **finished job keeps claiming its
-  promised gear in every availability answer** ("going to Documentary"
-  weeks after the documentary wrapped). The enquiry screen degrades a
-  little more with every completed job.
-- No API creates a customer at all.
-
-*Plan check:* the dream plan puts customers in Phase C ("the server era").
-**Lived evidence says that is too late**: the ledger (Phase B, shipped)
-needs customers and job-wiring *on-device now*. A local-first
-add-customer + attach-to-job + close-job trio is two tables the demo
-schema already has. Recommend pulling it forward into Phase B as B0.
+Was `no-close-job`, `no-customer-on-desk-job`, `no-add-customer` — the
+year's worst wall, hit every single month, and the reason the money book
+only worked for seeded customers. Phase B0 shipped the trio end to end:
+the new-job sheet takes a customer (existing, or typed inline — the
+nephew case stays legal and says its cost out loud); the link lives on
+`jobs.customer_id`, the real 0017 column, synced to devices by 0018;
+`close_job`/`closeJob` end a job only when nothing still projects onto
+it (the refund gate's own `gear_still_out` predicate, enforced server-
+side by RPC + trigger, mirrored exactly on-device), reopen is
+owner/manager and audited, and closed jobs leave both boards but stay
+reachable — dated, khata-linked, reopenable — behind a "Closed jobs"
+door on the search surface. The simulation now creates jobs WITH their
+customers and closes them at each month's end; its three SQL workaround
+functions are deleted. One sharp edge moved rather than vanished:
+October's paid-for lost cable now makes its job REFUSE to close — pinned
+— because the cable still has no terminal state; that wall lives under
+`no-terminal-asset-state` (§4 below), where it belongs.
 
 ### 2. No bookings, and its two sharp edges — SEP, NOV, DEC, APR (the whole season)
 `no-bookings`, `double-promise`, `turnaway-blind-to-commitments`
@@ -217,8 +215,11 @@ sub-rent intake flag belongs in late B / early C, not E.
 Three ways gear left the fleet this year, none expressible:
 
 - The **paid-for lost cable** (OCT): client paid the damage charge; the
-  cable stays `presence='out'` on a closed job until the end of time. The
-  Today board's out-count carries a ghost from October onward.
+  cable stays `presence='out'` until the end of time, and since B0 its
+  job now honestly REFUSES to close ("1 item still out") — so the board
+  carries an open ghost job from October onward, the refusal pinned. The
+  close rule is right; what is missing is a terminal state to move the
+  cable to.
 - The **absconded client** (FEB): FX6 + lens stolen. The board shows the
   red overdue row forever (correct!), and the money side is now a legible
   `write_off` line — but the Rs 2.6M gear loss appears on **no book at
@@ -344,13 +345,13 @@ dispute outright. Those three are the product, and they held.
 **What nearly made him quit, in order:**
 
 1. **October**: discovering that jobs made in the app can't take charges
-   (`no-customer-on-desk-job`). The money book — the reason he adopted —
-   only worked for the four demo customers until SQL was typed on his
-   behalf. On a real pilot with no engineer standing by, **this is the
-   adoption cliff**, and it falls in week one.
+   (was `no-customer-on-desk-job` — since fixed, see (b)1). The money
+   book — the reason he adopted — only worked for the four demo customers
+   until SQL was typed on his behalf. On a real pilot with no engineer
+   standing by, **this is the adoption cliff**, and it falls in week one.
 2. **December**: the Today board scrolling through every job since
-   September because none of them could be closed, right when twelve live
-   jobs needed to be visible at once.
+   September because none of them could be closed (since fixed, (b)1),
+   right when twelve live jobs needed to be visible at once.
 3. **February**: telling the client "your cheque bounced" with a statement
    that printed *adjustment* — as if the house had made the error — while
    the balance card claimed the debt was six days old.
@@ -359,3 +360,9 @@ The year's single clearest instruction to the plan: **Phase B needs a B0 —
 customers, job-wiring, close-job, and the adjustment/deposit doors — before
 any Phase C ambition.** Everything else on the dream plan's ordering
 survived contact with the simulated year.
+
+*B0 status:* the customers / job-wiring / close-job trio SHIPPED
+(migration 0018 + the client wave; see (b)1) — the week-one adoption
+cliff and the December board-pileup are gone from the walls list. The
+adjustment and deposit doors remain open items (`no-adjustment-door`,
+`no-deposit-door`).
