@@ -542,11 +542,13 @@ select
   c.id            as customer_id,
   c.name,
   c.blacklisted,
+  -- ::bigint — sum(bigint) widens to numeric; the client mirror expects the
+  -- same integer minor units the rows carry.
   coalesce(sum(l.amount_minor) filter (where l.entry_kind in
     ('charge', 'late_fee', 'damage_charge', 'adjustment',
-     'payment', 'write_off', 'deposit_apply')), 0) as balance_minor,
+     'payment', 'write_off', 'deposit_apply')), 0)::bigint as balance_minor,
   coalesce(sum(l.amount_minor) filter (where l.entry_kind in
-    ('deposit_hold', 'deposit_apply', 'deposit_refund')), 0) as deposit_held_minor,
+    ('deposit_hold', 'deposit_apply', 'deposit_refund')), 0)::bigint as deposit_held_minor,
   count(l.id)::int     as entry_count,
   max(l.server_time)   as last_entry_at
   from customers c
@@ -570,7 +572,7 @@ select
   e.org_id,
   e.asset_id,
   coalesce(sum(e.amount_minor) filter (where e.entry_kind in
-    ('charge', 'late_fee', 'damage_charge')), 0) as earned_minor,
+    ('charge', 'late_fee', 'damage_charge')), 0)::bigint as earned_minor,
   count(*) filter (where e.entry_kind in
     ('charge', 'late_fee', 'damage_charge'))::int as earning_entry_count,
   max(e.server_time) as last_earned_at
