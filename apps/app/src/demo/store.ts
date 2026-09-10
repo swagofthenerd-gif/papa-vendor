@@ -493,8 +493,9 @@ export class DemoStore {
       }))
   }
 
-  /** The counters on the Today board. */
-  stats(): TodayStats {
+  /** The counters on the Today board. `nowMs` injectable so the one store
+   *  read that answers "today" can be asked about another day. */
+  stats(nowMs: number = Date.now()): TodayStats {
     const row = this.db.get<{ out_now: number; on_shelf: number; attention: number }>(
       `select
          sum(case when presence in ('out','in_transit') then 1 else 0 end) as out_now,
@@ -506,7 +507,7 @@ export class DemoStore {
     // list renders from, so the counter and the list it deep-links to can
     // never disagree. Jobs whose expected_back is free text land in neither
     // number — 'no date' is not late, it is unknown, and it stays that way.
-    const due = dueBoard(this.db, Date.now())
+    const due = dueBoard(this.db, nowMs)
     return {
       outNow: Number(row?.out_now ?? 0),
       onShelf: Number(row?.on_shelf ?? 0),
@@ -786,12 +787,18 @@ export class DemoStore {
   /**
    * Money received — a PAST FACT, written as a negative line. The method the
    * cash arrived by rides in the note, beside whatever the desk added.
+   *
+   * `whenMs` lets the fact be BACKDATED — "the client paid me yesterday,
+   * I'm entering it this morning" is an everyday truth the ledger must be
+   * able to state, or the statement books it in the wrong day (and at a
+   * month edge, the wrong month). The default is still now.
    */
   recordPayment(
     customerId: string,
     amountMinor: number,
     method: string,
     note: string | null,
+    whenMs: number = Date.now(),
   ): void {
     recordEntry(this.db, {
       orgId: this.seed.orgId,
@@ -799,7 +806,7 @@ export class DemoStore {
       kind: 'payment',
       amountMinor: -Math.abs(amountMinor),
       note: note && note.trim().length > 0 ? `${method} — ${note.trim()}` : method,
-      createdAt: Date.now(),
+      createdAt: whenMs,
     })
   }
 
@@ -815,7 +822,12 @@ export class DemoStore {
    * no customer is wired, because a charge with no khata to land in is money
    * recorded into a void.
    */
-  chargeClient(jobId: string, amountMinor: number, note: string | null): boolean {
+  chargeClient(
+    jobId: string,
+    amountMinor: number,
+    note: string | null,
+    whenMs: number = Date.now(),
+  ): boolean {
     const customer = this.customerForJob(jobId)
     if (!customer || amountMinor <= 0) return false
     recordEntry(this.db, {
@@ -825,7 +837,7 @@ export class DemoStore {
       amountMinor,
       jobId,
       note,
-      createdAt: Date.now(),
+      createdAt: whenMs,
     })
     return true
   }
@@ -862,7 +874,12 @@ export class DemoStore {
   }
 
   /** The confirmed late fee — the owner's figure, not the draft's. */
-  recordLateFee(jobId: string, amountMinor: number, note: string | null): boolean {
+  recordLateFee(
+    jobId: string,
+    amountMinor: number,
+    note: string | null,
+    whenMs: number = Date.now(),
+  ): boolean {
     const customer = this.customerForJob(jobId)
     if (!customer || amountMinor <= 0) return false
     recordEntry(this.db, {
@@ -872,7 +889,7 @@ export class DemoStore {
       amountMinor,
       jobId,
       note,
-      createdAt: Date.now(),
+      createdAt: whenMs,
     })
     return true
   }

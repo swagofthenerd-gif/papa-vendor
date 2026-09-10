@@ -58,9 +58,15 @@ export class Outbox {
   // the price of running the offline engine's tests against a real SQLite
   // with no build step, and it is worth paying.
   private readonly db: SqlDriver
+  /** The queue's clock. Injectable so `created_at` — which the hisaab's day
+   *  grouping and the asset history read — agrees with the payload's
+   *  device_time when the caller runs on a controlled clock. This was the
+   *  last hidden Date.now() in the write path (the `clock-welds` finding). */
+  private readonly now: () => number
 
-  constructor(db: SqlDriver) {
+  constructor(db: SqlDriver, now: () => number = Date.now) {
     this.db = db
+    this.now = now
   }
 
   /**
@@ -98,7 +104,7 @@ export class Outbox {
       const seq = this.nextSeq()
       const payload = JSON.stringify(input.payload)
       const dependsOn = input.dependsOn ?? null
-      const createdAt = Date.now()
+      const createdAt = this.now()
 
       this.db.exec(
         `insert into outbox (id, seq, op, payload, depends_on, state, created_at)

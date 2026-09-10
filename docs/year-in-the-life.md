@@ -101,19 +101,18 @@ assertions deterministic.
 *Fix direction:* carry `rowid` (insertion order) into `LedgerEntryView`
 and use it as the tie-break, as `rowsFor` already does in SQL.
 
-### 7. The clock is welded shut in three places — `clock-welds`
+### 7. The clock is welded shut in three places — FIXED
 
-Audit of hidden `Date.now()` / `new Date()` reads (the code takes `nowMs`
-almost everywhere — these are the leaks):
-
-| Place | Weld | Consequence |
-|---|---|---|
-| `Outbox.enqueue` (`packages/core/src/outbox.ts:101`) | `created_at = Date.now()` | The hisaab's day grouping and asset history read outbox `created_at`, not the payload's `device_time` — a simulated or wrong clock splits the two records of when a scan happened. Din-ka-hisaab for any day but the real today is untestable. |
-| `SessionRegistry.open` (`apps/app/src/demo/sessions.ts:104`) | `startedAt: Date.now()`, and it never passes `now` into `ScanSession` | The registry cannot run on an injected clock at all; this simulation had to bypass it and drive `ScanSession` directly. |
-| `DemoStore.recordPayment` / `chargeClient` / `recordLateFee` (`store.ts`) | `createdAt: Date.now()`, no parameter | **The vendor cannot backdate money.** "The client paid me yesterday, I'm entering it this morning" is an everyday fact the ledger cannot state. The statement then books it in the wrong day — and potentially the wrong month. |
-| `DemoStore.stats` (`store.ts:486`) | `dueBoard(this.db, Date.now())` | Consistent for the UI, but the one store read that cannot be asked about another day. |
-
-The backdating gap is the user-facing half; the rest is testability debt.
+Was `clock-welds`. All four welds are out: `Outbox` takes an injectable
+clock and `ScanSession` hands its own `now` down, so a queued row's
+`created_at` agrees with its payload's `device_time`; `SessionRegistry`
+takes a clock and passes it into every session it opens (the year
+simulation now drives the REAL registry); `recordPayment` / `chargeClient`
+/ `recordLateFee` accept `whenMs`, so **money can be backdated** —
+"the client paid me yesterday" is now a statable fact (a date field on the
+payment sheet is UI follow-up); and `stats(nowMs)` can be asked about
+another day. (SEP block pins the registry and outbox stamping the
+simulated instant.)
 
 ---
 

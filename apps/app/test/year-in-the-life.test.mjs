@@ -19,13 +19,12 @@
  * strip) is exact and the file is deterministic relative to its run date.
  * The story labels (SEP..AUG) are narrative names for k = 0..11.
  *
- * KNOWN CLOCK WELDS (finding `clock-welds`): Outbox.enqueue stamps
- * created_at with Date.now() and SessionRegistry stamps session starts the
- * same way, so scan rows always land on the REAL today — which is why this
- * file drives ScanSession directly with an injected `now`, and why the
- * din-ka-hisaab day grouping cannot be exercised for a simulated past day.
- * The store's money writes (recordPayment / chargeClient / recordLateFee)
- * take no timestamp at all, so this file posts through recordEntry.
+ * THE CLOCK WELDS ARE GONE. Outbox.enqueue, SessionRegistry and the store's
+ * money writes all take an injectable clock now, so this file drives the
+ * REAL SessionRegistry on the simulated calendar and every outbox row's
+ * created_at agrees with its payload's device_time. Money still posts
+ * through recordEntry (the store's sql.js driver cannot load under Node),
+ * but the store methods accept `whenMs`, so a payment can be backdated.
  */
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
@@ -67,10 +66,10 @@ import {
   openJobs,
   openJobCommitments,
   packedProgress,
-  recordSessionStart,
   sessionScanFacts,
   setExpectedBack,
 } from '../src/demo/read-model.ts'
+import { SessionRegistry } from '../src/demo/sessions.ts'
 import {
   assetEarnings,
   customerForJob,
@@ -213,23 +212,24 @@ const physicallyOut = (jobId) =>
     .map((r) => r.id)
 
 /**
- * Open a session the way the registry does, but on the simulated clock —
- * the registry itself cannot take one, the outbox stamps rows with the
- * real Date.now(), and the store's money writes take no timestamp at all
- * (so a payment can never be backdated). Finding `clock-welds`.
+ * The REAL SessionRegistry, on the simulated clock. The clock welds are
+ * fixed: the registry stamps session starts from its injected `now`, hands
+ * the same clock to every ScanSession it opens, and the outbox stamps each
+ * queued row with it — so the queue, the session record and the payloads
+ * all tell one story about when a scan happened.
  */
+let simNow = at(0, -10)
+const registry = new SessionRegistry(
+  db,
+  'sim-phone',
+  (jobId, mode) =>
+    mode === 'out' ? (openJob(db, jobId)?.expected ?? []) : physicallyOut(jobId),
+  () => simNow,
+)
+
 function openSession(jobId, mode, whenMs) {
-  finding('clock-welds')
-  const expected =
-    mode === 'out' ? (openJob(db, jobId)?.expected ?? []) : physicallyOut(jobId)
-  const session = new ScanSession(db, {
-    deviceId: 'sim-phone',
-    jobId,
-    expected: new Set(expected),
-    now: () => whenMs,
-  })
-  recordSessionStart(db, { id: session.id, jobId, mode, startedAt: whenMs, expected })
-  return { session, expected, mode, jobId }
+  simNow = whenMs
+  return registry.open(jobId, mode)
 }
 
 /** Scan a list of assets by their real tags; keep the trackers honest. */
@@ -399,6 +399,18 @@ describe('a year in the life of the rental house', () => {
     assert.equal(pull.total, 11)
     scanAll(shan, shan.expected, 'check_out')
     assert.equal(packedProgress(db, 'job-shan'), 11)
+
+    // The clock welds are gone: the registry's session record AND the
+    // outbox row both carry the simulated instant, not the machine's —
+    // so the hisaab's day grouping and the asset history tell one story.
+    assert.equal(
+      Number(db.get(`select started_at from scan_sessions where id = ?`, [shan.session.id]).started_at),
+      at(0, -1, 6),
+    )
+    assert.equal(
+      Number(db.get(`select created_at from outbox where op = 'submit_scan_batch' order by seq desc limit 1`).created_at),
+      at(0, -1, 6),
+    )
 
     // --- Second job out: the wedding, and the overlap ---------------------
     // The seed promises V-Mount batteries 1-4 to BOTH the TVC and the
@@ -1284,7 +1296,6 @@ describe('a year in the life of the rental house', () => {
     assert.deepEqual(
       [...FINDINGS].sort(),
       [
-        'clock-welds',
         'debt-age-resets-on-bounce',
         'double-promise',
         'import-apply-welded',

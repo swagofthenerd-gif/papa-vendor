@@ -130,7 +130,10 @@ export class ScanSession {
     this.now = opts.now ?? Date.now
     this.newId = opts.newId ?? (() => crypto.randomUUID())
     this.id = this.newId()
-    this.outbox = new Outbox(db)
+    // The session's clock rides into the queue too, so the outbox row's
+    // created_at and the payload's device_time can never disagree about
+    // when a scan happened.
+    this.outbox = new Outbox(db, this.now)
   }
 
   /** Assets recorded so far, in scan order. */
