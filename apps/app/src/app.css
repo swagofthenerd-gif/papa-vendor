@@ -955,6 +955,12 @@ h2.stamp .h-ico { display: none; }
 .session-actions { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-5); }
 .session-foot { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); font-weight: 600; text-align: center; }
 
+/* Money under the counters: three figures, same totals-row grammar.
+   Rupee amounts run long, so the numerals step down from stat scale —
+   the strip is a glance line, not a headline. */
+.money-strip { grid-template-columns: repeat(3, 1fr); margin-top: var(--sp-3); }
+.money-strip .stat-n { font-size: var(--fs-lg); font-weight: 700; }
+
 /* ---- the khata --------------------------------------------- */
 /* The balance is THE figure of the page — the challan-total voice at
    stat scale, closed by the double rule the .tally already draws. */

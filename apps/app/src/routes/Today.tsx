@@ -1,5 +1,6 @@
 import { Icon } from '@papa/icons'
 import {
+  formatRupees,
   parsePhoneNumber,
   telUrl,
   whatsAppChatUrl,
@@ -52,6 +53,18 @@ export interface TodayStats {
   onShelf: number
 }
 
+/**
+ * The board's money glance — projected entirely from the local ledger
+ * (see demo/khata.ts moneyStrip). Minor units in, formatting here, so the
+ * strip and the khata pages it opens can never round differently.
+ */
+export interface MoneyFigures {
+  owedMinor: number
+  dueTodayMinor: number
+  earnedMonthMinor: number
+  owingCount: number
+}
+
 /** A job with gear physically out, whatever its list said. */
 export interface OutRow {
   id: string
@@ -74,6 +87,7 @@ export function Today({
   jobs,
   outJobs,
   stats,
+  money,
   onOpenGear,
   onNewJob,
   onEditDate,
@@ -81,6 +95,7 @@ export function Today({
   jobs: JobRow[]
   outJobs: OutRow[]
   stats: TodayStats
+  money: MoneyFigures
   onOpenGear: (filter: 'here' | 'out' | 'attention' | 'all') => void
   onNewJob: () => void
   onEditDate: (jobId: string) => void
@@ -124,6 +139,29 @@ export function Today({
           <span className="stat-n code">{stats.needsAttention}</span>
           <span className="stat-label">{STR.todayStatNeedALook}</span>
         </button>
+      </div>
+
+      {/* The money strip — the morning glance's third line, from the local
+          ledger only. 'Owed to me' is the one figure that is a DOOR (it
+          opens the owed list, which opens the khatas); the other two are
+          facts of the day and the month, not filters, so they stay ink. */}
+      <div className="stat-strip money-strip" role="group" aria-label={STR.todayMoneyHeading}>
+        <button
+          className="stat pressable"
+          onClick={() => go({ name: 'owed' })}
+          aria-label={STR.todayMoneyOwedAria}
+        >
+          <span className="stat-n code">{formatRupees(money.owedMinor)}</span>
+          <span className="stat-label">{STR.todayMoneyOwedToMe}</span>
+        </button>
+        <div className="stat">
+          <span className="stat-n code">{formatRupees(money.dueTodayMinor)}</span>
+          <span className="stat-label">{STR.todayMoneyDueInToday}</span>
+        </div>
+        <div className="stat">
+          <span className="stat-n code">{formatRupees(money.earnedMonthMinor)}</span>
+          <span className="stat-label">{STR.todayMoneyEarnedThisMonth}</span>
+        </div>
       </div>
 
       <section className="section">
