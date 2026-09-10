@@ -104,9 +104,15 @@ create table if not exists locations (
   id text primary key, org_id text, name text, kind text, path text, code text
 );
 
+-- customer_id and closed_at mirror the 0018 server columns (the customer
+-- chip; boards that stop accumulating finished jobs). Added under the same
+-- caveat as asset_containment.removed_at above: no installed phone exists
+-- yet (pre-auth, demo only), so create-if-not-exists still covers every
+-- real database — but a local migration path remains a pre-ship
+-- requirement before ANY device persists this schema.
 create table if not exists jobs (
   id text primary key, org_id text, label text, contact text,
-  expected_back text, status text
+  expected_back text, status text, customer_id text, closed_at text
 );
 
 create table if not exists products (

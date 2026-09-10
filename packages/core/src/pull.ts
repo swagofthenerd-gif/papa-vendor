@@ -42,7 +42,9 @@ const MIRROR_COLUMNS: Record<string, string[]> = {
   // No `contact` here: it is a phone number, and the server's PII sync guard
   // (0009/0015) excludes it from pull_changes. The local column still exists
   // for the demo seed; on a real device it simply stays null.
-  jobs: ['id', 'org_id', 'label', 'expected_back', 'status'],
+  // customer_id and closed_at arrive as of 0018: the customer chip and the
+  // boards that stop accumulating finished jobs both read the mirror.
+  jobs: ['id', 'org_id', 'label', 'expected_back', 'status', 'customer_id', 'closed_at'],
 }
 
 /** The primary key each mirror is keyed on locally. */
