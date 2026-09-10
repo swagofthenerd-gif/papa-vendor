@@ -25,9 +25,9 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
-  // The day's account is a Today surface, not a fifth tab — the tab bar
-  // stays four places (see the comment above).
-  { view: { name: 'jobs' }, label: STR.commonTabToday, icon: 'home', matches: ['jobs', 'session', 'hisaab'] },
+  // The day's account and the money book are Today surfaces, not extra
+  // tabs — the tab bar stays four places (see the comment above).
+  { view: { name: 'jobs' }, label: STR.commonTabToday, icon: 'home', matches: ['jobs', 'session', 'hisaab', 'owed', 'customer'] },
   { view: { name: 'gear' }, label: STR.commonTabGear, icon: 'box', matches: ['gear', 'asset'] },
   { view: { name: 'enquiry' }, label: STR.commonTabKitList, icon: 'chat', matches: ['enquiry'] },
   { view: { name: 'settings' }, label: STR.commonTabLabels, icon: 'ticket', matches: ['settings', 'import'] },
