@@ -21,19 +21,41 @@ import { STR } from '../strings.ts'
  * The four rows below are ordered worst-first: the exceptions are the work.
  */
 
+/** The overdue return's late-fee offer, precomputed by the store. */
+export interface LateFeeOffer {
+  dueLabel: string
+  /** 'Rs 33,000' — the per-day rate label, or null when nothing is priced. */
+  perDayLabel: string | null
+  /** Items on the job that carry no day rate — reported, never zeroed. */
+  unpriced: number
+}
+
 export function Session({
   summary,
+  chargeCustomerName,
+  lateFee,
   onShareWhatsApp,
   onShowParchi,
   onBackToScanning,
   onDone,
+  onChargeClient,
+  onDraftLateFee,
 }: {
   summary: SessionSummary
+  /** The job's customer, when one is wired — the khata a dock charge lands
+   *  in. Null renders no charge affordance at all, never a dead button. */
+  chargeCustomerName: string | null
+  /** Present only on an overdue RETURN with a customer — see the store. */
+  lateFee: LateFeeOffer | null
   onShareWhatsApp: () => void
   /** Show the challan as a full-screen QR — the phone-to-phone gate pass. */
   onShowParchi: () => void
   onBackToScanning: () => void
   onDone: () => void
+  /** Open the damage/extras charge sheet — a write, so it lives with the
+   *  reconciliation lists, far from the share actions below. */
+  onChargeClient: () => void
+  onDraftLateFee: () => void
 }) {
   // Derived in session-summary.ts alongside the list it describes, so the
   // number above and the list below cannot drift apart again.
@@ -139,6 +161,41 @@ export function Session({
               </li>
             ))}
           </ul>
+          {coming && chargeCustomerName ? (
+            /* The gap has a price and the job has a khata — close the
+               unbilled-extras leak HERE, at the dock, while the figure is
+               on screen. Opens a sheet; nothing is charged by this tap. */
+            <button
+              className="btn btn-outline btn-block"
+              onClick={onChargeClient}
+              aria-label={STR.sessionChargeAria(chargeCustomerName)}
+            >
+              <Icon name="scroll" size={18} /> {STR.sessionChargeClient}
+            </button>
+          ) : null}
+        </section>
+      ) : null}
+
+      {coming && lateFee ? (
+        <section className="section">
+          <SectionHead
+            icon="hourglass"
+            title={STR.sessionCameBackLate}
+            sub={
+              lateFee.perDayLabel
+                ? STR.sessionLateFeeSub(lateFee.dueLabel, lateFee.perDayLabel)
+                : lateFee.dueLabel
+            }
+          />
+          {lateFee.unpriced > 0 ? (
+            <p className="section-sub">{STR.sessionUnpricedNotInFee(lateFee.unpriced)}</p>
+          ) : null}
+          <button className="btn btn-outline btn-block" onClick={onDraftLateFee}>
+            <Icon name="hourglass" size={18} /> {STR.sessionDraftLateFee}
+          </button>
+          {/* Said on the page, not only in the sheet: the fee is a
+              relationship decision, and the app never makes it alone. */}
+          <p className="session-foot muted">{STR.sessionLateFeeNeverAuto}</p>
         </section>
       ) : null}
 

@@ -68,6 +68,7 @@ export function TodayScreen({ store }: { store: DemoStore }) {
         }))}
         outJobs={store.outJobsDue(now)}
         stats={store.stats()}
+        money={store.moneyStrip(now)}
         onOpenGear={(f) => go({ name: 'gear', query: f === 'all' ? undefined : f })}
         onNewJob={() => setNewJobOpen(true)}
         onEditDate={(jobId) => setDateFor(jobId)}

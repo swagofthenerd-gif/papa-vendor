@@ -41,7 +41,7 @@ const APP = resolve(HERE, '..')
 const require = createRequire(import.meta.url)
 const ts = require('typescript')
 
-const PREFIXES = ['today', 'scan', 'session', 'gear', 'enquiry', 'hisaab', 'labels', 'common']
+const PREFIXES = ['today', 'scan', 'session', 'gear', 'enquiry', 'hisaab', 'labels', 'common', 'customer']
 
 /** Sample args so parameterised strings can be rendered and checked. */
 function renderValue(value) {

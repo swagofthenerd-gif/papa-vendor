@@ -14,6 +14,8 @@ import { EnquiryScreen } from './demo/EnquiryScreen.tsx'
 import { Tags } from './demo/Tags.tsx'
 import { ImportScreen } from './demo/ImportScreen.tsx'
 import { HisaabScreen } from './demo/HisaabScreen.tsx'
+import { KhataScreen } from './demo/KhataScreen.tsx'
+import { OwedScreen } from './demo/OwedScreen.tsx'
 
 /**
  * The app shell.
@@ -124,6 +126,16 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
 
     case 'asset': {
       const asset = store.assetView(view.assetId)
+      // The unit's money facts — ledger earnings, the payback bar, and the
+      // month's turned-away count for its product (the buy signal).
+      const money = asset
+        ? {
+            ...store.assetEarnings(view.assetId),
+            turnedAwayTimes: asset.productId
+              ? store.turnedAwayFor(asset.productId).times
+              : 0,
+          }
+        : null
       return (
         <Shell
           view={view}
@@ -137,6 +149,7 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
         >
           <Asset
             asset={asset}
+            money={money}
             photoPairs={store.photoPairs(view.assetId)}
             onProveIt={() => {
               const text = store.proveItText(view.assetId)
@@ -156,6 +169,17 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
 
     case 'hisaab':
       return <HisaabScreen store={store} />
+
+    case 'customer':
+      // KEYED for the same reason the scanner is: the payment sheet, the
+      // copied flag and the tick all live in instance state, and React
+      // reuses the instance when only props change — without the key,
+      // moving between two customers would carry one khata's open sheet
+      // onto the other's page.
+      return <KhataScreen key={view.customerId} store={store} customerId={view.customerId} />
+
+    case 'owed':
+      return <OwedScreen store={store} />
 
     case 'enquiry':
       return (

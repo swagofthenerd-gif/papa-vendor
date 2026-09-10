@@ -391,6 +391,8 @@ export function seedDemo(db: SqlDriver): DemoSeed {
         [id, side, at, conditionPlate(caption, mark)],
       )
     }
+
+    seedMoneyBook(db)
   })
 
   return {
@@ -406,6 +408,102 @@ export function seedDemo(db: SqlDriver): DemoSeed {
       expectedBack: isoDaysFromNow(j.backInDays),
       expected: expectedFor(j),
     })),
+  }
+}
+
+/** Epoch ms `days` before now — the ledger's created_at voice. Relative for
+ *  the same reason the due dates are: a fixed date rots into ancient history
+ *  and the khata would stop demonstrating a current month. */
+function msDaysAgo(days: number): number {
+  return Date.now() - days * 24 * 60 * 60 * 1000
+}
+
+/**
+ * The money book's seed: four customers wired to the jobs, with the history
+ * Phase B's screens need to demonstrate every state honestly —
+ *
+ *   Bilal   owes across TWO jobs (one closed, one on today's board)
+ *   Hamza   clean: charged and paid in full
+ *   Imran   nothing owed, but a deposit HELD pending inspection
+ *   Ayesha  overdue with an unpaid charge — the late-fee draft's customer
+ *
+ * Amounts are minor units (paisa), the `_minor` convention everywhere.
+ * ASSUMPTION: the figures are plausible Lahore PKR, unvalidated — same
+ * status as the seeded rates. See docs/assumptions.md#demo-rates
+ */
+function seedMoneyBook(db: SqlDriver): void {
+  const customers: [string, string, string | null][] = [
+    ['cust-bilal', 'Bilal Hussain', '0300 4412233'],
+    ['cust-hamza', 'Hamza Saeed', '0321 8899001'],
+    ['cust-ayesha', 'Ayesha Raza', '0333 1122334'],
+    ['cust-imran', 'Imran Qureshi', '0345 6677889'],
+  ]
+  for (const [id, name, phone] of customers) {
+    db.exec(
+      `insert into customers (id, org_id, name, phone, note) values (?, ?, ?, ?, null)`,
+      [id, ORG, name, phone],
+    )
+  }
+
+  // Closed jobs the histories hang off. status 'closed' keeps them off the
+  // Today board (openJobs selects 'open' only) while the khata still links.
+  const closedJobs: [string, string][] = [
+    ['job-shan-stills', 'Shan Foods stills — day shoot'],
+    ['job-hamza-mehndi', 'Mehndi — Model Town'],
+    ['job-imran-drama', 'Drama serial — Bahria set'],
+  ]
+  for (const [id, label] of closedJobs) {
+    db.exec(
+      `insert into jobs (id, org_id, label, contact, expected_back, status)
+       values (?, ?, ?, null, null, 'closed')`,
+      [id, ORG, label],
+    )
+  }
+
+  const wiring: [string, string][] = [
+    ['job-shan', 'cust-bilal'],
+    ['job-shan-stills', 'cust-bilal'],
+    ['job-wedding', 'cust-hamza'],
+    ['job-hamza-mehndi', 'cust-hamza'],
+    ['job-doc', 'cust-ayesha'],
+    ['job-imran-drama', 'cust-imran'],
+  ]
+  for (const [jobId, customerId] of wiring) {
+    db.exec(
+      `insert into job_customer (job_id, customer_id) values (?, ?)`,
+      [jobId, customerId],
+    )
+  }
+
+  // [id, customer, kind, rupees(signed), job, asset, note, daysAgo]
+  const entries: [
+    string, string, string, number, string | null, string | null, string | null, number,
+  ][] = [
+    // Bilal: Rs 60,000 charged last month, half paid, Rs 45,000 charged on
+    // today's TVC — Rs 75,000 owed across two jobs. Both charges name
+    // FX9-01, so its payback bar has two jobs behind it.
+    ['led-bilal-1', 'cust-bilal', 'charge', 60_000, 'job-shan-stills', 'asset-fx9-1', 'FX9 kit, 2 days', 34],
+    ['led-bilal-2', 'cust-bilal', 'payment', -30_000, 'job-shan-stills', null, 'JazzCash', 30],
+    ['led-bilal-3', 'cust-bilal', 'charge', 45_000, 'job-shan', 'asset-fx9-1', 'TVC day, FX9 + lights', 1],
+    // Hamza: the clean khata — charged, paid in full, balance zero.
+    ['led-hamza-1', 'cust-hamza', 'charge', 80_000, 'job-hamza-mehndi', 'asset-fx6-1', '2x FX6, one day', 20],
+    ['led-hamza-2', 'cust-hamza', 'payment', -80_000, 'job-hamza-mehndi', null, 'Cash', 18],
+    // Ayesha: unpaid charge on the OVERDUE job — the return flow offers
+    // the late-fee draft on top of this balance; nothing is auto-charged.
+    ['led-ayesha-1', 'cust-ayesha', 'charge', 55_000, 'job-doc', 'asset-c300-1', 'C300 + CN-E, 3 days', 9],
+    // Imran: paid up, but Rs 50,000 held as security — the deposit pot,
+    // separate from the balance, released only after inspection.
+    ['led-imran-1', 'cust-imran', 'charge', 40_000, 'job-imran-drama', 'asset-komodo-1', 'Komodo, 2 days', 6],
+    ['led-imran-2', 'cust-imran', 'deposit_hold', 50_000, 'job-imran-drama', null, 'Cheque held', 6],
+    ['led-imran-3', 'cust-imran', 'payment', -40_000, 'job-imran-drama', null, 'Bank transfer', 5],
+  ]
+  for (const [id, cust, kind, rupees, job, asset, note, daysAgo] of entries) {
+    db.exec(
+      `insert into customer_ledger_entries
+         (id, org_id, customer_id, kind, amount_minor, job_id, asset_id, note, created_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, ORG, cust, kind, rupees * 100, job, asset, note, msDaysAgo(daysAgo)],
+    )
   }
 }
 

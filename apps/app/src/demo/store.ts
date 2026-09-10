@@ -6,9 +6,13 @@ import {
   caseManifest,
   hasContents,
   pairBySide,
+  balanceCardText,
   buildPullList,
   checkAvailability,
+  dueStatus,
   indicativeDayTotal,
+  lateFeeDraft,
+  monthlyStatementText,
   matchKitList,
   moneyLabel,
   parseKitList,
@@ -23,6 +27,7 @@ import {
   type CaseManifest,
   type PhotoPair,
   type MatchedLine,
+  type MoneyTotal,
   type PullListView,
   type SqlDriver,
   type TagLookup,
@@ -48,6 +53,26 @@ import {
   type OpenJobRow,
 } from './read-model.ts'
 import { dayAccount, type DayAccount } from './hisaab.ts'
+import {
+  assetEarnings,
+  customerForJob,
+  customersByBalance,
+  customerView,
+  khataLabels,
+  moneyStrip,
+  paymentLine,
+  paymentQr,
+  recordEntry,
+  recordTurnedAway,
+  setPaymentLine,
+  setPaymentQr,
+  turnedAwayThisMonth,
+  type AssetEarnings,
+  type CustomerListRow,
+  type CustomerView,
+  type MoneyStrip,
+} from './khata.ts'
+import { STR } from '../strings.ts'
 import { buildParchi } from '../parchi.ts'
 import { buildProveIt } from '../prove-it.ts'
 import { statusSentence } from '../status.ts'
@@ -485,12 +510,13 @@ export class DemoStore {
       presence: string
       health: string
       serial_number: string | null
+      product_id: string | null
       location_name: string | null
       job_label: string | null
       tag_code: string | null
     }>(
       `select a.id, a.asset_code, coalesce(p.display_name, a.display_name) as display_name,
-              p.category, a.presence, a.health, a.serial_number,
+              p.category, a.presence, a.health, a.serial_number, a.product_id,
               l.name as location_name, j.label as job_label, t.tag_code
          from assets a
          left join products   p on p.id = a.product_id
@@ -524,6 +550,7 @@ export class DemoStore {
       locationName: row.location_name,
       jobLabel: row.job_label,
       serial: row.serial_number,
+      productId: row.product_id,
       tagCode: row.tag_code,
       history,
     }
@@ -711,6 +738,189 @@ export class DemoStore {
    *  reviewable — live or finished. */
   hasSummary(jobId: string): boolean {
     return lastSessionRecord(this.db, jobId) !== null
+  }
+
+  // ---- the money book (Phase B) -----------------------------------------
+  // Thin doors onto khata.ts: every rule lives there (and in @papa/core's
+  // ledger.ts) where plain Node can assert it; the store only binds the
+  // database, the clock and the active string table.
+
+  /** Every customer with their projected balance, biggest debt first. */
+  customers(): CustomerListRow[] {
+    return customersByBalance(this.db)
+  }
+
+  /** One customer's whole khata page, or null. */
+  customer(id: string): CustomerView | null {
+    return customerView(this.db, id)
+  }
+
+  /** The Today board's money strip, from the local book only. */
+  moneyStrip(nowMs: number = Date.now()): MoneyStrip {
+    return moneyStrip(this.db, nowMs)
+  }
+
+  /**
+   * Money received — a PAST FACT, written as a negative line. The method the
+   * cash arrived by rides in the note, beside whatever the desk added.
+   */
+  recordPayment(
+    customerId: string,
+    amountMinor: number,
+    method: string,
+    note: string | null,
+  ): void {
+    recordEntry(this.db, {
+      orgId: this.seed.orgId,
+      customerId,
+      kind: 'payment',
+      amountMinor: -Math.abs(amountMinor),
+      note: note && note.trim().length > 0 ? `${method} — ${note.trim()}` : method,
+      createdAt: Date.now(),
+    })
+  }
+
+  /** The customer a job belongs to — how the dock finds the khata. Null when
+   *  the job has no customer wired, and the charge buttons then never render. */
+  customerForJob(jobId: string): { id: string; name: string } | null {
+    return customerForJob(this.db, jobId)
+  }
+
+  /**
+   * The dock's "charge client": a damage/extras charge agreed at the counter,
+   * written onto the job's customer. Returns false — writing nothing — when
+   * no customer is wired, because a charge with no khata to land in is money
+   * recorded into a void.
+   */
+  chargeClient(jobId: string, amountMinor: number, note: string | null): boolean {
+    const customer = this.customerForJob(jobId)
+    if (!customer || amountMinor <= 0) return false
+    recordEntry(this.db, {
+      orgId: this.seed.orgId,
+      customerId: customer.id,
+      kind: 'damage_charge',
+      amountMinor,
+      jobId,
+      note,
+      createdAt: Date.now(),
+    })
+    return true
+  }
+
+  /**
+   * The late-fee DRAFT for an overdue return: days late × the day rates of
+   * what is still out on the job. Null unless the job is actually overdue
+   * with a customer to charge — the sheet must never open on a guess. The
+   * figure is a draft the owner edits and confirms; nothing here writes.
+   */
+  lateFeeDraftFor(
+    jobId: string,
+    nowMs: number = Date.now(),
+  ): { daysLate: number; dueLabel: string; perDay: MoneyTotal; draft: MoneyTotal } | null {
+    const job = this.job(jobId)
+    if (!job) return null
+    const due = dueStatus(job.expectedBack, nowMs)
+    if (due.state !== 'overdue' || !due.daysLate) return null
+    if (!this.customerForJob(jobId)) return null
+    const rates = this.db
+      .all<{ day_rate_minor: number | null }>(
+        `select r.day_rate_minor from assets a
+           left join product_rates r on r.product_id = a.product_id
+          where a.current_job_id = ? and a.presence in ('out', 'in_transit')`,
+        [jobId],
+      )
+      .map((r) => (r.day_rate_minor === null ? null : Number(r.day_rate_minor)))
+    return {
+      daysLate: due.daysLate,
+      dueLabel: due.label,
+      perDay: lateFeeDraft(1, rates),
+      draft: lateFeeDraft(due.daysLate, rates),
+    }
+  }
+
+  /** The confirmed late fee — the owner's figure, not the draft's. */
+  recordLateFee(jobId: string, amountMinor: number, note: string | null): boolean {
+    const customer = this.customerForJob(jobId)
+    if (!customer || amountMinor <= 0) return false
+    recordEntry(this.db, {
+      orgId: this.seed.orgId,
+      customerId: customer.id,
+      kind: 'late_fee',
+      amountMinor,
+      jobId,
+      note,
+      createdAt: Date.now(),
+    })
+    return true
+  }
+
+  /** The "send balance" card for one customer, in the app's language, with
+   *  the payment line under it when one is configured. */
+  balanceText(customerId: string): string | null {
+    const c = this.customer(customerId)
+    if (!c) return null
+    return balanceCardText(
+      {
+        customerName: c.name,
+        houseName: this.seed.houseName,
+        entries: c.entries,
+        paymentLine: paymentLine(this.db),
+      },
+      khataLabels(STR),
+    )
+  }
+
+  /** The month's statement for one customer — WhatsApp-forwardable text. */
+  statementText(customerId: string, nowMs: number = Date.now()): string | null {
+    const c = this.customer(customerId)
+    if (!c) return null
+    return monthlyStatementText(
+      {
+        customerName: c.name,
+        houseName: this.seed.houseName,
+        entries: c.entries,
+        nowMs,
+        paymentLine: paymentLine(this.db),
+      },
+      khataLabels(STR),
+    )
+  }
+
+  /** What one unit has earned, and how far it has paid for itself. */
+  assetEarnings(assetId: string): AssetEarnings {
+    return assetEarnings(this.db, assetId)
+  }
+
+  /** The demand this product's shortage turned away this month. */
+  turnedAwayFor(
+    productId: string,
+    nowMs: number = Date.now(),
+  ): { times: number; units: number } {
+    return turnedAwayThisMonth(this.db, productId, nowMs)
+  }
+
+  /** Persist the shortages of an answered kit list at the moment the answer
+   *  is USED — reply copied, or a job made from it. See khata.ts. */
+  recordTurnedAway(summary: AvailabilitySummary, nowMs: number = Date.now()): number {
+    return recordTurnedAway(this.db, summary.lines, nowMs)
+  }
+
+  /** 'JazzCash: 0300 1234567' — or null; the money documents omit it then. */
+  paymentLine(): string | null {
+    return paymentLine(this.db)
+  }
+
+  setPaymentLine(value: string | null): void {
+    setPaymentLine(this.db, value)
+  }
+
+  /** The payment QR as a data URL, or null. This device only. */
+  paymentQr(): string | null {
+    return paymentQr(this.db)
+  }
+
+  setPaymentQr(dataUrl: string | null): void {
+    setPaymentQr(this.db, dataUrl)
   }
 }
 
