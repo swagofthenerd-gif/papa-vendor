@@ -74,17 +74,16 @@ for a bounce the house did not cause. (MAY block pins the surviving
 clock.) The `no-adjustment-door` finding stands: no screen writes a
 reversal yet.
 
-### 5. The payback bar counts damage recovery as earnings — `payback-counts-damage`
+### 5. The payback bar counts damage recovery as earnings — FIXED
 
-`assetEarnings` sums `charge + late_fee + damage_charge`. The FX9 that
-cracked its handle "earned" Rs 150,000 of repair recovery, and its payback
-bar celebrates accordingly. A camera that gets broken often will look like
-the best performer in the fleet.
-
-*Repro:* JAN block — `earnedMinor` includes the Rs 150,000 damage line.
-
-*Fix direction:* keep damage in the customer's khata but out of the
-asset's payback figure (or show it as a separate strand of the bar).
+Was `payback-counts-damage`. `assetEarnings` now sums rental money only
+(`charge + late_fee`); damage stays on the customer's khata but never
+inflates the asset's bar, and — POLICY (owner may overrule) — a charge a
+`reversal` later voided stops counting too, so a charged-then-returned
+item keeps no phantom earnings. **The server's `asset_earnings` view
+(`db/migrations/0017_money_book.sql`) still sums `damage_charge` and
+knows no reversals — follow-up migration needed to match.** (JAN and MAR
+blocks pin the honest figure; `khata.test.mjs` pins both exclusions.)
 
 ### 6. Same-millisecond ledger ties can flip the running balance — FIXED
 

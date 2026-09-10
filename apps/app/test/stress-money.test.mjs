@@ -157,11 +157,12 @@ describe('charge-from-the-dock versus a shortfall that heals (report finding)', 
     assert.equal(trail.assetId, 'asset-fx6-3')
     assert.equal(trail.jobId, 'job-doc')
 
-    // PIN 3: the payback bar now counts the damage money as earnings for
-    // an item that is back on the shelf.
+    // PIN 3 (flipped with the payback-counts-damage fix): the payback bar
+    // does NOT count the dock charge — damage recovery is not rental
+    // earnings, so an item back on the shelf shows no phantom 100% bar.
     const earnings = assetEarnings(db, 'asset-fx6-3')
-    assert.equal(earnings.earnedMinor, fx6.replacementMinor)
-    assert.equal(earnings.paybackPct, 100, 'one dock charge = a 100% "paid for itself" bar')
+    assert.equal(earnings.earnedMinor, 0)
+    assert.equal(earnings.paybackPct, 0)
   })
 })
 

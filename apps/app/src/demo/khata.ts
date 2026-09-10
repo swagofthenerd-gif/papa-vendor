@@ -249,7 +249,9 @@ export function moneyStrip(db: SqlDriver, nowMs: number): MoneyStrip {
 }
 
 export interface AssetEarnings {
-  /** Charge-side ledger money carrying this asset's id. */
+  /** RENTAL money carrying this asset's id: charge + late_fee, minus
+   *  anything a reversal later voided. Damage recovery is deliberately
+   *  not in here — see assetEarnings. */
   earnedMinor: number
   /** Distinct jobs those lines belong to. */
   jobs: number
@@ -259,7 +261,18 @@ export interface AssetEarnings {
   paybackPct: number | null
 }
 
-/** What one unit has earned, from the lines that name it. */
+/**
+ * What one unit has earned, from the lines that name it.
+ *
+ * DAMAGE IS NOT EARNINGS. A damage_charge stays on the customer's khata,
+ * but a camera that gets broken often must not look like the fleet's best
+ * performer — the payback bar celebrates rental money only (the year
+ * report's `payback-counts-damage`). POLICY (owner may overrule):
+ * corrected charges are out too — a line a 'reversal' later voided never
+ * counts, so a charged-then-returned item does not keep phantom earnings.
+ * The SERVER's asset_earnings view (db/migrations/0017) still sums damage
+ * and knows no reversals: follow-up migration, noted in the year doc.
+ */
 export function assetEarnings(db: SqlDriver, assetId: string): AssetEarnings {
   const row = db.get<{ total: number | null; jobs: number }>(
     // count(distinct job_id) skips nulls: a line with no job still earns,
@@ -267,7 +280,9 @@ export function assetEarnings(db: SqlDriver, assetId: string): AssetEarnings {
     `select sum(amount_minor) as total,
             count(distinct job_id) as jobs
        from customer_ledger_entries
-      where asset_id = ? and kind in ('charge', 'late_fee', 'damage_charge')`,
+      where asset_id = ? and kind in ('charge', 'late_fee')
+        and id not in (select reversal_of from customer_ledger_entries
+                        where reversal_of is not null)`,
     [assetId],
   )
   const rate = db.get<{ replacement_minor: number | null }>(

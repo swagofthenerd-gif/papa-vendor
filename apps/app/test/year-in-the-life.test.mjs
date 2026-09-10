@@ -941,12 +941,13 @@ describe('a year in the life of the rental house', () => {
     closeJob(j1.id)
     jobBack(j1b.id, 'cust-bilal', at(4, -3), { k: 4, d: -3, chargeRs: 20_000, payRs: 20_000 })
 
-    // The payback bar now counts the Rs 150,000 damage RECOVERY as
-    // 'earnings' — the bar celebrates a repair bill. Finding `payback-counts-damage`.
+    // The payback bar counts RENTAL money only: the Rs 150,000 damage
+    // RECOVERY stays on Bilal's khata but never inflates the camera's
+    // earnings — a repair bill is not a celebration. (Was finding
+    // `payback-counts-damage`.)
     const earnings = assetEarnings(db, 'asset-fx9-1')
-    assert.equal(earnings.earnedMinor, rs(60_000 + 45_000 + 35_000 + 150_000))
+    assert.equal(earnings.earnedMinor, rs(60_000 + 45_000 + 35_000))
     assert.equal(earnings.jobs, 3)
-    finding('payback-counts-damage')
 
     // Farhan's last job — it will never come back (see FEB).
     const f1 = jobOut('Music video — night shoot', 'cust-farhan',
@@ -1042,10 +1043,11 @@ describe('a year in the life of the rental house', () => {
 
   // -------------------------------------------------------------- MAR (k=6)
   test('MAR — Ramzan slowdown: what did each camera earn, and what cannot be asked', () => {
-    // Per-asset earnings answer cleanly — for one asset at a time.
+    // Per-asset earnings answer cleanly — for one asset at a time. Rental
+    // money only: January's Rs 150,000 damage recovery is not in the bar.
     const fx9 = assetEarnings(db, 'asset-fx9-1')
-    assert.equal(fx9.earnedMinor, rs(290_000))
-    assert.equal(fx9.paybackPct, Math.round((rs(290_000) / rs(3_500_000)) * 100))
+    assert.equal(fx9.earnedMinor, rs(140_000))
+    assert.equal(fx9.paybackPct, Math.round((rs(140_000) / rs(3_500_000)) * 100))
 
     // Dead stock: the unpriced tripods earned nothing and have no payback
     // bar — honest. But NOTHING ranks the fleet or reports idle days; the
@@ -1324,7 +1326,6 @@ describe('a year in the life of the rental house', () => {
         'no-swap-flow',
         'no-terminal-asset-state',
         'no-utilization-read',
-        'payback-counts-damage',
         'turnaway-blind-to-commitments',
         'waived-fee-invisible',
         'write-off-illegible',

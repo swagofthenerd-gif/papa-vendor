@@ -261,6 +261,45 @@ describe('assetEarnings', () => {
     assert.equal(e.paybackPct, null)
   })
 
+  test('damage recovery is not earnings: the bar celebrates rental money only', () => {
+    const before = assetEarnings(db, 'asset-fx9-1').earnedMinor
+    recordEntry(db, {
+      orgId: seed.orgId,
+      customerId: 'cust-bilal',
+      kind: 'damage_charge',
+      amountMinor: rs(150_000),
+      assetId: 'asset-fx9-1',
+      note: 'Top handle repair',
+      createdAt: Date.now(),
+    })
+    // On the khata, yes; on the payback bar, never — a camera that gets
+    // broken often must not look like the fleet's best performer.
+    assert.equal(assetEarnings(db, 'asset-fx9-1').earnedMinor, before)
+  })
+
+  test('a reversed charge stops counting the moment the reversal names it', () => {
+    const before = assetEarnings(db, 'asset-fx9-1').earnedMinor
+    const chargeId = recordEntry(db, {
+      orgId: seed.orgId,
+      customerId: 'cust-bilal',
+      kind: 'charge',
+      amountMinor: rs(20_000),
+      assetId: 'asset-fx9-1',
+      createdAt: Date.now(),
+    })
+    assert.equal(assetEarnings(db, 'asset-fx9-1').earnedMinor, before + rs(20_000))
+    recordEntry(db, {
+      orgId: seed.orgId,
+      customerId: 'cust-bilal',
+      kind: 'reversal',
+      amountMinor: -rs(20_000),
+      assetId: 'asset-fx9-1',
+      reversalOf: chargeId,
+      createdAt: Date.now(),
+    })
+    assert.equal(assetEarnings(db, 'asset-fx9-1').earnedMinor, before)
+  })
+
   test('payments against the same asset id do not subtract from earnings', () => {
     const before = assetEarnings(db, 'asset-fx9-1').earnedMinor
     recordEntry(db, {
