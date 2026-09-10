@@ -115,6 +115,13 @@ tests pin the default instead of the accident.
   (`chargedButReturned` / `recordReversalOf` in `demo/khata.ts`; pinned
   in `stress-money.test.mjs`.)
 
+- **Rescan-after-restart duplicate history rows — RESOLVED-with-default.**
+  The write stays (append-only truth; the per-session dedupe honestly
+  dies with the process), but the asset history view collapses
+  consecutive same-event/same-job rows into one row with a "×2" marker
+  (`collapseHistory` in `demo/read-model.ts`; pinned in
+  `stress-registry.test.mjs`).
+
 ## (b) Missing features, ranked by how often the year hit the gap
 
 Ranked by number of months the simulation ran into the wall, worst first.

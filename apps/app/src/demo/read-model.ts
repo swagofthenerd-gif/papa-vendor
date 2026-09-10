@@ -486,6 +486,35 @@ export function sessionScanFacts(
   return { recorded, assumed, unknownTags }
 }
 
+/**
+ * Collapse an asset history's echoes for display.
+ *
+ * A rescan after a device kill legitimately writes a second op (the
+ * per-session dedupe died with the process; the projection stays right
+ * regardless — pinned in stress-registry.test.mjs). POLICY (owner may
+ * overrule): the WRITE stays — the queue is append-only truth — but the
+ * history VIEW folds consecutive rows repeating the same event on the
+ * same job into one row with a count, rendered as a "×2" marker, so a
+ * restart's echo reads as one return instead of two movements.
+ *
+ * Consecutive-only on purpose: a genuine out → in → out again on the same
+ * job alternates events and never folds.
+ */
+export function collapseHistory<T extends { event: string; jobLabel: string | null }>(
+  rows: T[],
+): (T & { times: number })[] {
+  const out: (T & { times: number })[] = []
+  for (const r of rows) {
+    const prev = out[out.length - 1]
+    if (prev && prev.event === r.event && prev.jobLabel === r.jobLabel) {
+      prev.times++
+      continue
+    }
+    out.push({ ...r, times: 1 })
+  }
+  return out
+}
+
 export interface SessionRecord {
   id: string
   jobId: string

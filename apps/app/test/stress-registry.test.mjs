@@ -29,6 +29,7 @@ import { LOCAL_SCHEMA } from '@papa/core'
 import { seedDemo } from '../src/demo/seed.ts'
 import { SessionRegistry } from '../src/demo/sessions.ts'
 import {
+  collapseHistory,
   decodeScanOps,
   lastSessionRecord,
   sessionScanFacts,
@@ -240,12 +241,22 @@ describe('the kill: a second registry over the same database', () => {
     const r = revived.session.addManually('asset-fx6-3', 'check_in')
     assert.equal(r.outcome, 'accepted', 'manual adds never flag off-list — see comment above')
     const ops = decodeScanOps(db).filter((op) => op.assetId === 'asset-fx6-3')
-    assert.equal(ops.length, 2, 'two check_in ops across the kill: history noise, not wrong inventory')
+    assert.equal(ops.length, 2, 'two check_in ops across the kill: append-only truth, both kept')
     assert.notEqual(ops[0].sessionId, ops[1].sessionId)
     assert.equal(
       db.get(`select presence from assets where id = 'asset-fx6-3'`).presence,
       'here',
       'the projection stays right regardless',
     )
+
+    // RESOLVED-with-default: the queue keeps both ops, but the history
+    // VIEW collapses the restart's echo — consecutive same-event/same-job
+    // rows fold into one row with a ×2 marker, the way the asset page
+    // renders them. POLICY (owner may overrule); see collapseHistory.
+    const story = collapseHistory(
+      ops.reverse().map((op) => ({ event: op.eventType, jobLabel: op.jobId })),
+    )
+    assert.equal(story.length, 1, 'one return, told once')
+    assert.equal(story[0].times, 2, 'wearing its ×2 honestly')
   })
 })

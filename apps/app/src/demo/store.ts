@@ -37,6 +37,7 @@ import { demoCatalogue, seedDemo, type DemoSeed } from './seed.ts'
 import { SessionRegistry, type SessionMode } from './sessions.ts'
 import {
   assetFacts,
+  collapseHistory,
   createJob,
   dayRateFor,
   decodeScanOps,
@@ -566,17 +567,21 @@ export class DemoStore {
     )
     if (!row) return null
 
-    const history: AssetHistoryRow[] = decodeScanOps(this.db)
-      .filter((op) => op.assetId === assetId)
-      .reverse() // newest first — it reads as a story, latest chapter on top
-      .map((op) => ({
-        id: op.outboxId,
-        event: op.eventType,
-        at: new Date(op.createdAt).toLocaleString(),
-        entryMethod: op.entryMethod,
-        jobLabel: op.jobId ? (this.job(op.jobId)?.label ?? null) : null,
-        actor: this.seed.userName,
-      }))
+    // collapseHistory folds a restart's rescan echo into one row with a
+    // ×N marker — the queue keeps every op; only the story is tidied.
+    const history: AssetHistoryRow[] = collapseHistory(
+      decodeScanOps(this.db)
+        .filter((op) => op.assetId === assetId)
+        .reverse() // newest first — it reads as a story, latest chapter on top
+        .map((op) => ({
+          id: op.outboxId,
+          event: op.eventType,
+          at: new Date(op.createdAt).toLocaleString(),
+          entryMethod: op.entryMethod,
+          jobLabel: op.jobId ? (this.job(op.jobId)?.label ?? null) : null,
+          actor: this.seed.userName,
+        })),
+    )
 
     return {
       id: row.id,
