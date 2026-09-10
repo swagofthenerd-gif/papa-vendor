@@ -743,17 +743,20 @@ set local papa.user_id = 'ffffffff-ffff-7fff-8fff-ffffffffffff';
 -- ---------------------------------------------------------------------------
 -- Per-asset earnings (B6): live charge-side lines only
 -- ---------------------------------------------------------------------------
+-- 0018 D7 narrowed the view to rental money only: the damage charge stays
+-- on the khata but out of the earnings, so a camera that gets broken often
+-- can never read as the fleet's best performer.
 select is(
   (select earned_minor from asset_earnings
     where asset_id = '30000000-0000-7000-8000-000000000001'),
-  9200000::bigint,
-  'the FX9 earned the corrected charge + the damage charge; the superseded 10000000 is gone');
+  9000000::bigint,
+  'the FX9 earned the corrected charge; the superseded 10000000 is gone and the damage charge never counts (0018)');
 
 select is(
   (select earning_entry_count from asset_earnings
     where asset_id = '30000000-0000-7000-8000-000000000001'),
-  2,
-  'two live earning lines');
+  1,
+  'one live earning line — the damage charge is khata money, not earnings (0018)');
 
 -- ---------------------------------------------------------------------------
 -- The job link: money lands on the right statement
