@@ -35,6 +35,7 @@ import {
   LOCAL_SCHEMA,
   ScanSession,
   PhotoStore,
+  allocateUnitCodes,
   lookupTag,
   dueStatus,
   lateFeeDraft,
@@ -355,14 +356,20 @@ describe('a year in the life of the rental house', () => {
     finding('import-apply-welded')
     applyPlan(plan)
 
-    // The import gave the new FX9 unit the code FX9-01 — the SAME visible
-    // code as the seeded FX9-01. Nothing objects. Two different cameras now
-    // answer to one sticker code in manual search. Finding `duplicate-asset-code`.
+    // The import used to give the new FX9 unit the code FX9-01 — the SAME
+    // visible code as the seeded FX9-01, so two cameras answered to one
+    // sticker in manual search. Fixed: allocateUnitCodes collision-checks
+    // the file's codes against the shelf and CONTINUES numbering, so the
+    // imported unit lands as FX9-03 and every visible code stays unique.
     const dupes = db.get(
       `select count(*) as n from assets where asset_code = 'FX9-01'`,
     )
-    assert.equal(Number(dupes.n), 2)
-    finding('duplicate-asset-code')
+    assert.equal(Number(dupes.n), 1)
+    const importedFx9 = db.get(
+      `select asset_code from assets
+        where id like 'asset-imported-%' and display_name = 'Sony FX9'`,
+    )
+    assert.equal(importedFx9.asset_code, 'FX9-03')
 
     // --- Tagging the imported rack ----------------------------------------
     const binder = new ScanSession(db, { deviceId: 'sim-phone', now: () => at(0, -3) })
@@ -1280,7 +1287,6 @@ describe('a year in the life of the rental house', () => {
         'clock-welds',
         'debt-age-resets-on-bounce',
         'double-promise',
-        'duplicate-asset-code',
         'import-apply-welded',
         'latefee-after-scan-zero',
         'no-add-customer',
@@ -1332,6 +1338,11 @@ function applyPlan(plan) {
   let products = 0
   db.transaction(() => {
     const idFor = new Map()
+    const takenCodes = new Set(
+      db
+        .all(`select asset_code from assets where asset_code is not null`)
+        .map((r) => r.asset_code),
+    )
     for (const { row, verdict } of plan.rows) {
       if (verdict.kind === 'rejected' || verdict.kind === 'ambiguous') continue
       let productId
@@ -1352,9 +1363,13 @@ function applyPlan(plan) {
           products++
         }
       }
+      const codes = row.code
+        ? allocateUnitCodes(takenCodes, row.code, row.quantity)
+        : null
       for (let i = 1; i <= row.quantity; i++) {
         const assetId = `asset-imported-${batch === 1 ? '' : `${batch}-`}${slug(row.name)}-${row.line}-${i}`
-        const code = row.code ? `${row.code}-${String(i).padStart(2, '0')}` : assetId
+        const code = codes ? codes[i - 1] : assetId
+        if (codes) takenCodes.add(code)
         db.exec(
           `insert into assets
              (id, org_id, product_id, asset_code, serial_number, display_name,

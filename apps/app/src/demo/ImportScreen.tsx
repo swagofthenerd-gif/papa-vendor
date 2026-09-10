@@ -15,7 +15,9 @@ import { STR } from '../strings.ts'
  * a tick.
  */
 export function ImportScreen({ store }: { store: DemoStore }) {
-  const [done, setDone] = useState<{ products: number; units: number } | null>(null)
+  const [done, setDone] = useState<
+    { products: number; units: number; renumbered: number } | null
+  >(null)
 
   const onApply = useCallback(
     (plan: ImportPlan) => setDone(store.applyImport(plan)),
@@ -27,6 +29,12 @@ export function ImportScreen({ store }: { store: DemoStore }) {
       <div className="empty">
         <Icon name="check-circle" size={40} />
         <p>{STR.labelsAddedAcross(done.units, done.products)}</p>
+        {/* The honest line: unit codes that would have duplicated a sticker
+            code already on the shelf were continued past it instead — the
+            vendor should know the file's numbering and the shelf's differ. */}
+        {done.renumbered > 0 ? (
+          <p className="muted">{STR.labelsCodesContinued(done.renumbered)}</p>
+        ) : null}
         <p className="muted">{STR.labelsYourNamesAreNowMatched}</p>
         <div className="session-actions">
           <button className="btn btn-primary btn-block" onClick={() => go({ name: 'gear' })}>

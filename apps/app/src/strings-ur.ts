@@ -423,6 +423,9 @@ export const STR_UR: StrTable = {
   labelsAddedAcross: (units: number, products: number): string =>
     `${units} ${cheezein(units)} add ho ${units === 1 ? 'gayi' : 'gayin'}, ` +
     `${products} ${products === 1 ? 'naya product' : 'naye products'} mein.`,
+  labelsCodesContinued: (n: number): string =>
+    `${n} asset code pehle se istemaal mein ${n === 1 ? 'tha' : 'thay'} — ` +
+    'duplicate banane ki bajaye numbering aage barhai gayi.',
   labelsYourNamesAreNowMatched:
     'Ab kit-list reader client ke message ko inhi naamon se milata hai.',
   labelsSeeTheGear: 'Saaman dekhein',

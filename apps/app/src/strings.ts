@@ -452,6 +452,9 @@ const STR_EN = {
     'Rows marked “need a look” are added as their own product rather than merged into a similar one. Nothing here overwrites what you already have.',
   labelsAddedAcross: (units: number, products: number): string =>
     `Added ${units} item${s(units)} across ${products} new product${s(products)}.`,
+  labelsCodesContinued: (n: number): string =>
+    `${n} asset code${s(n)} ${n === 1 ? 'was' : 'were'} already in use — ` +
+    'numbering continued instead of duplicating a sticker code.',
   labelsYourNamesAreNowMatched:
     'Your names are now what the kit-list reader matches a client’s message against.',
   labelsSeeTheGear: 'See the gear',

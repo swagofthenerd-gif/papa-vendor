@@ -26,7 +26,7 @@ export type { ParsedLine, MatchedLine, CatalogueItem, MatchConfidence } from './
 export type { PullListItem, PullListView, ShelfGroup } from './pull-list.ts'
 export { caseManifest, hasContents } from './containment.ts'
 export type { CaseManifest, ContainedChild, ContainmentKind } from './containment.ts'
-export { parseCsv, guessMapping, readRows, planImport } from './csv-import.ts'
+export { parseCsv, guessMapping, readRows, planImport, allocateUnitCodes } from './csv-import.ts'
 export type {
   CsvTable, ColumnMapping, FieldName, ImportRow, ImportPlan, ReviewedRow, RowVerdict,
 } from './csv-import.ts'

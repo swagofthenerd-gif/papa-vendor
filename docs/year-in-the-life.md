@@ -15,22 +15,19 @@ to [`vendor-dream-plan.md`](vendor-dream-plan.md) phases A–E.
 
 ## (a) Bugs found, with repro
 
-### 1. Two cameras answering to one code after an import — `duplicate-asset-code`
+Sections here are removed as their bugs are fixed (per the contract above);
+each fix leaves a one-line record and the test now pins the CORRECT
+behaviour where the wall used to be.
 
-The CSV import derives unit codes as `CODE-01`, `CODE-02`… from the file's
-code column. Importing a row `Sony FX9,1,FX9` into a house that already has
-a seeded `FX9-01` creates a **second asset with the visible code `FX9-01`**.
-Nothing warns; there is no uniqueness rule on `asset_code`. Manual search
-("can't scan it" path) now shows two identical rows and the tech picks one
-at coin-flip.
+### 1. Two cameras answering to one code after an import — FIXED
 
-*Repro:* seed the demo, apply an import plan whose row code prefix matches
-an existing product's, `select count(*) from assets where asset_code =
-'FX9-01'` → 2. (SEP block.)
-
-*Fix direction:* the import planner should collision-check codes against
-existing assets and continue numbering (`FX9-03`), the same way it already
-refuses to merge ambiguous names.
+Was `duplicate-asset-code`: the CSV import derived unit codes as `CODE-01`,
+`CODE-02`… per file, so importing `Sony FX9,1,FX9` beside a seeded `FX9-01`
+minted a second asset with the same visible sticker code. Fixed:
+`allocateUnitCodes` (`packages/core/src/csv-import.ts`) collision-checks the
+file's codes against every code already on an asset and **continues
+numbering** (`FX9-03`), and the import result screen says honestly how many
+codes were renumbered. (SEP block now pins uniqueness.)
 
 ### 2. The late-fee draft collapses to zero if the gear is scanned in first — `latefee-after-scan-zero`
 
