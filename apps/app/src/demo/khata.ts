@@ -1,13 +1,17 @@
 import {
   CHARGE_KINDS,
+  dueStatus,
+  lateFeeDraft,
   monthBounds,
   projectLedger,
   paybackPercent,
   type KhataStrings,
   type LedgerEntryKind,
   type LedgerEntryView,
+  type MoneyTotal,
   type SqlDriver,
 } from '@papa/core'
+import { decodeScanOps, lastSessionRecord, openJob } from './read-model.ts'
 import type { StrTable } from '../strings.ts'
 
 /**
@@ -301,6 +305,83 @@ export function assetEarnings(db: SqlDriver, assetId: string): AssetEarnings {
     jobs: Number(row?.jobs ?? 0),
     replacementMinor: replacement,
     paybackPct: paybackPercent(earned, replacement),
+  }
+}
+
+export interface LateFeeDraftView {
+  daysLate: number
+  dueLabel: string
+  perDay: MoneyTotal
+  draft: MoneyTotal
+}
+
+/**
+ * The late-fee draft for an overdue return — priced from the RETURN, never
+ * from whatever happens to still be out.
+ *
+ * The dock's natural order — the tech scans everything in, THEN the desk
+ * opens the charge sheet — used to collapse the draft to an unpriced zero,
+ * because it priced off "still out on this job" and the scan-in had just
+ * emptied that set. The owner saw no number exactly when he needed one,
+ * and nothing said the order of operations mattered.
+ *
+ * The draft now prices the union of what is still out and what CAME BACK
+ * in the job's most recent return session (the session knows), and the
+ * days-late clock freezes at the moment the last item was scanned home —
+ * a fee drafted an hour after the return must not keep growing while the
+ * sheet sits open at the desk. Still a DRAFT: the owner edits and
+ * confirms; nothing here writes.
+ */
+export function lateFeeDraftFor(
+  db: SqlDriver,
+  jobId: string,
+  nowMs: number,
+): LateFeeDraftView | null {
+  const job = openJob(db, jobId)
+  if (!job) return null
+  if (!customerForJob(db, jobId)) return null
+
+  const outIds = db
+    .all<{ id: string }>(
+      `select id from assets
+        where current_job_id = ? and presence in ('out', 'in_transit')`,
+      [jobId],
+    )
+    .map((r) => r.id)
+
+  // What the most recent return session brought home, and when.
+  const rec = lastSessionRecord(db, jobId)
+  const returned: string[] = []
+  let returnedAt: number | null = null
+  if (rec && rec.mode === 'in') {
+    for (const op of decodeScanOps(db)) {
+      if (op.sessionId !== rec.id || op.eventType !== 'check_in' || !op.assetId) continue
+      returned.push(op.assetId)
+      returnedAt = Math.max(returnedAt ?? 0, op.createdAt)
+    }
+  }
+
+  // Frozen at the return once everything is home; live while gear is out.
+  const clockMs = outIds.length === 0 && returnedAt !== null ? returnedAt : nowMs
+  const due = dueStatus(job.expectedBack, clockMs)
+  if (due.state !== 'overdue' || !due.daysLate) return null
+
+  const rates = [...new Set([...outIds, ...returned])].map((id) => {
+    const r = db.get<{ day_rate_minor: number | null }>(
+      `select r.day_rate_minor from assets a
+         left join product_rates r on r.product_id = a.product_id
+        where a.id = ?`,
+      [id],
+    )
+    return r?.day_rate_minor === null || r?.day_rate_minor === undefined
+      ? null
+      : Number(r.day_rate_minor)
+  })
+  return {
+    daysLate: due.daysLate,
+    dueLabel: due.label,
+    perDay: lateFeeDraft(1, rates),
+    draft: lateFeeDraft(due.daysLate, rates),
   }
 }
 

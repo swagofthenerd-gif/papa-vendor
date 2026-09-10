@@ -10,9 +10,7 @@ import {
   balanceCardText,
   buildPullList,
   checkAvailability,
-  dueStatus,
   indicativeDayTotal,
-  lateFeeDraft,
   monthlyStatementText,
   matchKitList,
   moneyLabel,
@@ -28,7 +26,6 @@ import {
   type CaseManifest,
   type PhotoPair,
   type MatchedLine,
-  type MoneyTotal,
   type PullListView,
   type SqlDriver,
   type TagLookup,
@@ -60,6 +57,7 @@ import {
   customersByBalance,
   customerView,
   khataLabels,
+  lateFeeDraftFor,
   moneyStrip,
   paymentLine,
   paymentQr,
@@ -71,6 +69,7 @@ import {
   type AssetEarnings,
   type CustomerListRow,
   type CustomerView,
+  type LateFeeDraftView,
   type MoneyStrip,
 } from './khata.ts'
 import { STR } from '../strings.ts'
@@ -843,34 +842,15 @@ export class DemoStore {
   }
 
   /**
-   * The late-fee DRAFT for an overdue return: days late × the day rates of
-   * what is still out on the job. Null unless the job is actually overdue
-   * with a customer to charge — the sheet must never open on a guess. The
-   * figure is a draft the owner edits and confirms; nothing here writes.
+   * The late-fee DRAFT for an overdue return — priced from what came back
+   * in the return session as well as what is still out, so the natural
+   * dock order (scan in first, open the sheet second) cannot collapse it
+   * to zero. Null unless the job is actually overdue with a customer to
+   * charge — the sheet must never open on a guess. The figure is a draft
+   * the owner edits and confirms; nothing here writes. See khata.ts.
    */
-  lateFeeDraftFor(
-    jobId: string,
-    nowMs: number = Date.now(),
-  ): { daysLate: number; dueLabel: string; perDay: MoneyTotal; draft: MoneyTotal } | null {
-    const job = this.job(jobId)
-    if (!job) return null
-    const due = dueStatus(job.expectedBack, nowMs)
-    if (due.state !== 'overdue' || !due.daysLate) return null
-    if (!this.customerForJob(jobId)) return null
-    const rates = this.db
-      .all<{ day_rate_minor: number | null }>(
-        `select r.day_rate_minor from assets a
-           left join product_rates r on r.product_id = a.product_id
-          where a.current_job_id = ? and a.presence in ('out', 'in_transit')`,
-        [jobId],
-      )
-      .map((r) => (r.day_rate_minor === null ? null : Number(r.day_rate_minor)))
-    return {
-      daysLate: due.daysLate,
-      dueLabel: due.label,
-      perDay: lateFeeDraft(1, rates),
-      draft: lateFeeDraft(due.daysLate, rates),
-    }
+  lateFeeDraftFor(jobId: string, nowMs: number = Date.now()): LateFeeDraftView | null {
+    return lateFeeDraftFor(this.db, jobId, nowMs)
   }
 
   /** The confirmed late fee — the owner's figure, not the draft's. */

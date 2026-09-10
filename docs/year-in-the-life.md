@@ -29,21 +29,15 @@ file's codes against every code already on an asset and **continues
 numbering** (`FX9-03`), and the import result screen says honestly how many
 codes were renumbered. (SEP block now pins uniqueness.)
 
-### 2. The late-fee draft collapses to zero if the gear is scanned in first — `latefee-after-scan-zero`
+### 2. The late-fee draft collapses to zero if the gear is scanned in first — FIXED
 
-`lateFeeDraftFor` prices the draft off **what is still physically out on
-the job**. The natural dock order — tech scans everything in, THEN the
-desk opens the charge sheet — leaves nothing out, so a 3-days-late job
-drafts *zero, unpriced*. The owner sees no number exactly when he needs
-one. Nothing tells the desk that the order of operations matters.
-
-*Repro:* job overdue 3 days with a Komodo + Ronin out → draft Rs 84,000.
-Scan both in, recompute → `totalMinor 0, priced 0`, `moneyLabel` null.
-(OCT block.)
-
-*Fix direction:* price the draft off what came back **in the return
-session** (the session knows), or snapshot the out-set when the return
-session opens.
+Was `latefee-after-scan-zero`. `lateFeeDraftFor` (now a pure read in
+`khata.ts`, testable under Node) prices the union of what is still out
+and what **came back in the job's most recent return session**, and the
+days-late clock freezes at the last check-in scan — so the natural dock
+order (scan in first, open the sheet second) shows the same Rs 84,000,
+and the fee stops growing while the sheet sits open. (OCT block pins the
+held draft.)
 
 ### 3. A mis-scan cannot be undone; the repair writes false history — `no-scan-undo`
 

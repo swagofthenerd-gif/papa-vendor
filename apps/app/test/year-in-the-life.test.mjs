@@ -77,6 +77,7 @@ import {
   customerView,
   isoDate,
   khataLabels,
+  lateFeeDraftFor,
   moneyStrip,
   recordEntry,
   recordTurnedAway,
@@ -590,37 +591,25 @@ describe('a year in the life of the rental house', () => {
 
     const o2due = dueStatus(iso(1, 2), at(1, 5))
     assert.equal(o2due.daysLate, 3)
-    // The draft the charge sheet would offer — computed, as the store does,
-    // from the day rates of what is STILL OUT on the job:
-    const ratesBefore = db
-      .all(
-        `select r.day_rate_minor from assets a
-           left join product_rates r on r.product_id = a.product_id
-          where a.current_job_id = ? and a.presence in ('out','in_transit')`,
-        [o2.id],
-      )
-      .map((r) => (r.day_rate_minor === null ? null : Number(r.day_rate_minor)))
-    assert.equal(lateFeeDraft(3, ratesBefore).totalMinor, rs(84_000))
+    // The charge sheet's draft with the gear still out: 3 days × the
+    // Komodo + Ronin day rates = Rs 84,000.
+    const draftBefore = lateFeeDraftFor(db, o2.id, at(1, 5))
+    assert.equal(draftBefore.daysLate, 3)
+    assert.equal(draftBefore.draft.totalMinor, rs(84_000))
 
     const o2back = openSession(o2.id, 'in', at(1, 5))
     scanAll(o2back, o2back.expected, 'check_in')
 
-    // Same sheet opened AFTER the tech scanned the gear in: nothing is out,
-    // so the draft collapses to an unpriced zero. The desk must charge the
-    // fee BEFORE scanning — nothing says so. Finding `latefee-after-scan-zero`.
-    const ratesAfter = db
-      .all(
-        `select r.day_rate_minor from assets a
-           left join product_rates r on r.product_id = a.product_id
-          where a.current_job_id = ? and a.presence in ('out','in_transit')`,
-        [o2.id],
-      )
-      .map((r) => (r.day_rate_minor === null ? null : Number(r.day_rate_minor)))
-    const collapsed = lateFeeDraft(3, ratesAfter)
-    assert.equal(collapsed.totalMinor, 0)
-    assert.equal(collapsed.priced, 0)
-    assert.equal(moneyLabel(collapsed), null)
-    finding('latefee-after-scan-zero')
+    // Same sheet opened AFTER the tech scanned the gear in — the natural
+    // dock order. The draft HOLDS: it prices what came back in the return
+    // session and dates the fee from the return scan, not from the
+    // shortfall that just healed, so the desk sees the same Rs 84,000 an
+    // hour later. (Was finding `latefee-after-scan-zero`.)
+    const draftAfter = lateFeeDraftFor(db, o2.id, at(1, 5, 14))
+    assert.equal(draftAfter.daysLate, 3)
+    assert.equal(draftAfter.draft.totalMinor, rs(84_000))
+    assert.equal(draftAfter.draft.priced, 2)
+    assert.notEqual(moneyLabel(draftAfter.draft), null)
 
     post('cust-sana', 'charge', 55_000, { k: 1, d: 5, jobId: o2.id, note: 'Komodo + Ronin, 3 days' })
     post('cust-sana', 'late_fee', 15_000, { k: 1, d: 5, jobId: o2.id, note: '3 days late — reduced' })
@@ -1307,7 +1296,6 @@ describe('a year in the life of the rental house', () => {
       [
         'double-promise',
         'import-apply-welded',
-        'latefee-after-scan-zero',
         'no-add-customer',
         'no-adjustment-door',
         'no-blacklist-or-theft-export',
