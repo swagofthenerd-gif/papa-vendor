@@ -20,13 +20,28 @@ import { STR } from '../strings.ts'
 export function EnquiryScreen({ store }: { store: DemoStore }) {
   const [summary, setSummary] = useState<AvailabilitySummary | null>(null)
   const [creating, setCreating] = useState(false)
+  // The turned-away demand log records ONCE per answered list, at the
+  // moment the answer is USED (reply copied, or a job made) — a pasted
+  // list the owner abandons was a draft, not a turned-away client, and
+  // copying twice is one incident, not two.
+  const [demandLogged, setDemandLogged] = useState(false)
 
   const onPaste = useCallback(
     (text: string) => {
       if (text.trim().length === 0) { setSummary(null); return }
       setSummary(store.checkKitList(text))
+      setDemandLogged(false)
     },
     [store],
+  )
+
+  const logDemand = useCallback(
+    (current: AvailabilitySummary) => {
+      if (demandLogged) return
+      store.recordTurnedAway(current)
+      setDemandLogged(true)
+    },
+    [store, demandLogged],
   )
 
   const onResolve = useCallback(
@@ -53,7 +68,10 @@ export function EnquiryScreen({ store }: { store: DemoStore }) {
     // The reply plus the indicative day-rate line — composed in the store so
     // what is copied and what is previewed are the same text.
     void navigator.clipboard?.writeText(store.replyText(summary)).catch(() => {})
-  }, [store, summary])
+    // Copying the reply is the answer being USED — the shortages in it are
+    // now turned-away demand, and the product pages start counting them.
+    logDemand(summary)
+  }, [store, summary, logDemand])
 
   // What the sheet will actually promise: resolved lines only. Said out loud
   // on the sheet, because a job that silently drops the two unresolved lines
@@ -84,6 +102,9 @@ export function EnquiryScreen({ store }: { store: DemoStore }) {
           linesNote={linesNote}
           onCreate={(input) => {
             store.createJobFromLines(summary.lines, input)
+            // A job made from the list is the other way the answer gets
+            // used — same one-incident rule as the reply copy.
+            logDemand(summary)
             setCreating(false)
             // The new job's home is the board — land on it ready to scan.
             go({ name: 'jobs' })

@@ -126,6 +126,16 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
 
     case 'asset': {
       const asset = store.assetView(view.assetId)
+      // The unit's money facts — ledger earnings, the payback bar, and the
+      // month's turned-away count for its product (the buy signal).
+      const money = asset
+        ? {
+            ...store.assetEarnings(view.assetId),
+            turnedAwayTimes: asset.productId
+              ? store.turnedAwayFor(asset.productId).times
+              : 0,
+          }
+        : null
       return (
         <Shell
           view={view}
@@ -139,6 +149,7 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
         >
           <Asset
             asset={asset}
+            money={money}
             photoPairs={store.photoPairs(view.assetId)}
             onProveIt={() => {
               const text = store.proveItText(view.assetId)

@@ -1,4 +1,5 @@
 import { Icon } from '@papa/icons'
+import { formatRupees } from '@papa/core'
 import { go } from '../nav.ts'
 import { SectionHead } from '../components/Shell.tsx'
 import { StatusBadge } from '../components/StatusBadge.tsx'
@@ -40,8 +41,77 @@ export interface AssetView {
   locationName: string | null
   jobLabel: string | null
   serial: string | null
+  productId: string | null
   tagCode: string | null
   history: AssetHistoryRow[]
+}
+
+/** The money facts of one unit — computed in khata.ts, rendered here. */
+export interface AssetMoney {
+  earnedMinor: number
+  jobs: number
+  replacementMinor: number | null
+  /** Null when the replacement value is unknown — no bar against a
+   *  made-up denominator. NOT clamped: 130% is the celebration itself. */
+  paybackPct: number | null
+  /** How many enquiries this unit's product was turned away from this
+   *  month — the buy signal. */
+  turnedAwayTimes: number
+}
+
+/**
+ * What this unit has EARNED — the sum of the ledger lines that name it —
+ * and how far that has gone toward its replacement value.
+ *
+ * The money.ts honesty rule holds throughout: no replacement value on
+ * record means NO bar, because a payback bar against a made-up denominator
+ * is a confident lie; and past 100% the bar fills and the page says so out
+ * loud — that line is the digest's celebration, earned literally.
+ */
+function AssetMoneySection({ money }: { money: AssetMoney }) {
+  const paidOff = money.paybackPct !== null && money.paybackPct >= 100
+  return (
+    <section className="section">
+      <SectionHead
+        icon="scroll"
+        title={STR.gearMoneyHeading}
+        sub={
+          money.earnedMinor > 0
+            ? STR.gearEarnedAcross(formatRupees(money.earnedMinor), money.jobs)
+            : STR.gearNothingEarnedYet
+        }
+      />
+      {money.paybackPct !== null ? (
+        <div className="payback">
+          <div
+            className="payback-bar"
+            role="img"
+            aria-label={STR.gearPaybackLabel(money.paybackPct)}
+          >
+            <span
+              className="payback-fill"
+              style={{ width: `${Math.min(100, Math.max(0, money.paybackPct))}%` }}
+            />
+          </div>
+          <p className="payback-label">
+            {STR.gearPaybackLabel(money.paybackPct)}
+          </p>
+          {paidOff ? (
+            <p className="payback-paid">
+              <Icon name="check" size={14} /> {STR.gearPaidForItself}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <p className="section-sub">{STR.gearNoReplacementValue}</p>
+      )}
+      {money.turnedAwayTimes > 0 ? (
+        <p className="payback-demand">
+          {STR.gearTurnedAway(money.turnedAwayTimes)}
+        </p>
+      ) : null}
+    </section>
+  )
 }
 
 /** How an entry got into the log, said plainly. */
@@ -62,10 +132,12 @@ const EVENT_LABEL: Record<string, string> = {
 
 export function Asset({
   asset,
+  money,
   photoPairs,
   onProveIt,
 }: {
   asset: AssetView | null
+  money: AssetMoney | null
   photoPairs: PhotoPair[]
   /** Share the alibi card built from this item's local history. */
   onProveIt: () => void
@@ -127,6 +199,8 @@ export function Asset({
       <button className="btn btn-outline btn-block" onClick={onProveIt}>
         <Icon name="send" size={18} /> {STR.gearProveIt}
       </button>
+
+      {money ? <AssetMoneySection money={money} /> : null}
 
       <section className="section">
         <SectionHead

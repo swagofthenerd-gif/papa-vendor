@@ -979,6 +979,30 @@ h2.stamp .h-ico { display: none; }
    column is the one number the list exists to show. */
 .line-code.is-owed { color: var(--ink); font-weight: 800; }
 
+/* The payback bar: how far a unit has paid for itself. An inked frame
+   on the paper, filled with the accent — a ruler line, not a gauge. */
+.payback { margin-top: var(--sp-2); }
+.payback-bar {
+  height: 10px; overflow: hidden;
+  border: var(--line-w) solid var(--line-strong);
+  background: transparent;
+}
+.payback-fill { display: block; height: 100%; background: var(--accent); }
+.payback-label {
+  margin: var(--sp-2) 0 0; color: var(--muted);
+  font-size: var(--fs-xs); font-weight: 600;
+}
+/* Earned in full — the one green sentence this page is allowed. */
+.payback-paid {
+  display: flex; align-items: center; gap: 6px;
+  margin: var(--sp-1) 0 0; color: var(--green-ink);
+  font-size: var(--fs-sm); font-weight: 800;
+}
+.payback-demand {
+  margin: var(--sp-2) 0 0; color: var(--accent-strong);
+  font-size: var(--fs-sm); font-weight: 700;
+}
+
 /* ---- kit list ---------------------------------------------- */
 .enquiry-bar { display: flex; justify-content: flex-end; margin-top: var(--sp-3); }
 

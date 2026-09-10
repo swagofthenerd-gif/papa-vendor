@@ -510,12 +510,13 @@ export class DemoStore {
       presence: string
       health: string
       serial_number: string | null
+      product_id: string | null
       location_name: string | null
       job_label: string | null
       tag_code: string | null
     }>(
       `select a.id, a.asset_code, coalesce(p.display_name, a.display_name) as display_name,
-              p.category, a.presence, a.health, a.serial_number,
+              p.category, a.presence, a.health, a.serial_number, a.product_id,
               l.name as location_name, j.label as job_label, t.tag_code
          from assets a
          left join products   p on p.id = a.product_id
@@ -549,6 +550,7 @@ export class DemoStore {
       locationName: row.location_name,
       jobLabel: row.job_label,
       serial: row.serial_number,
+      productId: row.product_id,
       tagCode: row.tag_code,
       history,
     }
