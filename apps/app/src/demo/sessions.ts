@@ -58,15 +58,22 @@ export class SessionRegistry {
   private readonly db: SqlDriver
   private readonly deviceId: string
   private readonly expectedFor: (jobId: string, mode: SessionMode) => string[]
+  /** The registry's clock — injected by tests, Date.now on a phone. It
+   *  stamps session starts AND rides into every ScanSession it opens, so
+   *  the whole write path can run on a controlled clock (the registry used
+   *  to weld Date.now here, which made it undrivable by a simulation). */
+  private readonly now: () => number
 
   constructor(
     db: SqlDriver,
     deviceId: string,
     expectedFor: (jobId: string, mode: SessionMode) => string[],
+    now: () => number = Date.now,
   ) {
     this.db = db
     this.deviceId = deviceId
     this.expectedFor = expectedFor
+    this.now = now
   }
 
   /**
@@ -90,6 +97,7 @@ export class SessionRegistry {
           deviceId: this.deviceId,
           jobId,
           expected: new Set(expected),
+          now: this.now,
         }),
       }
       this.entries.set(key, entry)
@@ -101,7 +109,7 @@ export class SessionRegistry {
         id: entry.session.id,
         jobId,
         mode,
-        startedAt: Date.now(),
+        startedAt: this.now(),
         expected,
       })
     }

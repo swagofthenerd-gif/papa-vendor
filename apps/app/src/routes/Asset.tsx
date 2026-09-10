@@ -29,6 +29,11 @@ export interface AssetHistoryRow {
   entryMethod: string
   jobLabel: string | null
   actor: string
+  /** Consecutive same-event/same-job rows collapsed into this one — a
+   *  rescan-after-restart echo renders as one row with a ×N marker.
+   *  POLICY (owner may overrule): the queue keeps every op; only the
+   *  story is tidied. See collapseHistory in demo/read-model.ts. */
+  times: number
 }
 
 export interface AssetView {
@@ -238,7 +243,10 @@ export function Asset({
               <li key={h.id} className={h.entryMethod === 'assumed' ? 'is-assumed' : ''}>
                 <span className="hist-dot" aria-hidden="true" />
                 <div className="hist-body">
-                  <span className="hist-event">{EVENT_LABEL[h.event] ?? h.event}</span>
+                  <span className="hist-event">
+                    {EVENT_LABEL[h.event] ?? h.event}
+                    {h.times > 1 ? <span className="code"> ×{h.times}</span> : null}
+                  </span>
                   {h.jobLabel ? <span className="hist-job">{h.jobLabel}</span> : null}
                   <span className="hist-meta">
                     {h.at} · {h.actor} · {METHOD_LABEL[h.entryMethod] ?? h.entryMethod}

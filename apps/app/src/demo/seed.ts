@@ -142,6 +142,14 @@ const JOBS: JobSpec[] = [
   },
 ]
 
+/** Which khata each seeded live job's money lands in — jobs.customer_id,
+ *  the real mirror column (0017/0018), not a demo-only link table. */
+const JOB_CUSTOMER: Record<string, string> = {
+  'job-shan': 'cust-bilal',
+  'job-wedding': 'cust-hamza',
+  'job-doc': 'cust-ayesha',
+}
+
 /**
  * Due dates are RELATIVE to the day the demo opens, as real ISO dates.
  *
@@ -304,9 +312,9 @@ export function seedDemo(db: SqlDriver): DemoSeed {
 
     for (const j of JOBS) {
       db.exec(
-        `insert into jobs (id, org_id, label, contact, expected_back, status)
-         values (?, ?, ?, ?, ?, 'open')`,
-        [j.id, ORG, j.label, j.contact, isoDaysFromNow(j.backInDays)],
+        `insert into jobs (id, org_id, label, contact, expected_back, status, customer_id)
+         values (?, ?, ?, ?, ?, 'open', ?)`,
+        [j.id, ORG, j.label, j.contact, isoDaysFromNow(j.backInDays), JOB_CUSTOMER[j.id] ?? null],
       )
       db.exec(
         `insert into job_meta (job_id, departs_at) values (?, ?)`,
@@ -446,32 +454,21 @@ function seedMoneyBook(db: SqlDriver): void {
   }
 
   // Closed jobs the histories hang off. status 'closed' keeps them off the
-  // Today board (openJobs selects 'open' only) while the khata still links.
-  const closedJobs: [string, string][] = [
-    ['job-shan-stills', 'Shan Foods stills — day shoot'],
-    ['job-hamza-mehndi', 'Mehndi — Model Town'],
-    ['job-imran-drama', 'Drama serial — Bahria set'],
+  // Today board (openJobs selects 'open' only) while the khata still links,
+  // and closed_at is stamped the way closeJob stamps it — the "Closed jobs"
+  // door reads it. Customers wire through jobs.customer_id, the real mirror
+  // column. (The live jobs' wiring rides the JOBS insert via JOB_CUSTOMER.)
+  const closedJobs: [string, string, string, number][] = [
+    ['job-shan-stills', 'Shan Foods stills — day shoot', 'cust-bilal', 32],
+    ['job-hamza-mehndi', 'Mehndi — Model Town', 'cust-hamza', 17],
+    ['job-imran-drama', 'Drama serial — Bahria set', 'cust-imran', 4],
   ]
-  for (const [id, label] of closedJobs) {
+  for (const [id, label, customerId, closedDaysAgo] of closedJobs) {
     db.exec(
-      `insert into jobs (id, org_id, label, contact, expected_back, status)
-       values (?, ?, ?, null, null, 'closed')`,
-      [id, ORG, label],
-    )
-  }
-
-  const wiring: [string, string][] = [
-    ['job-shan', 'cust-bilal'],
-    ['job-shan-stills', 'cust-bilal'],
-    ['job-wedding', 'cust-hamza'],
-    ['job-hamza-mehndi', 'cust-hamza'],
-    ['job-doc', 'cust-ayesha'],
-    ['job-imran-drama', 'cust-imran'],
-  ]
-  for (const [jobId, customerId] of wiring) {
-    db.exec(
-      `insert into job_customer (job_id, customer_id) values (?, ?)`,
-      [jobId, customerId],
+      `insert into jobs (id, org_id, label, contact, expected_back, status,
+                         customer_id, closed_at)
+       values (?, ?, ?, null, null, 'closed', ?, ?)`,
+      [id, ORG, label, customerId, new Date(msDaysAgo(closedDaysAgo)).toISOString()],
     )
   }
 

@@ -33,6 +33,26 @@ export type LedgerEntryKind =
   | 'late_fee'
   | 'damage_charge'
   | 'adjustment'
+  /**
+   * The correction vocabulary, still append-only:
+   *
+   * `reversal` voids one earlier entry and NAMES it (`reversalOf`). A
+   * bounced cheque is a reversal of its payment; a charged-then-returned
+   * item is a reversal of its damage charge. The link is what lets the
+   * projections treat the pair as if the voided entry never happened —
+   * the debt clock survives a bounce, and a reversed charge stops
+   * counting as the asset's earnings — while both lines stay on the page,
+   * because the client saw both happen.
+   *
+   * `write_off` is debt the house has given up collecting — absconded
+   * client, goodwill, a dispute settled by walking away. Distinguished
+   * from `adjustment` (a data fix) so the statement never prints a theft
+   * as if the house corrected its own error. POLICY (owner may overrule):
+   * the kind exists client-side so a synced server write-off renders
+   * properly; no screen writes it yet.
+   */
+  | 'reversal'
+  | 'write_off'
 
 /** One ledger line, as the projection and the text builders read it. */
 export interface LedgerEntryView {
@@ -41,6 +61,19 @@ export interface LedgerEntryView {
   amountMinor: number
   /** Epoch ms, device clock — a past fact, labelled as such elsewhere. */
   createdAt: number
+  /**
+   * Insertion order (rowid on device) — the tie-break when two entries
+   * share a millisecond. Without it, a charge/payment pair written in the
+   * same ms flips order after re-sorting the screen's newest-first rows,
+   * momentarily dipping the running balance and resetting the owed-since
+   * clock. Optional so hand-built test entries still type; absent ties
+   * keep their input order.
+   */
+  seq?: number
+  /** The entry's id — needed only so a `reversal` can point at it. */
+  id?: string
+  /** For kind 'reversal': the id of the entry this one voids. */
+  reversalOf?: string | null
   jobLabel?: string | null
   note?: string | null
 }
@@ -57,6 +90,12 @@ const DEPOSIT_KINDS: ReadonlySet<LedgerEntryKind> = new Set([
   'deposit_apply',
   'deposit_refund',
 ])
+
+/** Book order: written time, then insertion order — the same tie-break
+ *  `rowsFor`'s SQL uses, so a re-sort can never disagree with the page. */
+function byBookOrder(a: LedgerEntryView, b: LedgerEntryView): number {
+  return a.createdAt - b.createdAt || (a.seq ?? 0) - (b.seq ?? 0)
+}
 
 /** Kinds that put money ON the book — the earned side of the account. */
 export const CHARGE_KINDS: ReadonlySet<LedgerEntryKind> = new Set([
@@ -92,12 +131,31 @@ export function projectLedger(entries: LedgerEntryView[]): LedgerProjection {
  * of the CURRENT stretch of debt, which is what "oldest unpaid" honestly
  * means on a running account (a payment that clears the book resets the
  * clock; a partial payment does not). Null when nothing is owed now.
+ *
+ * A `reversal` and the entry it voids are skipped AS A PAIR: they cancel
+ * in money, so they must also cancel in time. Without this, a payment that
+ * cleared the book and then bounced reset the clock to the bounce — the
+ * debt looked six days old instead of six weeks, on the one number
+ * collections pressure runs on. The pair-skip means the walk never sees
+ * the voided payment's false dip, so the clock keeps pointing at the
+ * charge the debt actually dates from.
  */
 export function oldestUnpaidMs(entries: LedgerEntryView[]): number | null {
-  const ordered = [...entries].sort((a, b) => a.createdAt - b.createdAt)
+  const present = new Set<string>()
+  for (const e of entries) if (e.id !== undefined) present.add(e.id)
+  const voided = new Set<string>()
+  for (const e of entries) {
+    if (e.kind === 'reversal' && e.reversalOf && present.has(e.reversalOf)) {
+      voided.add(e.reversalOf)
+    }
+  }
+
+  const ordered = [...entries].sort(byBookOrder)
   let balance = 0
   let since: number | null = null
   for (const e of ordered) {
+    if (e.id !== undefined && voided.has(e.id)) continue
+    if (e.kind === 'reversal' && e.reversalOf && voided.has(e.reversalOf)) continue
     if (DEPOSIT_KINDS.has(e.kind) && e.kind !== 'deposit_apply') continue
     balance += e.amountMinor
     if (balance > 0) {
@@ -201,6 +259,11 @@ export interface KhataStrings {
   /** Said when nothing is owed — a khata that only speaks when money is
    *  due reads as a threat, not an account. */
   nothingOwed: string
+  /** POLICY (owner may overrule): a NEGATIVE balance — the house owes the
+   *  customer (overpayment, an unrefunded credit) — is said plainly:
+   *  'You owe them Rs X' / 'Aap ke zimme Rs X'. Never 'Nothing owed';
+   *  hiding the house's own debt is the confident lie in mirror image. */
+  houseOwes: (rupees: string) => string
   /** 'Owed since 9 Aug' */
   owedSince: (date: string) => string
   /** One word per entry kind, the row vocabulary of the book. */
@@ -230,12 +293,14 @@ export function balanceCardText(input: BalanceCardInput, L: KhataStrings): strin
   lines.push(input.houseName)
   lines.push('')
   lines.push(
-    balanceMinor > 0 ? L.balanceLine(formatRupees(balanceMinor)) : L.nothingOwed,
+    balanceMinor > 0
+      ? L.balanceLine(formatRupees(balanceMinor))
+      : balanceMinor < 0
+        ? L.houseOwes(formatRupees(-balanceMinor))
+        : L.nothingOwed,
   )
 
-  const recent = [...input.entries]
-    .sort((a, b) => a.createdAt - b.createdAt)
-    .slice(-3)
+  const recent = [...input.entries].sort(byBookOrder).slice(-3)
   if (recent.length > 0) {
     lines.push('')
     for (const e of recent) {
@@ -275,7 +340,7 @@ export interface StatementInput {
  */
 export function monthlyStatementText(input: StatementInput, L: KhataStrings): string {
   const month = monthBounds(input.nowMs)
-  const ordered = [...input.entries].sort((a, b) => a.createdAt - b.createdAt)
+  const ordered = [...input.entries].sort(byBookOrder)
   const inMonth = ordered.filter(
     (e) => e.createdAt >= month.startMs && e.createdAt < month.endMs,
   )

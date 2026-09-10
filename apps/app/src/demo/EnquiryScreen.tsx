@@ -100,6 +100,7 @@ export function EnquiryScreen({ store }: { store: DemoStore }) {
       {creating && summary ? (
         <NewJobSheet
           linesNote={linesNote}
+          customers={store.customers()}
           onCreate={(input) => {
             store.createJobFromLines(summary.lines, input)
             // A job made from the list is the other way the answer gets

@@ -26,6 +26,11 @@ export interface JobRow {
   /** A session was ever recorded here, so a handover is reviewable — even
    *  after every item came back and the job left the coming-back list. */
   hasSummary: boolean
+  /** The khata this job's money lands in — the chip that opens it. */
+  customer: { id: string; name: string } | null
+  /** The close rule's number: items still projecting onto this job. Zero
+   *  means the Close button is live; anything else is its honest reason. */
+  stillOut: number
 }
 
 /**
@@ -78,6 +83,8 @@ export interface OutRow {
   nudgeUrl: string | null
   /** A scan session was recorded on this job, so a handover is reviewable. */
   hasSummary: boolean
+  /** The khata the return's money will land in, when one is wired. */
+  customer: { id: string; name: string } | null
 }
 
 /** The anchor the overdue counter jumps to. */
@@ -91,6 +98,7 @@ export function Today({
   onOpenGear,
   onNewJob,
   onEditDate,
+  onCloseJob,
 }: {
   jobs: JobRow[]
   outJobs: OutRow[]
@@ -99,6 +107,7 @@ export function Today({
   onOpenGear: (filter: 'here' | 'out' | 'attention' | 'all') => void
   onNewJob: () => void
   onEditDate: (jobId: string) => void
+  onCloseJob: (jobId: string) => void
 }) {
   const totalExpected = jobs.reduce((n, j) => n + j.expected, 0)
   const totalScanned = jobs.reduce((n, j) => n + j.scanned, 0)
@@ -242,6 +251,7 @@ export function Today({
                     </button>
 
                     <div className="job-actions">
+                      <CustomerChip customer={job.customer} />
                       <ContactLinks contact={job.contact} />
                       <EditDateButton job={job} onEditDate={onEditDate} />
                       {job.hasSummary ? (
@@ -252,6 +262,10 @@ export function Today({
                           <Icon name="clipboard-check" size={16} /> {STR.todayLastHandover}
                         </button>
                       ) : null}
+                      <CloseJobButton
+                        stillOut={job.stillOut}
+                        onClose={() => onCloseJob(job.id)}
+                      />
                     </div>
                   </div>
                 </li>
@@ -291,6 +305,7 @@ export function Today({
                   </button>
 
                   <div className="job-actions">
+                    <CustomerChip customer={j.customer} />
                     <ContactLinks contact={j.contact} />
                     <EditDateButton job={j} onEditDate={onEditDate} />
                     {j.nudgeUrl ? (
@@ -368,6 +383,58 @@ export function DueBadge({ due }: { due: DueStatus }) {
         ? ' badge-orange'
         : ''
   return <span className={`badge${cls}`}>{due.label}</span>
+}
+
+/**
+ * The customer as a door: one tap from the job card to the khata the job's
+ * money lands in. Null renders nothing — the nephew case has no khata, and
+ * a chip that opens nowhere is a dead button.
+ */
+export function CustomerChip({
+  customer,
+}: {
+  customer: { id: string; name: string } | null
+}) {
+  if (!customer) return null
+  return (
+    <button
+      className="btn btn-sm btn-ghost"
+      onClick={() => go({ name: 'customer', customerId: customer.id })}
+      aria-label={STR.todayOpenKhataAria(customer.name)}
+    >
+      <Icon name="user" size={16} /> {customer.name}
+    </button>
+  )
+}
+
+/**
+ * End the job — live only when nothing still projects onto it, mirroring
+ * the server's close rule (0018 D3). The disabled state carries its honest
+ * reason inline ('3 items still out'), because a greyed button with no
+ * explanation reads as broken, and 'why won't it close' should never need
+ * the desk to phone anyone.
+ */
+export function CloseJobButton({
+  stillOut,
+  onClose,
+}: {
+  stillOut: number
+  onClose: () => void
+}) {
+  const blocked = stillOut > 0
+  return (
+    <button
+      className="btn btn-sm btn-ghost"
+      disabled={blocked}
+      onClick={onClose}
+      title={blocked ? STR.todayStillOutCannotClose(stillOut) : undefined}
+    >
+      <Icon name="check" size={16} />{' '}
+      {blocked
+        ? `${STR.todayCloseJob} — ${STR.todayStillOutCannotClose(stillOut)}`
+        : STR.todayCloseJob}
+    </button>
+  )
 }
 
 /**

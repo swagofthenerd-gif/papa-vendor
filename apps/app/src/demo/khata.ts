@@ -1,13 +1,17 @@
 import {
   CHARGE_KINDS,
+  dueStatus,
+  lateFeeDraft,
   monthBounds,
   projectLedger,
   paybackPercent,
   type KhataStrings,
   type LedgerEntryKind,
   type LedgerEntryView,
+  type MoneyTotal,
   type SqlDriver,
 } from '@papa/core'
+import { decodeScanOps, lastSessionRecord, openJob } from './read-model.ts'
 import type { StrTable } from '../strings.ts'
 
 /**
@@ -36,6 +40,7 @@ export interface LedgerRow extends LedgerEntryView {
   id: string
   jobId: string | null
   assetId: string | null
+  reversalOf: string | null
 }
 
 export interface CustomerLinkedJob {
@@ -66,10 +71,16 @@ function rowsFor(db: SqlDriver, customerId: string): LedgerRow[] {
       asset_id: string | null
       note: string | null
       created_at: number
+      seq: number
+      reversal_of: string | null
       job_label: string | null
     }>(
+      // rowid rides along as `seq` so pure re-sorts downstream
+      // (oldestUnpaidMs, the statement builders) break created_at ties
+      // exactly the way this ORDER BY does — a same-millisecond
+      // charge/payment pair must never flip and dip the running balance.
       `select e.id, e.kind, e.amount_minor, e.job_id, e.asset_id, e.note,
-              e.created_at, j.label as job_label
+              e.created_at, e.rowid as seq, e.reversal_of, j.label as job_label
          from customer_ledger_entries e
          left join jobs j on j.id = e.job_id
         where e.customer_id = ?
@@ -81,8 +92,10 @@ function rowsFor(db: SqlDriver, customerId: string): LedgerRow[] {
       kind: r.kind as LedgerEntryKind,
       amountMinor: Number(r.amount_minor),
       createdAt: Number(r.created_at),
+      seq: Number(r.seq),
       jobId: r.job_id,
       assetId: r.asset_id,
+      reversalOf: r.reversal_of,
       note: r.note,
       jobLabel: r.job_label,
     }))
@@ -124,8 +137,8 @@ export function customerView(db: SqlDriver, id: string): CustomerView | null {
     expected_back: string | null
   }>(
     `select j.id, j.label, j.status, j.expected_back
-       from job_customer jc join jobs j on j.id = jc.job_id
-      where jc.customer_id = ?
+       from jobs j
+      where j.customer_id = ?
       order by j.status = 'open' desc, j.label`,
     [id],
   )
@@ -145,15 +158,44 @@ export function customerView(db: SqlDriver, id: string): CustomerView | null {
   }
 }
 
-/** The customer a job belongs to, or null — how a dock charge finds a khata. */
+/** The customer a job belongs to, or null — how a dock charge finds a khata.
+ *  Reads jobs.customer_id, the real mirror column (0017/0018). */
 export function customerForJob(db: SqlDriver, jobId: string): { id: string; name: string } | null {
   const row = db.get<{ id: string; name: string }>(
-    `select c.id, c.name from job_customer jc
-       join customers c on c.id = jc.customer_id
-      where jc.job_id = ?`,
+    `select c.id, c.name from jobs j
+       join customers c on c.id = j.customer_id
+      where j.id = ?`,
     [jobId],
   )
   return row ?? null
+}
+
+export interface CreateCustomerInput {
+  /** Caller-supplied id, like CreateJobInput's — the store passes a uuid;
+   *  tests pass readable ids. */
+  id?: string
+  orgId: string
+  name: string
+  phone?: string | null
+}
+
+/**
+ * The add-customer door the year simulation ran a whole pilot without
+ * (`no-add-customer`). A row, not a ceremony: customer records are not
+ * evidence — the LEDGER is (0017's words) — so this is plain insert-tier
+ * work, same as the server's direct-DML customers table. Returns the id,
+ * or null for a blank name: a khata with no name cannot be found again,
+ * and a silent empty row is how one gets lost.
+ */
+export function createCustomer(db: SqlDriver, input: CreateCustomerInput): string | null {
+  const name = input.name.trim()
+  if (name.length === 0) return null
+  const id = input.id ?? `cust-${crypto.randomUUID()}`
+  db.exec(
+    `insert into customers (id, org_id, name, phone, note) values (?, ?, ?, ?, null)`,
+    [id, input.orgId, name, input.phone?.trim() || null],
+  )
+  return id
 }
 
 export interface RecordEntryInput {
@@ -165,20 +207,24 @@ export interface RecordEntryInput {
   jobId?: string | null
   assetId?: string | null
   note?: string | null
+  /** For kind 'reversal': the entry this line voids. */
+  reversalOf?: string | null
   createdAt: number
 }
 
-/** Append one line to the book. Insert-only — there is no update path. */
+/** Append one line to the book. Insert-only — there is no update path;
+ *  a mistake is corrected by a further entry (a 'reversal' naming it). */
 export function recordEntry(db: SqlDriver, input: RecordEntryInput): string {
   const id = `led-${crypto.randomUUID()}`
   db.exec(
     `insert into customer_ledger_entries
-       (id, org_id, customer_id, kind, amount_minor, job_id, asset_id, note, created_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, org_id, customer_id, kind, amount_minor, job_id, asset_id, note,
+        reversal_of, created_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id, input.orgId, input.customerId, input.kind, input.amountMinor,
       input.jobId ?? null, input.assetId ?? null, input.note ?? null,
-      input.createdAt,
+      input.reversalOf ?? null, input.createdAt,
     ],
   )
   return id
@@ -209,9 +255,9 @@ export function moneyStrip(db: SqlDriver, nowMs: number): MoneyStrip {
   const dueToday = new Set(
     db
       .all<{ customer_id: string }>(
-        `select distinct jc.customer_id from job_customer jc
-           join jobs j on j.id = jc.job_id
-          where j.status = 'open' and j.expected_back = ?`,
+        `select distinct j.customer_id from jobs j
+          where j.status = 'open' and j.expected_back = ?
+            and j.customer_id is not null`,
         [iso],
       )
       .map((r) => r.customer_id),
@@ -236,7 +282,9 @@ export function moneyStrip(db: SqlDriver, nowMs: number): MoneyStrip {
 }
 
 export interface AssetEarnings {
-  /** Charge-side ledger money carrying this asset's id. */
+  /** RENTAL money carrying this asset's id: charge + late_fee, minus
+   *  anything a reversal later voided. Damage recovery is deliberately
+   *  not in here — see assetEarnings. */
   earnedMinor: number
   /** Distinct jobs those lines belong to. */
   jobs: number
@@ -246,7 +294,18 @@ export interface AssetEarnings {
   paybackPct: number | null
 }
 
-/** What one unit has earned, from the lines that name it. */
+/**
+ * What one unit has earned, from the lines that name it.
+ *
+ * DAMAGE IS NOT EARNINGS. A damage_charge stays on the customer's khata,
+ * but a camera that gets broken often must not look like the fleet's best
+ * performer — the payback bar celebrates rental money only (the year
+ * report's `payback-counts-damage`). POLICY (owner may overrule):
+ * corrected charges are out too — a line a 'reversal' later voided never
+ * counts, so a charged-then-returned item does not keep phantom earnings.
+ * The SERVER's asset_earnings view (db/migrations/0017) still sums damage
+ * and knows no reversals: follow-up migration, noted in the year doc.
+ */
 export function assetEarnings(db: SqlDriver, assetId: string): AssetEarnings {
   const row = db.get<{ total: number | null; jobs: number }>(
     // count(distinct job_id) skips nulls: a line with no job still earns,
@@ -254,7 +313,9 @@ export function assetEarnings(db: SqlDriver, assetId: string): AssetEarnings {
     `select sum(amount_minor) as total,
             count(distinct job_id) as jobs
        from customer_ledger_entries
-      where asset_id = ? and kind in ('charge', 'late_fee', 'damage_charge')`,
+      where asset_id = ? and kind in ('charge', 'late_fee')
+        and id not in (select reversal_of from customer_ledger_entries
+                        where reversal_of is not null)`,
     [assetId],
   )
   const rate = db.get<{ replacement_minor: number | null }>(
@@ -273,6 +334,218 @@ export function assetEarnings(db: SqlDriver, assetId: string): AssetEarnings {
     jobs: Number(row?.jobs ?? 0),
     replacementMinor: replacement,
     paybackPct: paybackPercent(earned, replacement),
+  }
+}
+
+export interface ChargedButReturned {
+  entryId: string
+  customerId: string
+  customerName: string
+  kind: LedgerEntryKind
+  amountMinor: number
+  jobId: string
+  jobLabel: string
+  assetId: string
+  assetCode: string
+  assetName: string
+}
+
+/**
+ * Charges whose item CAME BACK — the dock's "charged, then it turned up
+ * on the other truck" case (pinned end to end in stress-money.test.mjs).
+ *
+ * POLICY (owner may overrule): this is a NEEDS-A-DECISION notice, never an
+ * auto-reverse. A charge/damage_charge naming an asset and a job, not yet
+ * corrected by a reversal, whose asset was scanned in AFTER the charge was
+ * written, surfaces on the khata and the session summary with a one-tap
+ * correction DRAFT — the reversal is written only when the owner confirms,
+ * because "we keep the money anyway" (a genuinely lost accessory inside,
+ * a negotiated settlement) is a real answer only a person can give.
+ */
+export function chargedButReturned(db: SqlDriver): ChargedButReturned[] {
+  const reversed = new Set(
+    db
+      .all<{ reversal_of: string }>(
+        `select reversal_of from customer_ledger_entries
+          where reversal_of is not null`,
+      )
+      .map((r) => r.reversal_of),
+  )
+  const rows = db.all<{
+    id: string
+    customer_id: string
+    customer_name: string
+    kind: string
+    amount_minor: number
+    job_id: string
+    job_label: string | null
+    asset_id: string
+    asset_code: string | null
+    asset_name: string | null
+    created_at: number
+  }>(
+    `select e.id, e.customer_id, c.name as customer_name, e.kind,
+            e.amount_minor, e.job_id, j.label as job_label, e.asset_id,
+            a.asset_code, coalesce(p.display_name, a.display_name) as asset_name,
+            e.created_at
+       from customer_ledger_entries e
+       join customers c on c.id = e.customer_id
+       left join jobs j on j.id = e.job_id
+       join assets a on a.id = e.asset_id
+       left join products p on p.id = a.product_id
+      where e.kind in ('charge', 'damage_charge')
+        and e.asset_id is not null and e.job_id is not null
+      order by e.created_at, e.rowid`,
+  )
+  if (rows.length === 0) return []
+
+  // "Came back" means a check_in scan recorded STRICTLY AFTER the charge —
+  // the ordinary flow (gear home first, rental charged at the desk after)
+  // must never cry wolf.
+  const ops = decodeScanOps(db)
+  const out: ChargedButReturned[] = []
+  for (const r of rows) {
+    if (reversed.has(r.id)) continue
+    const cameBack = ops.some(
+      (op) =>
+        op.assetId === r.asset_id &&
+        op.eventType === 'check_in' &&
+        op.createdAt > Number(r.created_at),
+    )
+    if (!cameBack) continue
+    out.push({
+      entryId: r.id,
+      customerId: r.customer_id,
+      customerName: r.customer_name,
+      kind: r.kind as LedgerEntryKind,
+      amountMinor: Number(r.amount_minor),
+      jobId: r.job_id,
+      jobLabel: r.job_label ?? 'Unnamed job',
+      assetId: r.asset_id,
+      assetCode: r.asset_code ?? '—',
+      assetName: r.asset_name ?? 'Unnamed',
+    })
+  }
+  return out
+}
+
+/**
+ * Write the correction the notice drafted: a `reversal` naming the charge.
+ * POLICY (owner may overrule): runs only from the owner's confirm tap —
+ * nothing calls this automatically. Refuses a second reversal of the same
+ * entry, so a double-tap cannot flip the correction into a discount.
+ */
+export function recordReversalOf(
+  db: SqlDriver,
+  orgId: string,
+  entryId: string,
+  note: string | null,
+  whenMs: number,
+): boolean {
+  const e = db.get<{
+    customer_id: string
+    amount_minor: number
+    job_id: string | null
+    asset_id: string | null
+  }>(
+    `select customer_id, amount_minor, job_id, asset_id
+       from customer_ledger_entries where id = ?`,
+    [entryId],
+  )
+  if (!e) return false
+  const already = db.get<{ one: number }>(
+    `select 1 as one from customer_ledger_entries where reversal_of = ?`,
+    [entryId],
+  )
+  if (already) return false
+  recordEntry(db, {
+    orgId,
+    customerId: e.customer_id,
+    kind: 'reversal',
+    amountMinor: -Number(e.amount_minor),
+    jobId: e.job_id,
+    assetId: e.asset_id,
+    note,
+    reversalOf: entryId,
+    createdAt: whenMs,
+  })
+  return true
+}
+
+export interface LateFeeDraftView {
+  daysLate: number
+  dueLabel: string
+  perDay: MoneyTotal
+  draft: MoneyTotal
+}
+
+/**
+ * The late-fee draft for an overdue return — priced from the RETURN, never
+ * from whatever happens to still be out.
+ *
+ * The dock's natural order — the tech scans everything in, THEN the desk
+ * opens the charge sheet — used to collapse the draft to an unpriced zero,
+ * because it priced off "still out on this job" and the scan-in had just
+ * emptied that set. The owner saw no number exactly when he needed one,
+ * and nothing said the order of operations mattered.
+ *
+ * The draft now prices the union of what is still out and what CAME BACK
+ * in the job's most recent return session (the session knows), and the
+ * days-late clock freezes at the moment the last item was scanned home —
+ * a fee drafted an hour after the return must not keep growing while the
+ * sheet sits open at the desk. Still a DRAFT: the owner edits and
+ * confirms; nothing here writes.
+ */
+export function lateFeeDraftFor(
+  db: SqlDriver,
+  jobId: string,
+  nowMs: number,
+): LateFeeDraftView | null {
+  const job = openJob(db, jobId)
+  if (!job) return null
+  if (!customerForJob(db, jobId)) return null
+
+  const outIds = db
+    .all<{ id: string }>(
+      `select id from assets
+        where current_job_id = ? and presence in ('out', 'in_transit')`,
+      [jobId],
+    )
+    .map((r) => r.id)
+
+  // What the most recent return session brought home, and when.
+  const rec = lastSessionRecord(db, jobId)
+  const returned: string[] = []
+  let returnedAt: number | null = null
+  if (rec && rec.mode === 'in') {
+    for (const op of decodeScanOps(db)) {
+      if (op.sessionId !== rec.id || op.eventType !== 'check_in' || !op.assetId) continue
+      returned.push(op.assetId)
+      returnedAt = Math.max(returnedAt ?? 0, op.createdAt)
+    }
+  }
+
+  // Frozen at the return once everything is home; live while gear is out.
+  const clockMs = outIds.length === 0 && returnedAt !== null ? returnedAt : nowMs
+  const due = dueStatus(job.expectedBack, clockMs)
+  if (due.state !== 'overdue' || !due.daysLate) return null
+
+  const rates = [...new Set([...outIds, ...returned])].map((id) => {
+    const r = db.get<{ day_rate_minor: number | null }>(
+      `select r.day_rate_minor from assets a
+         left join product_rates r on r.product_id = a.product_id
+        where a.id = ?`,
+      [id],
+    )
+    return r?.day_rate_minor === null || r?.day_rate_minor === undefined
+      ? null
+      : Number(r.day_rate_minor)
+  })
+  return {
+    daysLate: due.daysLate,
+    dueLabel: due.label,
+    perDay: lateFeeDraft(1, rates),
+    draft: lateFeeDraft(due.daysLate, rates),
   }
 }
 
@@ -385,6 +658,7 @@ export function khataLabels(str: StrTable): KhataStrings {
     balanceLine: str.customerCardBalanceLine,
     closingLine: str.customerStatementClosingLine,
     nothingOwed: str.customerNothingOwed,
+    houseOwes: str.customerHouseOwes,
     owedSince: str.customerOwedSince,
     kindLabel: (kind) => str.customerKindLabel(kind),
     nothingThisMonth: str.customerNothingThisMonth,

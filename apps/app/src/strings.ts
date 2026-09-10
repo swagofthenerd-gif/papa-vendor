@@ -55,6 +55,11 @@ const KIND_EN: Record<string, string> = {
   late_fee: 'late fee',
   damage_charge: 'damage',
   adjustment: 'adjustment',
+  // The correction vocabulary: a reversal voids a named earlier entry (a
+  // bounced cheque reads 'reversed', never 'adjustment' — the house did
+  // not make the error), and a write-off is given-up debt, not a data fix.
+  reversal: 'reversed',
+  write_off: 'write-off',
 }
 
 /**
@@ -137,6 +142,20 @@ const STR_EN = {
   todayContactPlaceholder: 'Name and number — e.g. Bilal 0300 4412233',
   todayExpectedBackOptional: 'Expected back (optional)',
   todayCreateJob: 'Create job',
+  // The customer picker on the new-job sheet. Optional on purpose — the
+  // nephew case (a job with no customer) stays legal; it just cannot take
+  // a charge, and the sheet says so instead of forcing a fake name.
+  todayCustomerOptional: 'Customer (optional)',
+  todayNoCustomer: 'No customer',
+  todayNoCustomerHint: 'Without a customer this job cannot take a charge.',
+  todayNewCustomer: 'New customer',
+  todayCustomerNameLabel: 'Customer name',
+  todayCustomerNamePlaceholder: 'e.g. Bilal Hussain',
+  todayCustomerPhoneOptional: 'Phone (optional)',
+  todayOpenKhataAria: (name: string): string => `Open ${name}’s khata`,
+  // Closing a job — the end the year simulation had to fake with SQL.
+  todayCloseJob: 'Close job',
+  todayStillOutCannotClose: (n: number): string => `${n} item${s(n)} still out`,
   // The money strip — the board's third glance, from the local ledger.
   todayMoneyHeading: 'Money',
   todayMoneyOwedToMe: 'owed to me',
@@ -452,6 +471,9 @@ const STR_EN = {
     'Rows marked “need a look” are added as their own product rather than merged into a similar one. Nothing here overwrites what you already have.',
   labelsAddedAcross: (units: number, products: number): string =>
     `Added ${units} item${s(units)} across ${products} new product${s(products)}.`,
+  labelsCodesContinued: (n: number): string =>
+    `${n} asset code${s(n)} ${n === 1 ? 'was' : 'were'} already in use — ` +
+    'numbering continued instead of duplicating a sticker code.',
   labelsYourNamesAreNowMatched:
     'Your names are now what the kit-list reader matches a client’s message against.',
   labelsSeeTheGear: 'See the gear',
@@ -509,9 +531,35 @@ const STR_EN = {
   customerStatementClosingLine: (rupees: string): string =>
     `Closing balance: ${rupees}`,
   customerNothingOwed: 'Nothing owed',
+  // POLICY (owner may overrule): a negative balance is the house's own
+  // debt and is said plainly — never disguised as 'Nothing owed'.
+  customerHouseOwes: (rupees: string): string => `You owe them ${rupees}`,
   customerOwedSince: (date: string): string => `Owed since ${date}`,
   customerKindLabel: (kind: string): string => KIND_EN[kind] ?? kind,
   customerNothingThisMonth: 'Nothing recorded this month.',
+  // Charged-then-returned: the NEEDS-A-DECISION notice and its one-tap
+  // correction draft. POLICY (owner may overrule): a notice, never an
+  // auto-reverse — see chargedButReturned in demo/khata.ts.
+  customerChargedButReturned: (rupees: string, code: string, job: string): string =>
+    `Charged ${rupees} for ${code} on ${job} — it came back. Reverse?`,
+  customerReverseDraft: 'Reverse…',
+  customerReverseConfirm: (rupees: string): string =>
+    `Confirm — write ${rupees} back`,
+  customerReversedNote: 'Charged, then it came back — reversed',
+
+  // --------------------------------------------------------------- closed
+  // The "Closed jobs" door — the smallest honest surface for jobs that
+  // ended: off the boards, still findable, reopenable when the story
+  // continues.
+  closedJobsTitle: 'Closed jobs',
+  closedJobsSubtitle: (n: number): string => `${n} job${s(n)} finished`,
+  closedJobsEmpty: 'No closed jobs yet.',
+  closedJobsEmptyHint: 'Close a job from its card once everything is back.',
+  closedJobsDoor: 'Closed jobs',
+  closedJobsReopen: 'Reopen',
+  closedJobsClosedOn: (date: string): string => `Closed ${date}`,
+  closedJobsNeverCameBack: (n: number): string =>
+    `${n} item${s(n)} never came back`,
 }
 
 /**

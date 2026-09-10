@@ -3,8 +3,10 @@ import QRCode from 'qrcode'
 import { Icon } from '@papa/icons'
 import { moneyLabel } from '@papa/core'
 import { Session } from '../routes/Session.tsx'
+import { CloseJobButton, CustomerChip } from '../routes/Today.tsx'
 import { manifestText } from '../session-summary.ts'
 import { Shell } from '../components/Shell.tsx'
+import { ReversalNotices } from '../components/ReversalNotice.tsx'
 import { go, type View } from '../nav.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
@@ -26,12 +28,18 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
   const [parchi, setParchi] = useState<string | null>(null)
   const [sheet, setSheet] = useState<'charge' | 'latefee' | null>(null)
   const [written, setWritten] = useState<string | null>(null)
+  const [tick, setTick] = useState(0)
 
   // The khata a dock charge would land in, and the overdue return's
   // late-fee draft — both null when the facts do not support them, and
   // the affordances then never render (never a dead button).
   const customer = store.customerForJob(jobId)
   const lateFee = store.lateFeeDraftFor(jobId)
+  // Close-job facts: the rule's number, and whether the job is still open
+  // at all (a closed job's handover stays reviewable; the button does not
+  // render for it — done twice is not more done). `tick` re-reads both.
+  const jobOpen = store.job(jobId) !== undefined
+  const stillOut = store.stillOut(jobId)
 
   const onShare = useCallback(() => {
     if (!summary) return
@@ -86,6 +94,37 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
         }}
         onChargeClient={() => setSheet('charge')}
         onDraftLateFee={() => setSheet('latefee')}
+      />
+
+      {/* The job's doors, under the handover: the khata chip (when a
+          customer is wired) and Close job — live only once everything is
+          back, the same rule the server enforces (0018 D3), with the
+          honest count as its disabled reason. */}
+      <div className="job-actions">
+        <CustomerChip customer={customer} />
+        {jobOpen ? (
+          <CloseJobButton
+            stillOut={stillOut}
+            onClose={() => {
+              if (store.closeJob(jobId).ok) {
+                store.endSession()
+                go({ name: 'jobs' })
+              }
+            }}
+          />
+        ) : null}
+      </div>
+
+      {/* Charged-then-returned: the dock's own NEEDS-A-DECISION notice.
+          POLICY (owner may overrule): a reversal draft behind a confirm
+          tap, never an auto-reverse — see ReversalNotice. */}
+      <ReversalNotices
+        notices={store.chargedButReturned({ jobId })}
+        refreshKey={tick}
+        onReverse={(entryId) => {
+          store.reverseEntry(entryId)
+          setTick((t) => t + 1)
+        }}
       />
 
       {written && customer ? (

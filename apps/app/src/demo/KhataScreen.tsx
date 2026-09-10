@@ -8,6 +8,7 @@ import {
   whatsAppShareUrl,
 } from '@papa/core'
 import { Shell, SectionHead } from '../components/Shell.tsx'
+import { ReversalNotices } from '../components/ReversalNotice.tsx'
 import { go, type View } from '../nav.ts'
 import { DueBadge } from '../routes/Today.tsx'
 import type { DemoStore } from './store.ts'
@@ -33,7 +34,7 @@ import { STR } from '../strings.ts'
  */
 export function KhataScreen({ store, customerId }: { store: DemoStore; customerId: string }) {
   const view: View = { name: 'customer', customerId }
-  const [, setTick] = useState(0)
+  const [tick, setTick] = useState(0)
   const [paying, setPaying] = useState(false)
   const [copied, setCopied] = useState(false)
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -88,12 +89,16 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
       }
     >
       {/* The figure of the page. Mono, stat-sized, double-ruled — the
-          challan-total voice. A negative balance renders as itself: the
-          house owing the customer is a fact, not a display bug. */}
+          challan-total voice. A negative balance renders as itself, and
+          — POLICY (owner may overrule) — the sub-line SAYS it plainly:
+          'You owe them Rs X', never a disguised 'Balance'. The house
+          owing the customer is a fact, not a display bug. */}
       <div className="tally khata-balance">
         <p className="tally-line code">{formatRupees(customer.balanceMinor)}</p>
         <p className="tally-sub">
-          {STR.customerBalanceHeading}
+          {customer.balanceMinor < 0
+            ? STR.customerHouseOwes(formatRupees(-customer.balanceMinor))
+            : STR.customerBalanceHeading}
           {customer.depositHeldMinor > 0
             ? ` · ${STR.customerDepositHeldLine(formatRupees(customer.depositHeldMinor))}`
             : null}
@@ -103,6 +108,19 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
       <button className="btn btn-primary btn-block" onClick={() => setPaying(true)}>
         <Icon name="clipboard-check" size={18} /> {STR.customerRecordPayment}
       </button>
+
+      {/* Charged-then-returned: NEEDS-A-DECISION notices. POLICY (owner
+          may overrule): a pre-filled reversal DRAFT behind a confirm tap,
+          never an auto-reverse — see ReversalNotice. `tick` in the key
+          re-reads the list after a write. */}
+      <ReversalNotices
+        notices={store.chargedButReturned({ customerId })}
+        refreshKey={tick}
+        onReverse={(entryId) => {
+          store.reverseEntry(entryId)
+          setTick((t) => t + 1)
+        }}
+      />
 
       <section className="section">
         <SectionHead

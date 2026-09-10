@@ -12,8 +12,11 @@ export type {
 export { LOCAL_SCHEMA, DEVICE_ONLY_TABLES, MIRROR_TABLES } from './db/schema.ts'
 export { Outbox, syncStatus } from './outbox.ts'
 export type { OutboxRow, OutboxState, EnqueueInput, SyncTone } from './outbox.ts'
-export { ScanSession, SameTagDebounce, SAME_TAG_QUIET_MS, lookupTag } from './scan.ts'
-export type { ScanResult, ScanOutcome, ScanSessionOptions, TagLookup } from './scan.ts'
+export {
+  ScanSession, SameTagDebounce, SAME_TAG_QUIET_MS, lookupTag,
+  voidScan, voidedScanIds,
+} from './scan.ts'
+export type { ScanResult, ScanOutcome, ScanSessionOptions, TagLookup, VoidScanResult } from './scan.ts'
 export { SyncEngine, TransportError } from './sync.ts'
 export type { Transport, SubmitResult, FlushReport } from './sync.ts'
 export { PullApplier } from './pull.ts'
@@ -26,7 +29,7 @@ export type { ParsedLine, MatchedLine, CatalogueItem, MatchConfidence } from './
 export type { PullListItem, PullListView, ShelfGroup } from './pull-list.ts'
 export { caseManifest, hasContents } from './containment.ts'
 export type { CaseManifest, ContainedChild, ContainmentKind } from './containment.ts'
-export { parseCsv, guessMapping, readRows, planImport } from './csv-import.ts'
+export { parseCsv, guessMapping, readRows, planImport, allocateUnitCodes } from './csv-import.ts'
 export type {
   CsvTable, ColumnMapping, FieldName, ImportRow, ImportPlan, ReviewedRow, RowVerdict,
 } from './csv-import.ts'

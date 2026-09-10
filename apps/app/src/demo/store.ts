@@ -2,16 +2,17 @@ import {
   LOCAL_SCHEMA,
   PhotoStore,
   ScanSession,
+  allocateUnitCodes,
   lookupTag,
+  voidScan,
+  type VoidScanResult,
   caseManifest,
   hasContents,
   pairBySide,
   balanceCardText,
   buildPullList,
   checkAvailability,
-  dueStatus,
   indicativeDayTotal,
-  lateFeeDraft,
   monthlyStatementText,
   matchKitList,
   moneyLabel,
@@ -27,7 +28,6 @@ import {
   type CaseManifest,
   type PhotoPair,
   type MatchedLine,
-  type MoneyTotal,
   type PullListView,
   type SqlDriver,
   type TagLookup,
@@ -37,6 +37,9 @@ import { demoCatalogue, seedDemo, type DemoSeed } from './seed.ts'
 import { SessionRegistry, type SessionMode } from './sessions.ts'
 import {
   assetFacts,
+  closedJobs,
+  closeJob,
+  collapseHistory,
   createJob,
   dayRateFor,
   decodeScanOps,
@@ -48,18 +51,26 @@ import {
   openJobs,
   outItemNames,
   packedProgress,
+  reopenJob,
   sessionScanFacts,
   setExpectedBack,
+  stillOutCount,
+  type CloseJobResult,
+  type ClosedJobRow,
   type OpenJobRow,
 } from './read-model.ts'
 import { dayAccount, type DayAccount } from './hisaab.ts'
 import {
   assetEarnings,
+  chargedButReturned,
+  createCustomer,
   customerForJob,
   customersByBalance,
   customerView,
   khataLabels,
+  lateFeeDraftFor,
   moneyStrip,
+  recordReversalOf,
   paymentLine,
   paymentQr,
   recordEntry,
@@ -68,8 +79,10 @@ import {
   setPaymentQr,
   turnedAwayThisMonth,
   type AssetEarnings,
+  type ChargedButReturned,
   type CustomerListRow,
   type CustomerView,
+  type LateFeeDraftView,
   type MoneyStrip,
 } from './khata.ts'
 import { STR } from '../strings.ts'
@@ -80,6 +93,13 @@ import type { GearRow } from '../routes/Gear.tsx'
 import type { OutRow, TodayStats } from '../routes/Today.tsx'
 import type { AssetHistoryRow, AssetView } from '../routes/Asset.tsx'
 import { buildSummary, type SessionSummary } from '../session-summary.ts'
+
+/** How a new job names its khata: an existing customer, a fresh name typed
+ *  at the sheet, or none at all (the nephew case — legal, unchargeable). */
+export type JobCustomerChoice =
+  | { kind: 'existing'; id: string }
+  | { kind: 'new'; name: string; phone: string | null }
+  | null
 
 /**
  * The demo's one piece of state: a real local database with the demo house in
@@ -184,6 +204,16 @@ export class DemoStore {
   }
 
   /**
+   * Undo a mis-scan. Append-only stays intact: the wrong op keeps its
+   * queue row and a `void_scan` referencing it queues behind it; the
+   * projection re-derives and every history reader skips the voided op.
+   * See voidScan in @papa/core.
+   */
+  voidScan(outboxId: string): VoidScanResult {
+    return voidScan(this.db, outboxId)
+  }
+
+  /**
    * Resolve a label WITHOUT recording anything — the "where is this thing?"
    * question. Answered entirely from the local mirror: no session, no outbox
    * op, no projection change. See lookupTag in @papa/core for the rules.
@@ -222,6 +252,7 @@ export class DemoStore {
         due: j.due,
         nudgeUrl,
         hasSummary: this.hasSummary(j.id),
+        customer: j.customer,
       }
     })
   }
@@ -299,13 +330,28 @@ export class DemoStore {
    * Rows the planner could not decide are created as their OWN product, never
    * merged into the thing they resemble. That is the same refusal the kit-list
    * reader makes between C300 and C500, for the same reason.
+   *
+   * Unit codes are collision-checked against every code already on an asset
+   * and numbering CONTINUES (FX9-01, FX9-02 on the shelf → this file's FX9
+   * becomes FX9-03) — see allocateUnitCodes. `renumbered` counts the units
+   * whose naive `CODE-NN` would have duplicated an existing sticker code, so
+   * the result screen can say so honestly instead of minting two cameras
+   * that answer to one code.
    */
-  applyImport(plan: ImportPlan): { products: number; units: number } {
+  applyImport(plan: ImportPlan): { products: number; units: number; renumbered: number } {
     let products = 0
     let units = 0
+    let renumbered = 0
 
     this.db.transaction(() => {
       const idFor = new Map<string, string>()
+      const takenCodes = new Set(
+        this.db
+          .all<{ asset_code: string | null }>(
+            `select asset_code from assets where asset_code is not null`,
+          )
+          .map((r) => r.asset_code as string),
+      )
 
       for (const { row, verdict } of plan.rows) {
         if (verdict.kind === 'rejected') continue
@@ -330,9 +376,16 @@ export class DemoStore {
         }
 
         const locationId = row.location ? this.locationIdFor(row.location) : null
+        const codes = row.code
+          ? allocateUnitCodes(takenCodes, row.code, row.quantity)
+          : null
         for (let i = 1; i <= row.quantity; i++) {
           const assetId = `asset-imported-${slug(row.name)}-${row.line}-${i}`
-          const code = row.code ? `${row.code}-${String(i).padStart(2, '0')}` : assetId
+          const code = codes ? codes[i - 1] : assetId
+          if (codes) {
+            if (code !== `${row.code}-${String(i).padStart(2, '0')}`) renumbered++
+            takenCodes.add(code)
+          }
           this.db.exec(
             `insert into assets
                (id, org_id, product_id, asset_code, serial_number, display_name,
@@ -353,7 +406,7 @@ export class DemoStore {
     })
 
     this.refreshCatalogue()
-    return { products, units }
+    return { products, units, renumbered }
   }
 
   /** A shelf by name, created on first sight so an import cannot lose one. */
@@ -470,8 +523,9 @@ export class DemoStore {
       }))
   }
 
-  /** The counters on the Today board. */
-  stats(): TodayStats {
+  /** The counters on the Today board. `nowMs` injectable so the one store
+   *  read that answers "today" can be asked about another day. */
+  stats(nowMs: number = Date.now()): TodayStats {
     const row = this.db.get<{ out_now: number; on_shelf: number; attention: number }>(
       `select
          sum(case when presence in ('out','in_transit') then 1 else 0 end) as out_now,
@@ -483,7 +537,7 @@ export class DemoStore {
     // list renders from, so the counter and the list it deep-links to can
     // never disagree. Jobs whose expected_back is free text land in neither
     // number — 'no date' is not late, it is unknown, and it stays that way.
-    const due = dueBoard(this.db, Date.now())
+    const due = dueBoard(this.db, nowMs)
     return {
       outNow: Number(row?.out_now ?? 0),
       onShelf: Number(row?.on_shelf ?? 0),
@@ -528,17 +582,21 @@ export class DemoStore {
     )
     if (!row) return null
 
-    const history: AssetHistoryRow[] = decodeScanOps(this.db)
-      .filter((op) => op.assetId === assetId)
-      .reverse() // newest first — it reads as a story, latest chapter on top
-      .map((op) => ({
-        id: op.outboxId,
-        event: op.eventType,
-        at: new Date(op.createdAt).toLocaleString(),
-        entryMethod: op.entryMethod,
-        jobLabel: op.jobId ? (this.job(op.jobId)?.label ?? null) : null,
-        actor: this.seed.userName,
-      }))
+    // collapseHistory folds a restart's rescan echo into one row with a
+    // ×N marker — the queue keeps every op; only the story is tidied.
+    const history: AssetHistoryRow[] = collapseHistory(
+      decodeScanOps(this.db)
+        .filter((op) => op.assetId === assetId)
+        .reverse() // newest first — it reads as a story, latest chapter on top
+        .map((op) => ({
+          id: op.outboxId,
+          event: op.eventType,
+          at: new Date(op.createdAt).toLocaleString(),
+          entryMethod: op.entryMethod,
+          jobLabel: op.jobId ? (this.job(op.jobId)?.label ?? null) : null,
+          actor: this.seed.userName,
+        })),
+    )
 
     return {
       id: row.id,
@@ -708,14 +766,34 @@ export class DemoStore {
    * job_expected table the seed writes, so the new job is on the board,
    * scannable and counted by availability the moment this returns. Lines
    * the matcher never resolved are LEFT OUT, not guessed in.
+   *
+   * The customer rides in at birth — existing, typed fresh at the sheet,
+   * or honestly absent (the nephew case; the job then cannot take a
+   * charge, and the charge buttons never render for it). This is the door
+   * the year simulation ran a whole pilot without: a desk job that cannot
+   * meet a customer makes the money book unreachable from its own front
+   * door (`no-customer-on-desk-job`).
    */
   createJobFromLines(
     lines: MatchedLine[],
-    input: { label: string; contact: string | null; expectedBack: string | null },
+    input: {
+      label: string
+      contact: string | null
+      expectedBack: string | null
+      customer?: JobCustomerChoice
+    },
   ): { jobId: string; allocated: number; requested: number } {
     const wants = lines
       .filter((l): l is MatchedLine & { productId: string } => !!l.productId)
       .map((l) => ({ productId: l.productId, qty: l.quantity }))
+
+    const choice = input.customer ?? null
+    const customerId =
+      choice === null
+        ? null
+        : choice.kind === 'existing'
+          ? choice.id
+          : this.createCustomer(choice.name, choice.phone)
 
     const jobId = `job-${crypto.randomUUID()}`
     const result = createJob(this.db, {
@@ -724,9 +802,40 @@ export class DemoStore {
       label: input.label,
       contact: input.contact,
       expectedBack: input.expectedBack,
+      customerId,
       wants,
     })
     return { jobId, allocated: result.expected.length, requested: result.requested }
+  }
+
+  /** A new khata, by name. Null for a blank name — see createCustomer. */
+  createCustomer(name: string, phone: string | null): string | null {
+    return createCustomer(this.db, { orgId: this.seed.orgId, name, phone })
+  }
+
+  /** The close rule's number for one job — the honest disabled reason. */
+  stillOut(jobId: string): number {
+    return stillOutCount(this.db, jobId)
+  }
+
+  /**
+   * End a job. Mirrors the server's close_job rule exactly (0018 D3):
+   * refused while anything still projects onto the job. The refusal is a
+   * RESULT, not an exception — the button renders it as its disabled
+   * reason, never as a crash.
+   */
+  closeJob(jobId: string, nowMs: number = Date.now()): CloseJobResult {
+    return closeJob(this.db, jobId, nowMs)
+  }
+
+  /** The undo — the job returns to every board and availability answer. */
+  reopenJob(jobId: string): boolean {
+    return reopenJob(this.db, jobId)
+  }
+
+  /** Every closed job, newest first — the "Closed jobs" door. */
+  closedJobs(): ClosedJobRow[] {
+    return closedJobs(this.db)
   }
 
   /** Set or clear a job's due date. ISO in, honest 'no date' when cleared. */
@@ -763,12 +872,18 @@ export class DemoStore {
   /**
    * Money received — a PAST FACT, written as a negative line. The method the
    * cash arrived by rides in the note, beside whatever the desk added.
+   *
+   * `whenMs` lets the fact be BACKDATED — "the client paid me yesterday,
+   * I'm entering it this morning" is an everyday truth the ledger must be
+   * able to state, or the statement books it in the wrong day (and at a
+   * month edge, the wrong month). The default is still now.
    */
   recordPayment(
     customerId: string,
     amountMinor: number,
     method: string,
     note: string | null,
+    whenMs: number = Date.now(),
   ): void {
     recordEntry(this.db, {
       orgId: this.seed.orgId,
@@ -776,7 +891,7 @@ export class DemoStore {
       kind: 'payment',
       amountMinor: -Math.abs(amountMinor),
       note: note && note.trim().length > 0 ? `${method} — ${note.trim()}` : method,
-      createdAt: Date.now(),
+      createdAt: whenMs,
     })
   }
 
@@ -792,7 +907,12 @@ export class DemoStore {
    * no customer is wired, because a charge with no khata to land in is money
    * recorded into a void.
    */
-  chargeClient(jobId: string, amountMinor: number, note: string | null): boolean {
+  chargeClient(
+    jobId: string,
+    amountMinor: number,
+    note: string | null,
+    whenMs: number = Date.now(),
+  ): boolean {
     const customer = this.customerForJob(jobId)
     if (!customer || amountMinor <= 0) return false
     recordEntry(this.db, {
@@ -802,44 +922,30 @@ export class DemoStore {
       amountMinor,
       jobId,
       note,
-      createdAt: Date.now(),
+      createdAt: whenMs,
     })
     return true
   }
 
   /**
-   * The late-fee DRAFT for an overdue return: days late × the day rates of
-   * what is still out on the job. Null unless the job is actually overdue
-   * with a customer to charge — the sheet must never open on a guess. The
-   * figure is a draft the owner edits and confirms; nothing here writes.
+   * The late-fee DRAFT for an overdue return — priced from what came back
+   * in the return session as well as what is still out, so the natural
+   * dock order (scan in first, open the sheet second) cannot collapse it
+   * to zero. Null unless the job is actually overdue with a customer to
+   * charge — the sheet must never open on a guess. The figure is a draft
+   * the owner edits and confirms; nothing here writes. See khata.ts.
    */
-  lateFeeDraftFor(
-    jobId: string,
-    nowMs: number = Date.now(),
-  ): { daysLate: number; dueLabel: string; perDay: MoneyTotal; draft: MoneyTotal } | null {
-    const job = this.job(jobId)
-    if (!job) return null
-    const due = dueStatus(job.expectedBack, nowMs)
-    if (due.state !== 'overdue' || !due.daysLate) return null
-    if (!this.customerForJob(jobId)) return null
-    const rates = this.db
-      .all<{ day_rate_minor: number | null }>(
-        `select r.day_rate_minor from assets a
-           left join product_rates r on r.product_id = a.product_id
-          where a.current_job_id = ? and a.presence in ('out', 'in_transit')`,
-        [jobId],
-      )
-      .map((r) => (r.day_rate_minor === null ? null : Number(r.day_rate_minor)))
-    return {
-      daysLate: due.daysLate,
-      dueLabel: due.label,
-      perDay: lateFeeDraft(1, rates),
-      draft: lateFeeDraft(due.daysLate, rates),
-    }
+  lateFeeDraftFor(jobId: string, nowMs: number = Date.now()): LateFeeDraftView | null {
+    return lateFeeDraftFor(this.db, jobId, nowMs)
   }
 
   /** The confirmed late fee — the owner's figure, not the draft's. */
-  recordLateFee(jobId: string, amountMinor: number, note: string | null): boolean {
+  recordLateFee(
+    jobId: string,
+    amountMinor: number,
+    note: string | null,
+    whenMs: number = Date.now(),
+  ): boolean {
     const customer = this.customerForJob(jobId)
     if (!customer || amountMinor <= 0) return false
     recordEntry(this.db, {
@@ -849,7 +955,7 @@ export class DemoStore {
       amountMinor,
       jobId,
       note,
-      createdAt: Date.now(),
+      createdAt: whenMs,
     })
     return true
   }
@@ -889,6 +995,30 @@ export class DemoStore {
   /** What one unit has earned, and how far it has paid for itself. */
   assetEarnings(assetId: string): AssetEarnings {
     return assetEarnings(this.db, assetId)
+  }
+
+  /**
+   * Uncorrected charges whose item has since been scanned home — the
+   * NEEDS-A-DECISION notices for the khata and the session summary.
+   * POLICY (owner may overrule): surfaced, never auto-reversed.
+   */
+  chargedButReturned(filter: { jobId?: string; customerId?: string } = {}): ChargedButReturned[] {
+    return chargedButReturned(this.db).filter(
+      (n) =>
+        (filter.jobId === undefined || n.jobId === filter.jobId) &&
+        (filter.customerId === undefined || n.customerId === filter.customerId),
+    )
+  }
+
+  /** Write the correction a notice drafted — the owner's confirm tap. */
+  reverseEntry(entryId: string, whenMs: number = Date.now()): boolean {
+    return recordReversalOf(
+      this.db,
+      this.seed.orgId,
+      entryId,
+      STR.customerReversedNote,
+      whenMs,
+    )
   }
 
   /** The demand this product's shortage turned away this month. */

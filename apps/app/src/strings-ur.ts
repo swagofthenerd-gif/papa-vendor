@@ -37,6 +37,11 @@ const KIND_UR: Record<string, string> = {
   late_fee: 'late fee',
   damage_charge: 'nuqsaan',
   adjustment: 'darusti',
+  // Correction vocabulary: 'mansookh' (voided) for a reversal — a bounced
+  // cheque must never read as the house's own 'darusti' — and 'write off'
+  // stays the loanword the trade uses, like 'late fee'.
+  reversal: 'mansookh',
+  write_off: 'write off',
 }
 
 export const STR_UR: StrTable = {
@@ -109,6 +114,17 @@ export const STR_UR: StrTable = {
   todayContactPlaceholder: 'Naam aur number — maslan Bilal 0300 4412233',
   todayExpectedBackOptional: 'Wapsi (zaroori nahi)',
   todayCreateJob: 'Job banayein',
+  todayCustomerOptional: 'Customer (zaroori nahi)',
+  todayNoCustomer: 'Koi customer nahi',
+  todayNoCustomerHint: 'Customer ke baghair is job par charge nahi likha ja sakta.',
+  todayNewCustomer: 'Naya customer',
+  todayCustomerNameLabel: 'Customer ka naam',
+  todayCustomerNamePlaceholder: 'maslan Bilal Hussain',
+  todayCustomerPhoneOptional: 'Phone (zaroori nahi)',
+  todayOpenKhataAria: (name: string): string => `${name} ka khata kholein`,
+  todayCloseJob: 'Job band karein',
+  todayStillOutCannotClose: (n: number): string =>
+    n === 1 ? '1 cheez abhi bahar hai' : `${n} cheezein abhi bahar hain`,
   todayMoneyHeading: 'Paisa',
   todayMoneyOwedToMe: 'mera udhaar',
   todayMoneyDueInToday: 'aaj aana hai',
@@ -423,6 +439,9 @@ export const STR_UR: StrTable = {
   labelsAddedAcross: (units: number, products: number): string =>
     `${units} ${cheezein(units)} add ho ${units === 1 ? 'gayi' : 'gayin'}, ` +
     `${products} ${products === 1 ? 'naya product' : 'naye products'} mein.`,
+  labelsCodesContinued: (n: number): string =>
+    `${n} asset code pehle se istemaal mein ${n === 1 ? 'tha' : 'thay'} — ` +
+    'duplicate banane ki bajaye numbering aage barhai gayi.',
   labelsYourNamesAreNowMatched:
     'Ab kit-list reader client ke message ko inhi naamon se milata hai.',
   labelsSeeTheGear: 'Saaman dekhein',
@@ -479,7 +498,26 @@ export const STR_UR: StrTable = {
   customerStatementClosingLine: (rupees: string): string =>
     `Aakhri balance: ${rupees}`,
   customerNothingOwed: 'Kuch baqaya nahi',
+  customerHouseOwes: (rupees: string): string => `Aap ke zimme ${rupees}`,
   customerOwedSince: (date: string): string => `${date} se baqaya`,
   customerKindLabel: (kind: string): string => KIND_UR[kind] ?? kind,
   customerNothingThisMonth: 'Is mahine kuch darj nahi hua.',
+  customerChargedButReturned: (rupees: string, code: string, job: string): string =>
+    `${job} par ${code} ka ${rupees} charge hua — cheez wapas aa gayi. Mansookh karein?`,
+  customerReverseDraft: 'Mansookh…',
+  customerReverseConfirm: (rupees: string): string =>
+    `Pakka karein — ${rupees} wapas likhein`,
+  customerReversedNote: 'Charge hua, phir cheez wapas aa gayi — mansookh',
+
+  // --------------------------------------------------------------- closed
+  closedJobsTitle: 'Band jobs',
+  closedJobsSubtitle: (n: number): string =>
+    n === 1 ? '1 job mukammal' : `${n} jobs mukammal`,
+  closedJobsEmpty: 'Abhi koi band job nahi.',
+  closedJobsEmptyHint: 'Sab kuch wapas aa jaye to job ke card se band karein.',
+  closedJobsDoor: 'Band jobs',
+  closedJobsReopen: 'Dobara kholein',
+  closedJobsClosedOn: (date: string): string => `${date} ko band hui`,
+  closedJobsNeverCameBack: (n: number): string =>
+    n === 1 ? '1 cheez kabhi wapas nahi aayi' : `${n} cheezein kabhi wapas nahi aayin`,
 }

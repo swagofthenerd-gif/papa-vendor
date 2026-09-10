@@ -287,6 +287,44 @@ export function readRows(
 }
 
 /**
+ * Unit codes for one import row that REFUSE to collide with codes already
+ * on the shelf.
+ *
+ * The naive `CODE-01, CODE-02…` numbering restarts at 01 for every file, so
+ * importing `Sony FX9,1,FX9` into a house that already has a seeded FX9-01
+ * quietly created a SECOND asset answering to the same visible sticker code —
+ * manual search then shows two identical rows and the tech picks one at
+ * coin-flip. Same refusal as the ambiguous-name rule: the import never
+ * silently merges, and now it never silently duplicates either.
+ *
+ * Numbering CONTINUES past the highest `PREFIX-NN` already taken (FX9-01,
+ * FX9-02 on the shelf → this row gets FX9-03), and an exact-collision guard
+ * skips anything else in the set. Codes allocated here are not added to
+ * `taken` — quantities within one call cannot collide with each other, and
+ * the caller adds them before the next row so rows cannot collide across
+ * the file.
+ */
+export function allocateUnitCodes(
+  taken: ReadonlySet<string>,
+  prefix: string,
+  quantity: number,
+): string[] {
+  let next = 1
+  for (const code of taken) {
+    if (!code.startsWith(`${prefix}-`)) continue
+    const n = Number(code.slice(prefix.length + 1))
+    if (Number.isInteger(n) && n >= next) next = n + 1
+  }
+  const codes: string[] = []
+  while (codes.length < quantity) {
+    const candidate = `${prefix}-${String(next).padStart(2, '0')}`
+    if (!taken.has(candidate)) codes.push(candidate)
+    next++
+  }
+  return codes
+}
+
+/**
  * Decide what each row would do, without doing any of it.
  *
  * The thresholds are deliberately far apart. An exact normalised match is the

@@ -12,7 +12,7 @@ import { test, describe, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { NodeSqliteDriver } from '@papa/core/node-driver'
-import { LOCAL_SCHEMA, balanceCardText, monthlyStatementText } from '@papa/core'
+import { LOCAL_SCHEMA, balanceCardText, monthlyStatementText, oldestUnpaidMs } from '@papa/core'
 import { seedDemo } from '../src/demo/seed.ts'
 import {
   assetEarnings,
@@ -123,6 +123,29 @@ describe('recordEntry', () => {
     const c = customerView(db, 'cust-ayesha')
     assert.equal(c.balanceMinor, rs(63_000))
     assert.equal(c.entries[0].jobLabel, 'Documentary — Walled City')
+  })
+
+  test('a same-millisecond charge and payment cannot flip the owed-since clock', () => {
+    // A bulk import writes lines faster than the clock ticks. The book
+    // carries rowid as the tie-break (LedgerEntryView.seq), so re-sorting
+    // the screen's newest-first rows reproduces insertion order exactly —
+    // without it, the tied payment sorted ahead of the tied charge, the
+    // running balance dipped to zero mid-walk, and "owed since" jumped
+    // from the original charge to the tie's day.
+    db.exec(`insert into customers (id, org_id, name) values ('cust-tie', ?, 'Tie Case')`, [
+      seed.orgId,
+    ])
+    const t1 = new Date(2030, 2, 1, 12).getTime()
+    const t2 = new Date(2030, 2, 6, 12).getTime()
+    const line = (kind, amountMinor, createdAt) =>
+      recordEntry(db, { orgId: seed.orgId, customerId: 'cust-tie', kind, amountMinor, createdAt })
+    line('charge', rs(100_000), t1)
+    line('charge', rs(40_000), t2)
+    line('payment', -rs(100_000), t2) // same millisecond, written after
+    const v = customerView(db, 'cust-tie')
+    assert.equal(v.balanceMinor, rs(40_000))
+    // The debt has run unbroken since t1: the tied payment never cleared it.
+    assert.equal(oldestUnpaidMs(v.entries), t1)
   })
 })
 
@@ -236,6 +259,45 @@ describe('assetEarnings', () => {
     const e = assetEarnings(db, 'asset-sachdeva-1')
     assert.equal(e.replacementMinor, null)
     assert.equal(e.paybackPct, null)
+  })
+
+  test('damage recovery is not earnings: the bar celebrates rental money only', () => {
+    const before = assetEarnings(db, 'asset-fx9-1').earnedMinor
+    recordEntry(db, {
+      orgId: seed.orgId,
+      customerId: 'cust-bilal',
+      kind: 'damage_charge',
+      amountMinor: rs(150_000),
+      assetId: 'asset-fx9-1',
+      note: 'Top handle repair',
+      createdAt: Date.now(),
+    })
+    // On the khata, yes; on the payback bar, never — a camera that gets
+    // broken often must not look like the fleet's best performer.
+    assert.equal(assetEarnings(db, 'asset-fx9-1').earnedMinor, before)
+  })
+
+  test('a reversed charge stops counting the moment the reversal names it', () => {
+    const before = assetEarnings(db, 'asset-fx9-1').earnedMinor
+    const chargeId = recordEntry(db, {
+      orgId: seed.orgId,
+      customerId: 'cust-bilal',
+      kind: 'charge',
+      amountMinor: rs(20_000),
+      assetId: 'asset-fx9-1',
+      createdAt: Date.now(),
+    })
+    assert.equal(assetEarnings(db, 'asset-fx9-1').earnedMinor, before + rs(20_000))
+    recordEntry(db, {
+      orgId: seed.orgId,
+      customerId: 'cust-bilal',
+      kind: 'reversal',
+      amountMinor: -rs(20_000),
+      assetId: 'asset-fx9-1',
+      reversalOf: chargeId,
+      createdAt: Date.now(),
+    })
+    assert.equal(assetEarnings(db, 'asset-fx9-1').earnedMinor, before)
   })
 
   test('payments against the same asset id do not subtract from earnings', () => {
@@ -373,10 +435,33 @@ describe('the money documents, golden', () => {
     assert.ok(clean.includes('Kuch baqaya nahi'))
   })
 
+  test('a negative balance says the house owes — plainly, in both languages', () => {
+    // POLICY (owner may overrule): the vendor owing the client is a fact
+    // the card states, never a 'Nothing owed' shrug.
+    const overpaid = {
+      customerName: 'Bilal Hussain',
+      houseName: 'Lightcraft Rentals',
+      entries: [
+        { kind: 'charge', amountMinor: rs(20_000), createdAt: at(2026, 8, 9) },
+        { kind: 'payment', amountMinor: -rs(35_000), createdAt: at(2026, 8, 12) },
+      ],
+      paymentLine: null,
+    }
+    const en = balanceCardText(overpaid, khataLabels(STR_EN))
+    assert.ok(en.includes('You owe them Rs 15,000'))
+    assert.ok(!en.includes('Nothing owed'))
+    const ur = balanceCardText(overpaid, khataLabels(STR_UR))
+    assert.ok(ur.includes('Aap ke zimme Rs 15,000'))
+    assert.ok(!ur.includes('Kuch baqaya nahi'))
+  })
+
   test('every ledger kind has a word in both tables', () => {
     const kinds = [
       'charge', 'payment', 'deposit_hold', 'deposit_apply',
       'deposit_refund', 'late_fee', 'damage_charge', 'adjustment',
+      // The correction vocabulary: a synced server reversal or write-off
+      // must render as a word, never leak as a snake_case kind.
+      'reversal', 'write_off',
     ]
     for (const table of [STR_EN, STR_UR]) {
       const labels = khataLabels(table)

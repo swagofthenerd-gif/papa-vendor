@@ -75,6 +75,24 @@ describe('applying a page', () => {
     assert.equal(new PullApplier(db).cursor(), 512, 'survives a fresh instance')
   })
 
+  test('jobs mirror customer_id and closed_at — the 0018 columns', () => {
+    // The customer chip and the closed-jobs door both read the mirror, so
+    // the two columns the server started sending in 0018 must land.
+    const applier = new PullApplier(db)
+    applier.apply(
+      page({
+        jobs: [{
+          id: 'j1', org_id: ORG, label: 'Zindagi', status: 'closed',
+          customer_id: 'cust-1', closed_at: '2026-09-01T10:00:00Z',
+        }],
+      }),
+    )
+    const row = db.get(`select customer_id, closed_at, status from jobs where id = 'j1'`)
+    assert.equal(row.customer_id, 'cust-1')
+    assert.equal(row.closed_at, '2026-09-01T10:00:00Z')
+    assert.equal(row.status, 'closed')
+  })
+
   test('ignores a table this build does not mirror', () => {
     // The server may add a table before the client knows about it. Erroring
     // there would stop sync entirely for an older build — which is how one
