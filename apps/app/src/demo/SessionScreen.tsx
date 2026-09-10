@@ -6,7 +6,7 @@ import { Session } from '../routes/Session.tsx'
 import { CloseJobButton, CustomerChip } from '../routes/Today.tsx'
 import { manifestText } from '../session-summary.ts'
 import { Shell } from '../components/Shell.tsx'
-import { ReversalNotice } from '../components/ReversalNotice.tsx'
+import { ReversalNotices } from '../components/ReversalNotice.tsx'
 import { go, type View } from '../nav.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
@@ -118,18 +118,14 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
       {/* Charged-then-returned: the dock's own NEEDS-A-DECISION notice.
           POLICY (owner may overrule): a reversal draft behind a confirm
           tap, never an auto-reverse — see ReversalNotice. */}
-      {store
-        .chargedButReturned({ jobId })
-        .map((n) => (
-          <ReversalNotice
-            key={`${n.entryId}-${tick}`}
-            item={n}
-            onReverse={() => {
-              store.reverseEntry(n.entryId)
-              setTick((t) => t + 1)
-            }}
-          />
-        ))}
+      <ReversalNotices
+        notices={store.chargedButReturned({ jobId })}
+        refreshKey={tick}
+        onReverse={(entryId) => {
+          store.reverseEntry(entryId)
+          setTick((t) => t + 1)
+        }}
+      />
 
       {written && customer ? (
         /* The receipt of the write, with the door to the khata it landed

@@ -8,7 +8,7 @@ import {
   whatsAppShareUrl,
 } from '@papa/core'
 import { Shell, SectionHead } from '../components/Shell.tsx'
-import { ReversalNotice } from '../components/ReversalNotice.tsx'
+import { ReversalNotices } from '../components/ReversalNotice.tsx'
 import { go, type View } from '../nav.ts'
 import { DueBadge } from '../routes/Today.tsx'
 import type { DemoStore } from './store.ts'
@@ -113,18 +113,14 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
           may overrule): a pre-filled reversal DRAFT behind a confirm tap,
           never an auto-reverse — see ReversalNotice. `tick` in the key
           re-reads the list after a write. */}
-      {store
-        .chargedButReturned({ customerId })
-        .map((n) => (
-          <ReversalNotice
-            key={`${n.entryId}-${tick}`}
-            item={n}
-            onReverse={() => {
-              store.reverseEntry(n.entryId)
-              setTick((t) => t + 1)
-            }}
-          />
-        ))}
+      <ReversalNotices
+        notices={store.chargedButReturned({ customerId })}
+        refreshKey={tick}
+        onReverse={(entryId) => {
+          store.reverseEntry(entryId)
+          setTick((t) => t + 1)
+        }}
+      />
 
       <section className="section">
         <SectionHead

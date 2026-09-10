@@ -47,3 +47,37 @@ export function ReversalNotice({
     </div>
   )
 }
+
+/**
+ * The charged-then-returned notices for one screen, as a list. The khata and
+ * the session summary both surface the same NEEDS-A-DECISION cards over the
+ * same store call; rendering them here keeps the confirm-arms-then-writes
+ * policy — and the remount-on-write key — in exactly one place, so the two
+ * screens cannot drift into two different reversal flows.
+ *
+ * `refreshKey` (each screen's re-read tick) rides in the key so a written
+ * reversal remounts the card and clears its armed state, matching what each
+ * screen did inline before this was lifted out.
+ */
+export function ReversalNotices({
+  notices,
+  refreshKey,
+  onReverse,
+}: {
+  notices: ChargedButReturned[]
+  refreshKey: number
+  /** Writes the reversal for one entry — the owner's confirm tap. */
+  onReverse: (entryId: string) => void
+}) {
+  return (
+    <>
+      {notices.map((n) => (
+        <ReversalNotice
+          key={`${n.entryId}-${refreshKey}`}
+          item={n}
+          onReverse={() => onReverse(n.entryId)}
+        />
+      ))}
+    </>
+  )
+}
