@@ -3,13 +3,14 @@
  * edges where dates, empty books, and hostile input meet the read models.
  *
  * The centrepiece is the charge-from-the-dock question (report finding,
- * not invented policy): a return session shows a shortfall, the owner
- * charges the client for the missing item, and THEN the item is rescanned
- * home. What happens is pinned exactly as observed: the charge stays on
- * the khata, nothing offsets it, no surface hints that the charged item
- * came back, and the per-asset payback bar counts the damage money as
- * earnings. Whether that is right is the owner's call; these tests make
- * the current answer visible instead of accidental.
+ * since RESOLVED with a default the owner may overrule): a return session
+ * shows a shortfall, the owner charges the client for the missing item,
+ * and THEN the item is rescanned home. Pinned policy: the charge never
+ * moves on its own — but chargedButReturned derives the reconciliation,
+ * the khata and session summary surface it as a NEEDS-A-DECISION notice
+ * with a one-tap correction draft, the payback bar does not count damage
+ * money, and recordReversalOf writes the correction only on the owner's
+ * confirm (and refuses to write it twice).
  *
  * Everything else: seeded-random khata round-trips against a real SQLite,
  * the money strip over an empty book / zero-entry customers / month
@@ -33,12 +34,14 @@ import { seedDemo } from '../src/demo/seed.ts'
 import { SessionRegistry } from '../src/demo/sessions.ts'
 import {
   assetEarnings,
+  chargedButReturned,
   customerForJob,
   customersByBalance,
   customerView,
   isoDate,
   moneyStrip,
   recordEntry,
+  recordReversalOf,
 } from '../src/demo/khata.ts'
 import {
   assetFacts,
@@ -87,9 +90,12 @@ beforeEach(() => {
 
 // ------------------------------------------------ charged, then it came home
 
-describe('charge-from-the-dock versus a shortfall that heals (report finding)', () => {
-  test('the charge stays, nothing offsets it, and the payback bar counts it — pinned end to end', () => {
-    const registry = new SessionRegistry(db, 'stress-device', expectedFor)
+describe('charge-from-the-dock versus a shortfall that heals (resolved policy)', () => {
+  test('the charge stays put, the notice surfaces, and the confirm tap reverses — pinned end to end', () => {
+    // The registry runs on an injected clock (the clock welds are gone),
+    // so the rescan genuinely lands AFTER the charge on the book's axis.
+    let clock = NOW - 10 * 60_000
+    const registry = new SessionRegistry(db, 'stress-device', expectedFor, () => clock)
 
     // The seeded overdue job: asset-fx6-3 is physically out on job-doc,
     // whose customer is Ayesha with Rs 55,000 already on the book.
@@ -116,7 +122,7 @@ describe('charge-from-the-dock versus a shortfall that heals (report finding)', 
     // chargeClient path, reproduced at the khata layer it delegates to.
     const customer = customerForJob(db, 'job-doc')
     assert.equal(customer.id, 'cust-ayesha')
-    recordEntry(db, {
+    const chargeId = recordEntry(db, {
       orgId: seed.orgId,
       customerId: customer.id,
       kind: 'damage_charge',
@@ -133,6 +139,7 @@ describe('charge-from-the-dock versus a shortfall that heals (report finding)', 
 
     // …and TWENTY MINUTES LATER the camera turns up on the other truck and
     // is scanned home. The shortfall heals.
+    clock = NOW + 20 * 60_000
     const r = entry.session.addManually('asset-fx6-3', 'check_in')
     assert.equal(r.outcome, 'accepted')
     const facts1 = sessionScanFacts(decodeScanOps(db), entry.session.id)
@@ -145,17 +152,22 @@ describe('charge-from-the-dock versus a shortfall that heals (report finding)', 
     })
     assert.equal(summary1.missing.length, 0, 'the shortfall is gone')
 
-    // PIN 1: the charge does NOT move. The book is append-only and no code
-    // path writes an offsetting line or links a check_in to a charge.
+    // PIN 1 (policy, unchanged): the charge does NOT move on its own. The
+    // book is append-only and the machine never auto-reverses money.
     const after = customerView(db, 'cust-ayesha')
     assert.equal(after.balanceMinor, 55_000_00 + fx6.replacementMinor)
 
-    // PIN 2: the ONLY reconciliation trail is the entry itself naming the
-    // asset and job — an owner must notice and write the adjustment by
-    // hand. Nothing derives "charged but returned".
-    const trail = after.entries.find((e) => e.kind === 'damage_charge')
-    assert.equal(trail.assetId, 'asset-fx6-3')
-    assert.equal(trail.jobId, 'job-doc')
+    // PIN 2 (flipped): the reconciliation is now DERIVED, not left to the
+    // owner's memory. chargedButReturned surfaces the uncorrected charge
+    // whose item was scanned home after it — the NEEDS-A-DECISION notice
+    // the khata and the session summary render.
+    const notices = chargedButReturned(db)
+    assert.equal(notices.length, 1)
+    assert.equal(notices[0].entryId, chargeId)
+    assert.equal(notices[0].assetId, 'asset-fx6-3')
+    assert.equal(notices[0].jobId, 'job-doc')
+    assert.equal(notices[0].customerId, 'cust-ayesha')
+    assert.equal(notices[0].amountMinor, fx6.replacementMinor)
 
     // PIN 3 (flipped with the payback-counts-damage fix): the payback bar
     // does NOT count the dock charge — damage recovery is not rental
@@ -163,6 +175,24 @@ describe('charge-from-the-dock versus a shortfall that heals (report finding)', 
     const earnings = assetEarnings(db, 'asset-fx6-3')
     assert.equal(earnings.earnedMinor, 0)
     assert.equal(earnings.paybackPct, 0)
+
+    // The one-tap draft, CONFIRMED: a reversal naming the charge. The
+    // balance returns to the pre-charge book, the notice retires, both
+    // lines stay on the page — and a second confirm cannot flip the
+    // correction into a discount.
+    assert.equal(
+      recordReversalOf(db, seed.orgId, chargeId, 'came back', NOW + 40 * 60_000),
+      true,
+    )
+    const settled = customerView(db, 'cust-ayesha')
+    assert.equal(settled.balanceMinor, 55_000_00)
+    assert.equal(settled.entries.filter((e) => e.kind === 'damage_charge').length, 1)
+    assert.equal(settled.entries.filter((e) => e.kind === 'reversal').length, 1)
+    assert.equal(chargedButReturned(db).length, 0)
+    assert.equal(
+      recordReversalOf(db, seed.orgId, chargeId, 'again', NOW + 41 * 60_000),
+      false,
+    )
   })
 })
 

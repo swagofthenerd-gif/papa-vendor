@@ -490,4 +490,10 @@ export const STR_UR: StrTable = {
   customerOwedSince: (date: string): string => `${date} se baqaya`,
   customerKindLabel: (kind: string): string => KIND_UR[kind] ?? kind,
   customerNothingThisMonth: 'Is mahine kuch darj nahi hua.',
+  customerChargedButReturned: (rupees: string, code: string, job: string): string =>
+    `${job} par ${code} ka ${rupees} charge hua — cheez wapas aa gayi. Mansookh karein?`,
+  customerReverseDraft: 'Mansookh…',
+  customerReverseConfirm: (rupees: string): string =>
+    `Pakka karein — ${rupees} wapas likhein`,
+  customerReversedNote: 'Charge hua, phir cheez wapas aa gayi — mansookh',
 }

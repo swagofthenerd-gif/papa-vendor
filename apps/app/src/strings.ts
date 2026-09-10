@@ -520,6 +520,15 @@ const STR_EN = {
   customerOwedSince: (date: string): string => `Owed since ${date}`,
   customerKindLabel: (kind: string): string => KIND_EN[kind] ?? kind,
   customerNothingThisMonth: 'Nothing recorded this month.',
+  // Charged-then-returned: the NEEDS-A-DECISION notice and its one-tap
+  // correction draft. POLICY (owner may overrule): a notice, never an
+  // auto-reverse — see chargedButReturned in demo/khata.ts.
+  customerChargedButReturned: (rupees: string, code: string, job: string): string =>
+    `Charged ${rupees} for ${code} on ${job} — it came back. Reverse?`,
+  customerReverseDraft: 'Reverse…',
+  customerReverseConfirm: (rupees: string): string =>
+    `Confirm — write ${rupees} back`,
+  customerReversedNote: 'Charged, then it came back — reversed',
 }
 
 /**

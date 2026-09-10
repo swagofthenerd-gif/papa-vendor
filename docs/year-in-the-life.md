@@ -98,6 +98,23 @@ simulated instant.)
 
 ---
 
+## Policy defaults adopted (the stress tests' product questions)
+
+The hammer/stress runs raised four product questions; each now ships a
+default, flagged `POLICY (owner may overrule)` at the code site, and the
+tests pin the default instead of the accident.
+
+- **Charged-then-returned — RESOLVED-with-default.** When a check-in scan
+  lands for an asset with an uncorrected `charge`/`damage_charge` naming
+  that asset+job, the khata and the session summary surface a
+  NEEDS-A-DECISION notice ("Charged Rs X for FX9-02 on Job Y — it came
+  back. Reverse?") with a one-tap correction draft behind a confirm tap —
+  **never an auto-reverse** ("we keep the money anyway" is a real
+  answer). Reversed charges are also out of asset earnings client-side;
+  the server's `asset_earnings` view needs a follow-up migration.
+  (`chargedButReturned` / `recordReversalOf` in `demo/khata.ts`; pinned
+  in `stress-money.test.mjs`.)
+
 ## (b) Missing features, ranked by how often the year hit the gap
 
 Ranked by number of months the simulation ran into the wall, worst first.

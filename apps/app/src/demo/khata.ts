@@ -308,6 +308,141 @@ export function assetEarnings(db: SqlDriver, assetId: string): AssetEarnings {
   }
 }
 
+export interface ChargedButReturned {
+  entryId: string
+  customerId: string
+  customerName: string
+  kind: LedgerEntryKind
+  amountMinor: number
+  jobId: string
+  jobLabel: string
+  assetId: string
+  assetCode: string
+  assetName: string
+}
+
+/**
+ * Charges whose item CAME BACK — the dock's "charged, then it turned up
+ * on the other truck" case (pinned end to end in stress-money.test.mjs).
+ *
+ * POLICY (owner may overrule): this is a NEEDS-A-DECISION notice, never an
+ * auto-reverse. A charge/damage_charge naming an asset and a job, not yet
+ * corrected by a reversal, whose asset was scanned in AFTER the charge was
+ * written, surfaces on the khata and the session summary with a one-tap
+ * correction DRAFT — the reversal is written only when the owner confirms,
+ * because "we keep the money anyway" (a genuinely lost accessory inside,
+ * a negotiated settlement) is a real answer only a person can give.
+ */
+export function chargedButReturned(db: SqlDriver): ChargedButReturned[] {
+  const reversed = new Set(
+    db
+      .all<{ reversal_of: string }>(
+        `select reversal_of from customer_ledger_entries
+          where reversal_of is not null`,
+      )
+      .map((r) => r.reversal_of),
+  )
+  const rows = db.all<{
+    id: string
+    customer_id: string
+    customer_name: string
+    kind: string
+    amount_minor: number
+    job_id: string
+    job_label: string | null
+    asset_id: string
+    asset_code: string | null
+    asset_name: string | null
+    created_at: number
+  }>(
+    `select e.id, e.customer_id, c.name as customer_name, e.kind,
+            e.amount_minor, e.job_id, j.label as job_label, e.asset_id,
+            a.asset_code, coalesce(p.display_name, a.display_name) as asset_name,
+            e.created_at
+       from customer_ledger_entries e
+       join customers c on c.id = e.customer_id
+       left join jobs j on j.id = e.job_id
+       join assets a on a.id = e.asset_id
+       left join products p on p.id = a.product_id
+      where e.kind in ('charge', 'damage_charge')
+        and e.asset_id is not null and e.job_id is not null
+      order by e.created_at, e.rowid`,
+  )
+  if (rows.length === 0) return []
+
+  // "Came back" means a check_in scan recorded STRICTLY AFTER the charge —
+  // the ordinary flow (gear home first, rental charged at the desk after)
+  // must never cry wolf.
+  const ops = decodeScanOps(db)
+  const out: ChargedButReturned[] = []
+  for (const r of rows) {
+    if (reversed.has(r.id)) continue
+    const cameBack = ops.some(
+      (op) =>
+        op.assetId === r.asset_id &&
+        op.eventType === 'check_in' &&
+        op.createdAt > Number(r.created_at),
+    )
+    if (!cameBack) continue
+    out.push({
+      entryId: r.id,
+      customerId: r.customer_id,
+      customerName: r.customer_name,
+      kind: r.kind as LedgerEntryKind,
+      amountMinor: Number(r.amount_minor),
+      jobId: r.job_id,
+      jobLabel: r.job_label ?? 'Unnamed job',
+      assetId: r.asset_id,
+      assetCode: r.asset_code ?? '—',
+      assetName: r.asset_name ?? 'Unnamed',
+    })
+  }
+  return out
+}
+
+/**
+ * Write the correction the notice drafted: a `reversal` naming the charge.
+ * POLICY (owner may overrule): runs only from the owner's confirm tap —
+ * nothing calls this automatically. Refuses a second reversal of the same
+ * entry, so a double-tap cannot flip the correction into a discount.
+ */
+export function recordReversalOf(
+  db: SqlDriver,
+  orgId: string,
+  entryId: string,
+  note: string | null,
+  whenMs: number,
+): boolean {
+  const e = db.get<{
+    customer_id: string
+    amount_minor: number
+    job_id: string | null
+    asset_id: string | null
+  }>(
+    `select customer_id, amount_minor, job_id, asset_id
+       from customer_ledger_entries where id = ?`,
+    [entryId],
+  )
+  if (!e) return false
+  const already = db.get<{ one: number }>(
+    `select 1 as one from customer_ledger_entries where reversal_of = ?`,
+    [entryId],
+  )
+  if (already) return false
+  recordEntry(db, {
+    orgId,
+    customerId: e.customer_id,
+    kind: 'reversal',
+    amountMinor: -Number(e.amount_minor),
+    jobId: e.job_id,
+    assetId: e.asset_id,
+    note,
+    reversalOf: entryId,
+    createdAt: whenMs,
+  })
+  return true
+}
+
 export interface LateFeeDraftView {
   daysLate: number
   dueLabel: string

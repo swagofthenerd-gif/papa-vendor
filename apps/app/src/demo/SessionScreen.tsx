@@ -5,6 +5,7 @@ import { moneyLabel } from '@papa/core'
 import { Session } from '../routes/Session.tsx'
 import { manifestText } from '../session-summary.ts'
 import { Shell } from '../components/Shell.tsx'
+import { ReversalNotice } from '../components/ReversalNotice.tsx'
 import { go, type View } from '../nav.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
@@ -26,6 +27,7 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
   const [parchi, setParchi] = useState<string | null>(null)
   const [sheet, setSheet] = useState<'charge' | 'latefee' | null>(null)
   const [written, setWritten] = useState<string | null>(null)
+  const [tick, setTick] = useState(0)
 
   // The khata a dock charge would land in, and the overdue return's
   // late-fee draft — both null when the facts do not support them, and
@@ -87,6 +89,22 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
         onChargeClient={() => setSheet('charge')}
         onDraftLateFee={() => setSheet('latefee')}
       />
+
+      {/* Charged-then-returned: the dock's own NEEDS-A-DECISION notice.
+          POLICY (owner may overrule): a reversal draft behind a confirm
+          tap, never an auto-reverse — see ReversalNotice. */}
+      {store
+        .chargedButReturned({ jobId })
+        .map((n) => (
+          <ReversalNotice
+            key={`${n.entryId}-${tick}`}
+            item={n}
+            onReverse={() => {
+              store.reverseEntry(n.entryId)
+              setTick((t) => t + 1)
+            }}
+          />
+        ))}
 
       {written && customer ? (
         /* The receipt of the write, with the door to the khata it landed

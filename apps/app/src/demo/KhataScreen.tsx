@@ -8,6 +8,7 @@ import {
   whatsAppShareUrl,
 } from '@papa/core'
 import { Shell, SectionHead } from '../components/Shell.tsx'
+import { ReversalNotice } from '../components/ReversalNotice.tsx'
 import { go, type View } from '../nav.ts'
 import { DueBadge } from '../routes/Today.tsx'
 import type { DemoStore } from './store.ts'
@@ -33,7 +34,7 @@ import { STR } from '../strings.ts'
  */
 export function KhataScreen({ store, customerId }: { store: DemoStore; customerId: string }) {
   const view: View = { name: 'customer', customerId }
-  const [, setTick] = useState(0)
+  const [tick, setTick] = useState(0)
   const [paying, setPaying] = useState(false)
   const [copied, setCopied] = useState(false)
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -103,6 +104,23 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
       <button className="btn btn-primary btn-block" onClick={() => setPaying(true)}>
         <Icon name="clipboard-check" size={18} /> {STR.customerRecordPayment}
       </button>
+
+      {/* Charged-then-returned: NEEDS-A-DECISION notices. POLICY (owner
+          may overrule): a pre-filled reversal DRAFT behind a confirm tap,
+          never an auto-reverse — see ReversalNotice. `tick` in the key
+          re-reads the list after a write. */}
+      {store
+        .chargedButReturned({ customerId })
+        .map((n) => (
+          <ReversalNotice
+            key={`${n.entryId}-${tick}`}
+            item={n}
+            onReverse={() => {
+              store.reverseEntry(n.entryId)
+              setTick((t) => t + 1)
+            }}
+          />
+        ))}
 
       <section className="section">
         <SectionHead

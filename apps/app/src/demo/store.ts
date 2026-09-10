@@ -55,12 +55,14 @@ import {
 import { dayAccount, type DayAccount } from './hisaab.ts'
 import {
   assetEarnings,
+  chargedButReturned,
   customerForJob,
   customersByBalance,
   customerView,
   khataLabels,
   lateFeeDraftFor,
   moneyStrip,
+  recordReversalOf,
   paymentLine,
   paymentQr,
   recordEntry,
@@ -69,6 +71,7 @@ import {
   setPaymentQr,
   turnedAwayThisMonth,
   type AssetEarnings,
+  type ChargedButReturned,
   type CustomerListRow,
   type CustomerView,
   type LateFeeDraftView,
@@ -921,6 +924,30 @@ export class DemoStore {
   /** What one unit has earned, and how far it has paid for itself. */
   assetEarnings(assetId: string): AssetEarnings {
     return assetEarnings(this.db, assetId)
+  }
+
+  /**
+   * Uncorrected charges whose item has since been scanned home — the
+   * NEEDS-A-DECISION notices for the khata and the session summary.
+   * POLICY (owner may overrule): surfaced, never auto-reversed.
+   */
+  chargedButReturned(filter: { jobId?: string; customerId?: string } = {}): ChargedButReturned[] {
+    return chargedButReturned(this.db).filter(
+      (n) =>
+        (filter.jobId === undefined || n.jobId === filter.jobId) &&
+        (filter.customerId === undefined || n.customerId === filter.customerId),
+    )
+  }
+
+  /** Write the correction a notice drafted — the owner's confirm tap. */
+  reverseEntry(entryId: string, whenMs: number = Date.now()): boolean {
+    return recordReversalOf(
+      this.db,
+      this.seed.orgId,
+      entryId,
+      STR.customerReversedNote,
+      whenMs,
+    )
   }
 
   /** The demand this product's shortage turned away this month. */
