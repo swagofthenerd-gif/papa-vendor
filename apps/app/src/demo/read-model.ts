@@ -1,6 +1,7 @@
 import {
   compareDueDates,
   dueStatus,
+  voidedScanIds,
   type DueStatus,
   type JobCommitment,
   type MoneyTotal,
@@ -431,13 +432,20 @@ export interface DecodedScanOp {
  * live handover, and now the rebuilt one); three copies of "what is in a
  * scan op" is how one of them quietly stops agreeing with the others when a
  * field is renamed. They all read this instead.
+ *
+ * VOIDED OPS ARE SKIPPED HERE, once, for every reader: an op a `void_scan`
+ * names stays in the queue (append-only truth, and the server may already
+ * hold it) but is no longer a fact any history, summary or hisaab may
+ * repeat.
  */
 export function decodeScanOps(db: SqlDriver): DecodedScanOp[] {
+  const voided = voidedScanIds(db)
   return db
     .all<{ id: string; payload: string; created_at: number }>(
       `select id, payload, created_at from outbox
         where op = 'submit_scan_batch' order by seq`,
     )
+    .filter((o) => !voided.has(o.id))
     .map((o) => {
       const op = JSON.parse(o.payload) as Record<string, unknown>
       return {

@@ -4,6 +4,8 @@ import {
   ScanSession,
   allocateUnitCodes,
   lookupTag,
+  voidScan,
+  type VoidScanResult,
   caseManifest,
   hasContents,
   pairBySide,
@@ -181,6 +183,16 @@ export class DemoStore {
    *  other job's half-scanned session stays open behind it. */
   endSession(): void {
     this.sessions.endCurrent()
+  }
+
+  /**
+   * Undo a mis-scan. Append-only stays intact: the wrong op keeps its
+   * queue row and a `void_scan` referencing it queues behind it; the
+   * projection re-derives and every history reader skips the voided op.
+   * See voidScan in @papa/core.
+   */
+  voidScan(outboxId: string): VoidScanResult {
+    return voidScan(this.db, outboxId)
   }
 
   /**

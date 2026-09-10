@@ -39,22 +39,17 @@ order (scan in first, open the sheet second) shows the same Rs 84,000,
 and the fee stops growing while the sheet sits open. (OCT block pins the
 held draft.)
 
-### 3. A mis-scan cannot be undone; the repair writes false history — `no-scan-undo`
+### 3. A mis-scan cannot be undone; the repair writes false history — FIXED
 
-A new tech scans the C500 into the wrong job. The conflict warning fires
-correctly — and records, correctly (reality outranks the schedule). But
-there is **no undo**: the projection now says the camera is on the wrong
-job, and the only repair is a check-in on no job plus a re-check-out on
-the right one. That leaves two fabricated movement events in the permanent
-scan history and, on a synced device, in the server's append-only log. The
-asset page will forever show a phantom round-trip.
-
-*Repro:* NOV block, the "wrong-job scan" sequence — three extra ops to fix
-one mistake, `current_job_id` corrupted in between.
-
-*Fix direction:* a `void_scan` op referencing the outbox id (append-only
-stays intact; the projection and history readers skip voided ops). This is
-the scan-side sibling of the ledger's `adjustment`.
+Was `no-scan-undo`. `voidScan` (`packages/core/src/scan.ts`) is the
+scan-side sibling of the ledger's `reversal`: a `void_scan` op names the
+outbox id it voids and queues BEHIND it (`depends_on`), so append-only
+stays intact and a server can never see a void for a scan it has not
+received. The projection re-derives the asset's state from the remaining
+unvoided ops, and `decodeScanOps` skips voided ops once for every reader
+— history, summaries, hisaab. No fabricated round-trip. (NOV block pins
+the one-op undo; a UI affordance on the conflict row is follow-up — the
+mechanism exists via `store.voidScan`.)
 
 ### 4. The debt clock resets on a bounced cheque — FIXED
 
@@ -296,9 +291,10 @@ can be deleted.
   unknown labels recorded-not-lost, and manual adds honestly marked. The
   scan loop's feedback design held up under a clumsy first week; worth
   saying because so much else in this doc is a gap.
-- **Conflict repair needs a script.** The three-scan undo dance (NOV) is
-  performable but nothing in the UI suggests it; a tech who mis-scans
-  either invents it or leaves the projection wrong.
+- **Conflict repair now has a mechanism, not yet a button.** `voidScan`
+  undoes a mis-scan in one op (see fixed finding 3); the scan screen's
+  conflict row does not offer it yet, so a tech still needs the desk to
+  know it exists.
 
 ## (d) The vendor's verdict
 

@@ -36,6 +36,7 @@ import {
   PhotoStore,
   allocateUnitCodes,
   lookupTag,
+  voidScan,
   dueStatus,
   lateFeeDraft,
   checkAvailability,
@@ -735,7 +736,7 @@ describe('a year in the life of the rental house', () => {
     outTracker.add(n3.expected[1])
     scanAll(n3out, n3.expected.slice(2), 'check_out')
 
-    // --- The wrong-job scan, and the undo that does not exist -------------
+    // --- The wrong-job scan, and the undo that now exists -----------------
     const n4 = jobOut('Music video — c500 day', 'cust-sana',
       [{ productId: 'prod-c500', qty: 1 }], iso(2, 12), at(2, 8, 9))
     const c500 = n4.expected[0]
@@ -751,24 +752,24 @@ describe('a year in the life of the rental house', () => {
       n3.id,
       'the mis-scan moved the camera onto the wrong job',
     )
-    // There is no undo. The only repair is a compensating dance that writes
-    // two more (false) movement facts into the permanent history:
-    const fixer = new ScanSession(db, { deviceId: 'sim-phone', now: () => at(2, 8, 10) })
-    const undo = fixer.scan(tagOf.get(c500), 'check_in')
-    assert.equal(undo.outcome, 'accepted')
-    expectedScanOps++
-    const redoSession = new ScanSession(db, {
-      deviceId: 'sim-phone', jobId: n4.id, expected: new Set([c500]),
-      now: () => at(2, 8, 10),
-    })
-    const redo = redoSession.scan(tagOf.get(c500), 'check_out')
-    assert.equal(redo.outcome, 'accepted')
-    expectedScanOps++
-    assert.equal(
-      db.get(`select current_job_id as j from assets where id = ?`, [c500]).j,
-      n4.id,
+    // ONE op undoes it: void_scan names the wrong op and queues behind it.
+    // The queue stays append-only — the wrong row keeps its place — but
+    // the projection re-derives from what remains and every history reader
+    // skips the voided op: no fabricated round-trip, no phantom repair.
+    // (Was finding `no-scan-undo`.)
+    const undone = voidScan(db, wrong.outboxId, { now: () => at(2, 8, 10) })
+    assert.equal(undone.outcome, 'voided')
+    const restored = db.get(
+      `select current_job_id as j, presence as p from assets where id = ?`,
+      [c500],
     )
-    finding('no-scan-undo')
+    assert.equal(restored.j, n4.id, 'back on the job it really left on')
+    assert.equal(restored.p, 'out')
+    // The camera's history holds NO trace of the interview job — and no
+    // false check_in/check_out pair invented to repair the mistake.
+    const c500Story = decodeScanOps(db).filter((op) => op.assetId === c500)
+    assert.ok(c500Story.every((op) => op.jobId !== n3.id))
+    assert.equal(c500Story.length, 1) // the one true checkout
 
     jobBack(n3.id, 'cust-hamza', at(2, 12), { k: 2, d: 12, chargeRs: 20_000, payRs: 20_000 })
     jobBack(n4.id, 'cust-sana', at(2, 12), { k: 2, d: 12, chargeRs: 22_000, payRs: 22_000 })
@@ -1308,7 +1309,6 @@ describe('a year in the life of the rental house', () => {
         'no-health-door',
         'no-lifetime-value-view',
         'no-month-history-screen',
-        'no-scan-undo',
         'no-service-tracking',
         'no-subrent-intake',
         'no-swap-flow',

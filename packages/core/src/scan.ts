@@ -472,6 +472,113 @@ function seenKey(assetId: string, eventType: string): string {
   return `${assetId}\n${eventType}`
 }
 
+export type VoidScanResult =
+  | { outcome: 'voided'; outboxId: string; assetId: string | null }
+  | { outcome: 'not_found' }
+  | { outcome: 'not_a_scan' }
+  | { outcome: 'already_voided' }
+
+/**
+ * Undo a mis-scan WITHOUT rewriting history — the scan-side sibling of the
+ * ledger's `reversal`.
+ *
+ * Before this existed, the only repair for a scan into the wrong job was a
+ * compensating dance — check in on no job, check out on the right one —
+ * which wrote two FABRICATED movement events into the permanent record: the
+ * asset page forever showed a phantom round-trip, and on a synced device
+ * the server's append-only log carried it too.
+ *
+ * The queue stays append-only. The voided op keeps its row (and its place
+ * in the send order — the server may already have it), and the undo is
+ * itself an op: `void_scan`, naming the outbox id it voids, queued BEHIND
+ * it via depends_on so a server can never receive a void for a scan it has
+ * not seen. Locally, the projection re-derives the asset's state from the
+ * remaining unvoided ops, and every history reader skips voided ops via
+ * `voidedScanIds`.
+ */
+export function voidScan(
+  db: SqlDriver,
+  outboxId: string,
+  opts: { now?: () => number; newId?: () => string } = {},
+): VoidScanResult {
+  const now = opts.now ?? Date.now
+  const newId = opts.newId ?? (() => crypto.randomUUID())
+  const outbox = new Outbox(db, now)
+
+  const row = outbox.byId(outboxId)
+  if (!row) return { outcome: 'not_found' }
+  if (row.op !== 'submit_scan_batch') return { outcome: 'not_a_scan' }
+  if (voidedScanIds(db).has(outboxId)) return { outcome: 'already_voided' }
+
+  const payload = JSON.parse(row.payload) as Record<string, unknown>
+  const assetId = typeof payload.asset_id === 'string' ? payload.asset_id : null
+
+  db.transaction(() => {
+    outbox.enqueue({
+      id: newId(),
+      op: 'void_scan',
+      payload: {
+        voids: outboxId,
+        asset_id: assetId,
+        device_time: new Date(now()).toISOString(),
+      },
+      dependsOn: outboxId,
+    })
+    if (assetId) reprojectAsset(db, assetId)
+  })
+
+  return { outcome: 'voided', outboxId, assetId }
+}
+
+/** Outbox ids of scan ops a `void_scan` has voided — the skip set every
+ *  history reader applies, so a voided op can never resurface as fact. */
+export function voidedScanIds(db: SqlDriver): Set<string> {
+  const out = new Set<string>()
+  for (const r of db.all<{ payload: string }>(
+    `select payload from outbox where op = 'void_scan'`,
+  )) {
+    try {
+      const p = JSON.parse(r.payload) as Record<string, unknown>
+      if (typeof p.voids === 'string') out.add(p.voids)
+    } catch {
+      // A malformed void voids nothing.
+    }
+  }
+  return out
+}
+
+/**
+ * Re-derive one asset's projected state after a void.
+ *
+ * projectOp is memoryless — each movement op fully determines presence and
+ * job — so the LAST remaining unvoided movement op for the asset is the
+ * whole answer. When none remains (the voided op was the asset's only
+ * recorded movement), the shelf is the honest base state: on this device
+ * the queue is the only movement record there is, and an asset none of it
+ * moved is where the mirror last said — which the next real scan
+ * re-asserts either way.
+ */
+function reprojectAsset(db: SqlDriver, assetId: string): void {
+  const voided = voidedScanIds(db)
+  let last: Record<string, unknown> | null = null
+  for (const r of db.all<{ id: string; payload: string }>(
+    `select id, payload from outbox where op = 'submit_scan_batch' order by seq`,
+  )) {
+    if (voided.has(r.id)) continue
+    const p = JSON.parse(r.payload) as Record<string, unknown>
+    if (p.asset_id !== assetId) continue
+    if (p.event_type === 'check_out' || p.event_type === 'check_in') last = p
+  }
+  if (last) {
+    projectOp(db, last)
+    return
+  }
+  db.exec(
+    `update assets set presence = 'here', current_job_id = null where id = ?`,
+    [assetId],
+  )
+}
+
 /** What a decoded label turned out to be, without anything being recorded. */
 export type TagLookup =
   | { kind: 'found'; assetId: string; assetCode: string | null; displayName: string | null }
