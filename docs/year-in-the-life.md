@@ -62,19 +62,17 @@ one mistake, `current_job_id` corrupted in between.
 stays intact; the projection and history readers skip voided ops). This is
 the scan-side sibling of the ledger's `adjustment`.
 
-### 4. The debt clock resets on a bounced cheque — `debt-age-resets-on-bounce`
+### 4. The debt clock resets on a bounced cheque — FIXED
 
-`oldestUnpaidMs` returns the start of the *current stretch* of positive
-balance. A payment that clears the book, later reversed by an adjustment
-(the only way to record a bounced cheque), makes the debt look **six days
-old instead of six weeks**. "Owed since" on the balance card — the number
-collections pressure runs on — understates every debtor who ever bounced.
-
-*Repro:* MAY block. Charge → cheque payment (balance 0) → bounce
-adjustment. `oldestUnpaidMs` = the bounce date, not the charge date.
-
-*Fix direction:* a reversal kind that re-links to the payment it voids, so
-the projection can treat the pair as if the payment never happened.
+Was `debt-age-resets-on-bounce`. The ledger now has a `reversal` kind
+that NAMES the entry it voids (`reversal_of`, client-side column;
+**server-side ledger needs the same column in a follow-up migration**).
+`oldestUnpaidMs` skips a reversal and its target as a pair — they cancel
+in time as well as in money — so "owed since" keeps pointing at the
+original charge, and the statement prints *reversed*, never *adjustment*,
+for a bounce the house did not cause. (MAY block pins the surviving
+clock.) The `no-adjustment-door` finding stands: no screen writes a
+reversal yet.
 
 ### 5. The payback bar counts damage recovery as earnings — `payback-counts-damage`
 

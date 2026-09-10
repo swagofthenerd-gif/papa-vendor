@@ -37,6 +37,11 @@ const KIND_UR: Record<string, string> = {
   late_fee: 'late fee',
   damage_charge: 'nuqsaan',
   adjustment: 'darusti',
+  // Correction vocabulary: 'mansookh' (voided) for a reversal — a bounced
+  // cheque must never read as the house's own 'darusti' — and 'write off'
+  // stays the loanword the trade uses, like 'late fee'.
+  reversal: 'mansookh',
+  write_off: 'write off',
 }
 
 export const STR_UR: StrTable = {

@@ -36,6 +36,7 @@ export interface LedgerRow extends LedgerEntryView {
   id: string
   jobId: string | null
   assetId: string | null
+  reversalOf: string | null
 }
 
 export interface CustomerLinkedJob {
@@ -67,6 +68,7 @@ function rowsFor(db: SqlDriver, customerId: string): LedgerRow[] {
       note: string | null
       created_at: number
       seq: number
+      reversal_of: string | null
       job_label: string | null
     }>(
       // rowid rides along as `seq` so pure re-sorts downstream
@@ -74,7 +76,7 @@ function rowsFor(db: SqlDriver, customerId: string): LedgerRow[] {
       // exactly the way this ORDER BY does — a same-millisecond
       // charge/payment pair must never flip and dip the running balance.
       `select e.id, e.kind, e.amount_minor, e.job_id, e.asset_id, e.note,
-              e.created_at, e.rowid as seq, j.label as job_label
+              e.created_at, e.rowid as seq, e.reversal_of, j.label as job_label
          from customer_ledger_entries e
          left join jobs j on j.id = e.job_id
         where e.customer_id = ?
@@ -89,6 +91,7 @@ function rowsFor(db: SqlDriver, customerId: string): LedgerRow[] {
       seq: Number(r.seq),
       jobId: r.job_id,
       assetId: r.asset_id,
+      reversalOf: r.reversal_of,
       note: r.note,
       jobLabel: r.job_label,
     }))
@@ -171,20 +174,24 @@ export interface RecordEntryInput {
   jobId?: string | null
   assetId?: string | null
   note?: string | null
+  /** For kind 'reversal': the entry this line voids. */
+  reversalOf?: string | null
   createdAt: number
 }
 
-/** Append one line to the book. Insert-only — there is no update path. */
+/** Append one line to the book. Insert-only — there is no update path;
+ *  a mistake is corrected by a further entry (a 'reversal' naming it). */
 export function recordEntry(db: SqlDriver, input: RecordEntryInput): string {
   const id = `led-${crypto.randomUUID()}`
   db.exec(
     `insert into customer_ledger_entries
-       (id, org_id, customer_id, kind, amount_minor, job_id, asset_id, note, created_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, org_id, customer_id, kind, amount_minor, job_id, asset_id, note,
+        reversal_of, created_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id, input.orgId, input.customerId, input.kind, input.amountMinor,
       input.jobId ?? null, input.assetId ?? null, input.note ?? null,
-      input.createdAt,
+      input.reversalOf ?? null, input.createdAt,
     ],
   )
   return id

@@ -55,6 +55,11 @@ const KIND_EN: Record<string, string> = {
   late_fee: 'late fee',
   damage_charge: 'damage',
   adjustment: 'adjustment',
+  // The correction vocabulary: a reversal voids a named earlier entry (a
+  // bounced cheque reads 'reversed', never 'adjustment' — the house did
+  // not make the error), and a write-off is given-up debt, not a data fix.
+  reversal: 'reversed',
+  write_off: 'write-off',
 }
 
 /**

@@ -130,11 +130,12 @@ const CHARGE_KINDS = new Set(['charge', 'late_fee', 'damage_charge'])
 /** Charge-side minor units posted per simulated month. */
 const monthCharged = new Array(12).fill(0)
 
-/** Every ledger line this year posts goes through here. */
+/** Every ledger line this year posts goes through here. Returns the entry
+ *  id, so a later 'reversal' can name the line it voids. */
 function post(customerId, kind, rupees, opts) {
   const amountMinor = rs(rupees)
   const whenMs = at(opts.k, opts.d ?? 0, opts.hour ?? 12)
-  recordEntry(db, {
+  const id = recordEntry(db, {
     orgId: seed.orgId,
     customerId,
     kind,
@@ -142,6 +143,7 @@ function post(customerId, kind, rupees, opts) {
     jobId: opts.jobId ?? null,
     assetId: opts.assetId ?? null,
     note: opts.note ?? null,
+    reversalOf: opts.reversalOf ?? null,
     createdAt: whenMs,
   })
   const b = books.get(customerId) ?? { balance: 0, deposit: 0 }
@@ -153,6 +155,7 @@ function post(customerId, kind, rupees, opts) {
   }
   books.set(customerId, b)
   if (CHARGE_KINDS.has(kind)) monthCharged[opts.k] += amountMinor
+  return id
 }
 
 function assertBooks() {
@@ -1129,22 +1132,26 @@ describe('a year in the life of the rental house', () => {
       [{ productId: 'prod-komodo', qty: 1 }, { productId: 'prod-cne', qty: 1 }],
       iso(8, -1), at(8, -4))
     jobBack(may1.id, 'cust-imran', at(8, -1), { k: 8, d: -1, chargeRs: 40_000 })
-    post('cust-imran', 'payment', -40_000, { k: 8, d: -1, hour: 14, note: 'Cheque 114202' })
+    const chequeId = post('cust-imran', 'payment', -40_000, {
+      k: 8, d: -1, hour: 14, note: 'Cheque 114202',
+    })
     assert.equal(customerView(db, 'cust-imran').balanceMinor, books.get('cust-imran').balance)
 
-    // Six days later the bank returns the cheque. The only correction is
-    // the same doorless 'adjustment', and the client's statement will read
-    // 'adjustment +Rs 40,000' — as if the HOUSE made an error.
-    post('cust-imran', 'adjustment', 40_000, { k: 8, d: 5, note: 'Cheque 114202 bounced' })
+    // Six days later the bank returns the cheque. The correction now has a
+    // NAME: a 'reversal' that points at the payment it voids. The client's
+    // statement reads 'reversed', never 'adjustment' — the house made no
+    // error — though no screen writes it yet (`no-adjustment-door` holds).
+    post('cust-imran', 'reversal', 40_000, {
+      k: 8, d: 5, note: 'Cheque 114202 bounced', reversalOf: chequeId,
+    })
     finding('no-adjustment-door')
 
-    // Pinned semantics: the debt clock RESET. 'Owed since' now points at
-    // the bounce, not the original charge — the book believes the debt is
-    // six days younger than it is. Finding `debt-age-resets-on-bounce`.
+    // The debt clock SURVIVES the bounce: the voided payment and its
+    // reversal cancel in time as well as in money, so 'owed since' points
+    // at the original charge — the number collections pressure runs on is
+    // six weeks, not six days. (Was finding `debt-age-resets-on-bounce`.)
     const entries = customerView(db, 'cust-imran').entries
-    assert.equal(oldestUnpaidMs(entries), at(8, 5))
-    assert.notEqual(oldestUnpaidMs(entries), at(8, -1))
-    finding('debt-age-resets-on-bounce')
+    assert.equal(oldestUnpaidMs(entries), at(8, -1))
 
     const card = balanceCardText(
       {
@@ -1153,7 +1160,7 @@ describe('a year in the life of the rental house', () => {
       },
       L,
     )
-    assert.ok(card.includes(L.kindLabel('adjustment')))
+    assert.ok(card.includes(L.kindLabel('reversal')))
 
     assertBooks()
     assertNoLostScans()
@@ -1296,7 +1303,6 @@ describe('a year in the life of the rental house', () => {
     assert.deepEqual(
       [...FINDINGS].sort(),
       [
-        'debt-age-resets-on-bounce',
         'double-promise',
         'import-apply-welded',
         'latefee-after-scan-zero',

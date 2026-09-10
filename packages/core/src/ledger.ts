@@ -33,6 +33,26 @@ export type LedgerEntryKind =
   | 'late_fee'
   | 'damage_charge'
   | 'adjustment'
+  /**
+   * The correction vocabulary, still append-only:
+   *
+   * `reversal` voids one earlier entry and NAMES it (`reversalOf`). A
+   * bounced cheque is a reversal of its payment; a charged-then-returned
+   * item is a reversal of its damage charge. The link is what lets the
+   * projections treat the pair as if the voided entry never happened —
+   * the debt clock survives a bounce, and a reversed charge stops
+   * counting as the asset's earnings — while both lines stay on the page,
+   * because the client saw both happen.
+   *
+   * `write_off` is debt the house has given up collecting — absconded
+   * client, goodwill, a dispute settled by walking away. Distinguished
+   * from `adjustment` (a data fix) so the statement never prints a theft
+   * as if the house corrected its own error. POLICY (owner may overrule):
+   * the kind exists client-side so a synced server write-off renders
+   * properly; no screen writes it yet.
+   */
+  | 'reversal'
+  | 'write_off'
 
 /** One ledger line, as the projection and the text builders read it. */
 export interface LedgerEntryView {
@@ -50,6 +70,10 @@ export interface LedgerEntryView {
    * keep their input order.
    */
   seq?: number
+  /** The entry's id — needed only so a `reversal` can point at it. */
+  id?: string
+  /** For kind 'reversal': the id of the entry this one voids. */
+  reversalOf?: string | null
   jobLabel?: string | null
   note?: string | null
 }
@@ -107,12 +131,31 @@ export function projectLedger(entries: LedgerEntryView[]): LedgerProjection {
  * of the CURRENT stretch of debt, which is what "oldest unpaid" honestly
  * means on a running account (a payment that clears the book resets the
  * clock; a partial payment does not). Null when nothing is owed now.
+ *
+ * A `reversal` and the entry it voids are skipped AS A PAIR: they cancel
+ * in money, so they must also cancel in time. Without this, a payment that
+ * cleared the book and then bounced reset the clock to the bounce — the
+ * debt looked six days old instead of six weeks, on the one number
+ * collections pressure runs on. The pair-skip means the walk never sees
+ * the voided payment's false dip, so the clock keeps pointing at the
+ * charge the debt actually dates from.
  */
 export function oldestUnpaidMs(entries: LedgerEntryView[]): number | null {
+  const present = new Set<string>()
+  for (const e of entries) if (e.id !== undefined) present.add(e.id)
+  const voided = new Set<string>()
+  for (const e of entries) {
+    if (e.kind === 'reversal' && e.reversalOf && present.has(e.reversalOf)) {
+      voided.add(e.reversalOf)
+    }
+  }
+
   const ordered = [...entries].sort(byBookOrder)
   let balance = 0
   let since: number | null = null
   for (const e of ordered) {
+    if (e.id !== undefined && voided.has(e.id)) continue
+    if (e.kind === 'reversal' && e.reversalOf && voided.has(e.reversalOf)) continue
     if (DEPOSIT_KINDS.has(e.kind) && e.kind !== 'deposit_apply') continue
     balance += e.amountMinor
     if (balance > 0) {

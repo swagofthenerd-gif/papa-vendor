@@ -102,6 +102,11 @@ create table if not exists customer_ledger_entries (
   job_id       text,
   asset_id     text,
   note         text,
+  -- For kind 'reversal': the id of the entry this line voids. The link is
+  -- what lets projections treat the pair as if the voided entry never
+  -- happened (the debt clock, asset earnings) while both lines stay on
+  -- the page. Server side this column is a follow-up migration.
+  reversal_of  text,
   created_at   integer not null
 );
 create index if not exists ledger_customer_idx on customer_ledger_entries (customer_id, created_at);
