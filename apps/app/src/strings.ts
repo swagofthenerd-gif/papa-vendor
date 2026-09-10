@@ -280,6 +280,8 @@ const STR_EN = {
   sessionLateFee: 'Late fee',
   sessionUnpricedNotInFee: (n: number): string =>
     `${n} item${s(n)} carry no day rate and are not in this figure.`,
+  sessionChargeWritten: (name: string): string => `Written in ${name}’s khata`,
+  sessionViewKhata: 'Open the khata',
 
   // ----------------------------------------------------------------- gear
   // The inventory list, the asset page and the photo comparison.

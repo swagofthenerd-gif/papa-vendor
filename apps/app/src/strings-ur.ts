@@ -251,6 +251,9 @@ export const STR_UR: StrTable = {
   sessionLateFee: 'Late fee',
   sessionUnpricedNotInFee: (n: number): string =>
     `${n} ${cheezein(n)} ka day rate nahi, is raqam mein shamil nahi.`,
+  sessionChargeWritten: (name: string): string =>
+    `${name} ke khatay mein likh diya`,
+  sessionViewKhata: 'Khata kholein',
 
   // ----------------------------------------------------------------- gear
   gearTitle: 'Saaman',

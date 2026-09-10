@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import QRCode from 'qrcode'
 import { Icon } from '@papa/icons'
+import { moneyLabel } from '@papa/core'
 import { Session } from '../routes/Session.tsx'
 import { manifestText } from '../session-summary.ts'
 import { Shell } from '../components/Shell.tsx'
@@ -23,6 +24,14 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
   const summary = store.sessionSummary(jobId)
   const view: View = { name: 'session', sessionId: jobId }
   const [parchi, setParchi] = useState<string | null>(null)
+  const [sheet, setSheet] = useState<'charge' | 'latefee' | null>(null)
+  const [written, setWritten] = useState<string | null>(null)
+
+  // The khata a dock charge would land in, and the overdue return's
+  // late-fee draft — both null when the facts do not support them, and
+  // the affordances then never render (never a dead button).
+  const customer = store.customerForJob(jobId)
+  const lateFee = store.lateFeeDraftFor(jobId)
 
   const onShare = useCallback(() => {
     if (!summary) return
@@ -53,6 +62,16 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
     <Shell view={view} title={STR.sessionHandover} subtitle={summary.jobLabel}>
       <Session
         summary={summary}
+        chargeCustomerName={customer?.name ?? null}
+        lateFee={
+          lateFee
+            ? {
+                dueLabel: lateFee.dueLabel,
+                perDayLabel: moneyLabel(lateFee.perDay),
+                unpriced: lateFee.perDay.unpriced,
+              }
+            : null
+        }
         onShareWhatsApp={onShare}
         onShowParchi={() => {
           // The challan is stamped when the button is pressed — the moment
@@ -65,7 +84,74 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
           store.endSession()
           go({ name: 'jobs' })
         }}
+        onChargeClient={() => setSheet('charge')}
+        onDraftLateFee={() => setSheet('latefee')}
       />
+
+      {written && customer ? (
+        /* The receipt of the write, with the door to the khata it landed
+           in — the one place the figure can be checked and, if the desk
+           mis-typed, adjusted with a further entry, never an edit. */
+        <div className="notice">
+          <Icon name="check" size={18} />
+          <div>
+            <strong>{STR.sessionChargeWritten(customer.name)}</strong>
+          </div>
+          <button
+            className="btn btn-sm btn-ghost"
+            onClick={() => go({ name: 'customer', customerId: customer.id })}
+          >
+            {STR.sessionViewKhata}
+          </button>
+        </div>
+      ) : null}
+
+      {sheet === 'charge' && customer ? (
+        <KhataChargeSheet
+          title={STR.sessionChargeClient}
+          hint={STR.sessionChargeGoesTo(customer.name)}
+          // Prefilled from what the reconciliation priced the gap at —
+          // when it priced anything. Editable: the figure agreed at the
+          // dock is the owner's, not the list's.
+          initialAmount={
+            summary.missingValue.priced > 0
+              ? String(Math.round(summary.missingValue.totalMinor / 100))
+              : ''
+          }
+          initialNote=""
+          onSave={(amountMinor, note) => {
+            if (store.chargeClient(jobId, amountMinor, note)) {
+              setSheet(null)
+              setWritten('charge')
+            }
+          }}
+          onClose={() => setSheet(null)}
+        />
+      ) : null}
+
+      {sheet === 'latefee' && customer && lateFee ? (
+        <KhataChargeSheet
+          title={STR.sessionLateFee}
+          hint={STR.sessionChargeGoesTo(customer.name)}
+          sub={STR.sessionLateFeeNeverAuto}
+          initialAmount={
+            lateFee.draft.priced > 0
+              ? String(Math.round(lateFee.draft.totalMinor / 100))
+              : ''
+          }
+          // The note carries the arithmetic's basis — '3 days late' — so
+          // the ledger line explains itself when the client asks.
+          initialNote={lateFee.dueLabel}
+          onSave={(amountMinor, note) => {
+            if (store.recordLateFee(jobId, amountMinor, note)) {
+              setSheet(null)
+              setWritten('latefee')
+            }
+          }}
+          onClose={() => setSheet(null)}
+        />
+      ) : null}
+
       {parchi ? (
         <ParchiOverlay
           jobLabel={summary.jobLabel}
@@ -74,6 +160,81 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
         />
       ) : null}
     </Shell>
+  )
+}
+
+/**
+ * The dock's charge sheet — one shape for the damage/extras charge and the
+ * confirmed late fee. The amount arrives PREFILLED from the facts on screen
+ * and stays fully editable; nothing writes until the one button at the
+ * bottom, and closing the sheet writes nothing at all.
+ */
+function KhataChargeSheet({
+  title,
+  hint,
+  sub,
+  initialAmount,
+  initialNote,
+  onSave,
+  onClose,
+}: {
+  title: string
+  hint: string
+  sub?: string
+  initialAmount: string
+  initialNote: string
+  onSave: (amountMinor: number, note: string | null) => void
+  onClose: () => void
+}) {
+  const [amount, setAmount] = useState(initialAmount)
+  const [note, setNote] = useState(initialNote)
+  const rupees = Number(amount)
+  const valid = Number.isFinite(rupees) && rupees > 0
+
+  return (
+    <div className="sheet-backdrop" role="dialog" aria-label={title}>
+      <div className="sheet">
+        <header className="sheet-head">
+          <span className="sheet-title">{title}</span>
+          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
+            <Icon name="x" size={22} />
+          </button>
+        </header>
+
+        <p className="sheet-hint">{hint}</p>
+        {sub ? <p className="sheet-hint">{sub}</p> : null}
+
+        <label className="field-label" htmlFor="charge-amount">{STR.sessionChargeAmount}</label>
+        <input
+          id="charge-amount"
+          className="sheet-search code"
+          type="number"
+          inputMode="decimal"
+          min="0"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          autoFocus
+        />
+
+        <label className="field-label" htmlFor="charge-note">{STR.sessionChargeNoteOptional}</label>
+        <input
+          id="charge-note"
+          className="sheet-search"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          autoCorrect="off"
+          spellCheck={false}
+        />
+
+        <button
+          className="btn btn-primary btn-lg sheet-submit"
+          disabled={!valid}
+          onClick={() => onSave(Math.round(rupees * 100), note.trim() || null)}
+        >
+          {STR.sessionWriteInKhata}
+        </button>
+      </div>
+    </div>
   )
 }
 
