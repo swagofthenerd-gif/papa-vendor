@@ -16,6 +16,7 @@ import { ImportScreen } from './demo/ImportScreen.tsx'
 import { HisaabScreen } from './demo/HisaabScreen.tsx'
 import { KhataScreen } from './demo/KhataScreen.tsx'
 import { OwedScreen } from './demo/OwedScreen.tsx'
+import { ClosedJobsScreen } from './demo/ClosedJobsScreen.tsx'
 
 /**
  * The app shell.
@@ -120,6 +121,14 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
             initialQuery={asFilter ? '' : (view.query ?? '')}
             initialFilter={(asFilter ?? 'all') as GearFilter}
           />
+          {/* The smallest honest door to finished jobs: off the boards is
+              not gone. Lives on the search surface because "where did that
+              job go" is a search question. */}
+          <div className="session-actions">
+            <button className="btn btn-ghost btn-block" onClick={() => go({ name: 'closed' })}>
+              <Icon name="clipboard-check" size={18} /> {STR.closedJobsDoor}
+            </button>
+          </div>
         </Shell>
       )
     }
@@ -180,6 +189,9 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
 
     case 'owed':
       return <OwedScreen store={store} />
+
+    case 'closed':
+      return <ClosedJobsScreen store={store} />
 
     case 'enquiry':
       return (

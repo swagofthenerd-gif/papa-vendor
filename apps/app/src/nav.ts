@@ -19,6 +19,7 @@ export type View =
   | { name: 'hisaab' }                           // din ka hisaab: the day's account
   | { name: 'customer'; customerId: string }     // the khata page
   | { name: 'owed' }                             // customers by balance, owed first
+  | { name: 'closed' }                           // finished jobs, off the boards
   | { name: 'enquiry' }                          // the pasted kit list
   | { name: 'import' }                           // load the house's catalogue
   | { name: 'settings' }
@@ -69,6 +70,8 @@ export function parseHash(hash: string): View {
       return parts[1] ? { name: 'customer', customerId: parts[1] } : { name: 'owed' }
     case 'owed':
       return { name: 'owed' }
+    case 'closed':
+      return { name: 'closed' }
     case 'enquiry':
       return { name: 'enquiry' }
     case 'import':
@@ -98,6 +101,8 @@ export function viewToHash(view: View): string {
       return `#/customer/${view.customerId}`
     case 'owed':
       return '#/owed'
+    case 'closed':
+      return '#/closed'
     case 'enquiry':
       return '#/enquiry'
     case 'import':

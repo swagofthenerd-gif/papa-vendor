@@ -60,6 +60,7 @@ import {
 } from '@papa/core'
 import { seedDemo, demoCatalogue } from '../src/demo/seed.ts'
 import {
+  closeJob,
   createJob,
   decodeScanOps,
   dueBoard,
@@ -73,6 +74,7 @@ import {
 import { SessionRegistry } from '../src/demo/sessions.ts'
 import {
   assetEarnings,
+  createCustomer,
   customerForJob,
   customersByBalance,
   customerView,
@@ -257,35 +259,24 @@ function assertNoLostScans() {
   assert.equal(countScanOps(), expectedScanOps, 'scan op count')
 }
 
-// -------------------------------------------------- workarounds, documented
-// Each of these is a thing the VENDOR CANNOT DO in the app. The simulation
-// does it with direct SQL so the year can continue; each use is a finding.
+// ----------------------------------------------------- the B0 doors, real
+// The year's first run did all three of these with direct SQL and pinned
+// them as its #1 finding (`no-add-customer`, `no-customer-on-desk-job`,
+// `no-close-job`). Phase B0 shipped the doors — createCustomer, createJob's
+// customerId, closeJob — so the simulation now walks through them like a
+// vendor would, and the walls are gone from the findings ledger.
 
-/** finding `no-add-customer`: nothing in the app creates a customer row. */
+/** A customer the desk typed in — the real door, with the test's id. */
 function addCustomer(id, name, phone) {
-  db.exec(
-    `insert into customers (id, org_id, name, phone, note) values (?, ?, ?, ?, null)`,
-    [id, seed.orgId, name, phone],
-  )
+  assert.equal(createCustomer(db, { id, orgId: seed.orgId, name, phone }), id)
   books.set(id, { balance: 0, deposit: 0 })
-  finding('no-add-customer')
 }
 
-/** finding `no-customer-on-desk-job`: createJob/createJobFromLines take no
- *  customer, so every desk-made job is born unchargeable. */
-function wireJob(jobId, customerId) {
-  db.exec(`insert into job_customer (job_id, customer_id) values (?, ?)`, [
-    jobId,
-    customerId,
-  ])
-  finding('no-customer-on-desk-job')
-}
-
-/** finding `no-close-job`: no API sets status='closed'; without this SQL the
- *  Today board and availability commitments accumulate every job forever. */
-function closeJob(jobId) {
-  db.exec(`update jobs set status = 'closed' where id = ?`, [jobId])
-  finding('no-close-job')
+/** Close a finished job — refused unless everything is home, so the
+ *  assertion IS the close rule holding. */
+function mustClose(jobId, whenMs) {
+  const closed = closeJob(db, jobId, whenMs)
+  assert.deepEqual(closed, { ok: true }, `${jobId} closes once everything is home`)
 }
 
 // ------------------------------------------------------------- job helpers
@@ -300,9 +291,10 @@ function makeJob(label, customerId, wants, dueIso, contact = null) {
     label,
     contact,
     expectedBack: dueIso,
+    customerId,
     wants,
   })
-  wireJob(id, customerId)
+  assert.equal(customerForJob(db, id)?.id, customerId, 'born chargeable')
   return { id, expected: result.expected, requested: result.requested }
 }
 
@@ -314,7 +306,8 @@ function jobOut(label, customerId, wants, dueIso, whenMs, contact = null) {
   return job
 }
 
-/** Return everything physically out on a job, then charge/pay/close. */
+/** Return everything physically out on a job, then charge/pay/close —
+ *  the whole dock ritual, through the real doors. */
 function jobBack(jobId, customerId, whenMs, money = {}) {
   const back = openSession(jobId, 'in', whenMs)
   scanAll(back, back.expected, 'check_in')
@@ -330,7 +323,7 @@ function jobBack(jobId, customerId, whenMs, money = {}) {
     // re-sort tie-break; pinned in khata.test.mjs.)
     post(customerId, 'payment', -money.payRs, { k, d: money.d, hour: 13, jobId, note: 'Cash' })
   }
-  closeJob(jobId)
+  mustClose(jobId, whenMs)
 }
 
 // ===========================================================================
@@ -460,9 +453,8 @@ describe('a year in the life of the rental house', () => {
     const shanBack = openSession('job-shan', 'in', at(0, 0, 18))
     assert.equal(shanBack.expected.length, 11)
     scanAll(shanBack, shanBack.expected, 'check_in')
-    // Done — but the job cannot be closed from the app; it would sit on the
-    // Today board forever. Pinned below at the doc job, workaround here.
-    closeJob('job-shan')
+    // Done — and closed, through the real door (was `no-close-job`).
+    mustClose('job-shan', at(0, 0, 18))
 
     // --- First payments ---------------------------------------------------
     post('cust-bilal', 'payment', -25_000, { k: 0, d: 2, note: 'JazzCash' })
@@ -490,8 +482,11 @@ describe('a year in the life of the rental house', () => {
     assert.deepEqual(docBack.expected, ['asset-fx6-3'])
     scanAll(docBack, docBack.expected, 'check_in')
 
-    // Everything is home, yet the documentary still claims its promised set
-    // in every availability answer, because a finished job stays 'open':
+    // Everything is home, but until the desk actually CLOSES the job it
+    // keeps claiming its promised set in every availability answer — an
+    // open job's promise is a promise. One tap ends it, and the ghost
+    // leaves the enquiry screen with it (was the `no-close-job` wall; now
+    // the designed behaviour, pinned end to end).
     const answer = checkAvailability(
       db,
       matchKitList(parseKitList('1x Canon C300 Mark III'), demoCatalogue()),
@@ -502,10 +497,10 @@ describe('a year in the life of the rental house', () => {
     assert.equal(c300.state, 'available')
     assert.ok(
       c300.committed.some((c) => c.jobLabel.startsWith('Documentary')),
-      'ghost commitment from the unclosable job',
+      'an open finished job still claims its set',
     )
     assert.match(availabilityNote(c300), /going to Documentary/)
-    closeJob('job-doc')
+    mustClose('job-doc', at(0, 6, 13))
     const after = checkAvailability(
       db,
       matchKitList(parseKitList('1x Canon C300 Mark III'), demoCatalogue()),
@@ -531,20 +526,19 @@ describe('a year in the life of the rental house', () => {
     addCustomer('cust-farhan', 'Farhan Malik', '0301 5544332')
     addCustomer('cust-sana', 'Sana Tariq', '0322 7788990')
 
-    // A job made at the desk is born with NO customer — the charge buttons
-    // would never render for it. Pinned before the wiring workaround.
-    const o1 = createJob(db, {
-      id: 'job-sim-o1', orgId: seed.orgId, label: 'Corporate shoot — Gulberg',
-      contact: 'Farhan 0301 5544332', expectedBack: iso(1, -4),
-      wants: [{ productId: 'prod-fx6', qty: 2 }, { productId: 'prod-xlr', qty: 4 }],
-    })
-    assert.equal(customerForJob(db, 'job-sim-o1'), null)
-    wireJob('job-sim-o1', 'cust-farhan')
-    const o1out = openSession('job-sim-o1', 'out', at(1, -9))
+    // A job made at the desk is born WITH its customer now — makeJob
+    // asserts the khata link on every creation (was
+    // `no-customer-on-desk-job`, the year's #1 wall). The nephew case
+    // stays legal: createJob without customerId still works, pinned in
+    // create-job.test.mjs.
+    const o1 = makeJob('Corporate shoot — Gulberg', 'cust-farhan',
+      [{ productId: 'prod-fx6', qty: 2 }, { productId: 'prod-xlr', qty: 4 }],
+      iso(1, -4), 'Farhan 0301 5544332')
+    const o1out = openSession(o1.id, 'out', at(1, -9))
     scanAll(o1out, o1.expected, 'check_out')
 
     // --- The lost cable ---------------------------------------------------
-    const o1back = openSession('job-sim-o1', 'in', at(1, -4))
+    const o1back = openSession(o1.id, 'in', at(1, -4))
     assert.equal(o1back.expected.length, 6)
     const missingCable = o1back.expected.find((id) => id.startsWith('asset-xlr'))
     const came = o1back.expected.filter((id) => id !== missingCable)
@@ -571,16 +565,21 @@ describe('a year in the life of the rental house', () => {
     })
     assert.equal(o1summary.missing.length, 1)
     assert.equal(o1summary.missingValue.totalMinor, rs(8_000))
-    post('cust-farhan', 'charge', 40_000, { k: 1, d: -4, jobId: 'job-sim-o1', note: '2x FX6 + cables, 5 days' })
+    post('cust-farhan', 'charge', 40_000, { k: 1, d: -4, jobId: o1.id, note: '2x FX6 + cables, 5 days' })
     post('cust-farhan', 'damage_charge', 8_000, {
-      k: 1, d: -4, jobId: 'job-sim-o1', assetId: missingCable, note: 'XLR not returned',
+      k: 1, d: -4, jobId: o1.id, assetId: missingCable, note: 'XLR not returned',
     })
     post('cust-farhan', 'payment', -40_000, { k: 1, d: -4, note: 'Cash' })
-    // The cable was paid for — but it stays presence='out' on this job
-    // forever. There is no terminal state (lost / sold / written off), so
-    // the fleet count carries a ghost from here to year end.
+    // The cable was paid for — but it stays presence='out' on this job,
+    // so the CLOSE RULE refuses: a job cannot end while its projection
+    // says gear is still at the client's. The refusal is honest and the
+    // job sits open on the board from here to year end, because there is
+    // still no terminal state (lost / sold / written off) to move the
+    // cable to. The wall moved from "cannot close anything" to exactly
+    // where it belongs: `no-terminal-asset-state`.
+    const refused = closeJob(db, o1.id, at(1, -4, 13))
+    assert.deepEqual(refused, { ok: false, reason: 'still_out', stillOut: 1 })
     finding('no-terminal-asset-state')
-    closeJob('job-sim-o1')
     assert.ok(sqlOutSet().has(missingCable))
 
     // --- The first late fee, and the order-of-operations trap -------------
@@ -615,7 +614,7 @@ describe('a year in the life of the rental house', () => {
     post('cust-sana', 'charge', 55_000, { k: 1, d: 5, jobId: o2.id, note: 'Komodo + Ronin, 3 days' })
     post('cust-sana', 'late_fee', 15_000, { k: 1, d: 5, jobId: o2.id, note: '3 days late — reduced' })
     post('cust-sana', 'payment', -70_000, { k: 1, d: 5, note: 'Bank transfer' })
-    closeJob(o2.id)
+    mustClose(o2.id, at(1, 5, 15))
 
     // --- Four more clean loops: the volume doubling -----------------------
     const o3 = jobOut('Mehndi — Cantt', 'cust-hamza',
@@ -847,7 +846,7 @@ describe('a year in the life of the rental house', () => {
         post('cust-sana', 'deposit_apply', -40_000, { k: 3, d: backD, jobId: job.id, note: 'Held cheque applied' })
         post('cust-sana', 'deposit_refund', -60_000, { k: 3, d: backD, jobId: job.id, note: 'Balance of cheque returned' })
         post('cust-sana', 'payment', -50_000, { k: 3, d: backD, note: 'Cash' })
-        closeJob(job.id)
+        mustClose(job.id, at(3, backD))
         continue
       }
       jobBack(job.id, customerId, at(3, backD), {
@@ -928,7 +927,7 @@ describe('a year in the life of the rental house', () => {
     post('cust-bilal', 'charge', 35_000, { k: 4, d: -3, jobId: j1.id, assetId: 'asset-fx9-1', note: 'FX9 day rate x2' })
     post('cust-bilal', 'damage_charge', 150_000, { k: 4, d: -3, jobId: j1.id, assetId: 'asset-fx9-1', note: 'Top handle + mount repair' })
     post('cust-bilal', 'payment', -100_000, { k: 4, d: -2, note: 'Bank transfer' })
-    closeJob(j1.id)
+    mustClose(j1.id, at(4, -2, 13))
     jobBack(j1b.id, 'cust-bilal', at(4, -3), { k: 4, d: -3, chargeRs: 20_000, payRs: 20_000 })
 
     // The payback bar counts RENTAL money only: the Rs 150,000 damage
@@ -1293,17 +1292,17 @@ describe('a year in the life of the rental house', () => {
   test('the year’s findings are exactly the documented set', () => {
     // One id per wall the year hit. If a feature ships and a wall comes
     // down, remove its id here AND its section in docs/year-in-the-life.md.
+    // Phase B0 took three ids off this list — `no-add-customer`,
+    // `no-customer-on-desk-job`, `no-close-job` — by shipping the doors;
+    // the simulation now walks through them above.
     assert.deepEqual(
       [...FINDINGS].sort(),
       [
         'double-promise',
         'import-apply-welded',
-        'no-add-customer',
         'no-adjustment-door',
         'no-blacklist-or-theft-export',
         'no-bookings',
-        'no-close-job',
-        'no-customer-on-desk-job',
         'no-cycle-count',
         'no-deposit-door',
         'no-expense-book',

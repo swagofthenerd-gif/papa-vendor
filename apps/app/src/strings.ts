@@ -142,6 +142,20 @@ const STR_EN = {
   todayContactPlaceholder: 'Name and number — e.g. Bilal 0300 4412233',
   todayExpectedBackOptional: 'Expected back (optional)',
   todayCreateJob: 'Create job',
+  // The customer picker on the new-job sheet. Optional on purpose — the
+  // nephew case (a job with no customer) stays legal; it just cannot take
+  // a charge, and the sheet says so instead of forcing a fake name.
+  todayCustomerOptional: 'Customer (optional)',
+  todayNoCustomer: 'No customer',
+  todayNoCustomerHint: 'Without a customer this job cannot take a charge.',
+  todayNewCustomer: 'New customer',
+  todayCustomerNameLabel: 'Customer name',
+  todayCustomerNamePlaceholder: 'e.g. Bilal Hussain',
+  todayCustomerPhoneOptional: 'Phone (optional)',
+  todayOpenKhataAria: (name: string): string => `Open ${name}’s khata`,
+  // Closing a job — the end the year simulation had to fake with SQL.
+  todayCloseJob: 'Close job',
+  todayStillOutCannotClose: (n: number): string => `${n} item${s(n)} still out`,
   // The money strip — the board's third glance, from the local ledger.
   todayMoneyHeading: 'Money',
   todayMoneyOwedToMe: 'owed to me',
@@ -532,6 +546,20 @@ const STR_EN = {
   customerReverseConfirm: (rupees: string): string =>
     `Confirm — write ${rupees} back`,
   customerReversedNote: 'Charged, then it came back — reversed',
+
+  // --------------------------------------------------------------- closed
+  // The "Closed jobs" door — the smallest honest surface for jobs that
+  // ended: off the boards, still findable, reopenable when the story
+  // continues.
+  closedJobsTitle: 'Closed jobs',
+  closedJobsSubtitle: (n: number): string => `${n} job${s(n)} finished`,
+  closedJobsEmpty: 'No closed jobs yet.',
+  closedJobsEmptyHint: 'Close a job from its card once everything is back.',
+  closedJobsDoor: 'Closed jobs',
+  closedJobsReopen: 'Reopen',
+  closedJobsClosedOn: (date: string): string => `Closed ${date}`,
+  closedJobsNeverCameBack: (n: number): string =>
+    `${n} item${s(n)} never came back`,
 }
 
 /**

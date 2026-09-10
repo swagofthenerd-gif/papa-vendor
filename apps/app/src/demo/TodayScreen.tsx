@@ -65,6 +65,8 @@ export function TodayScreen({ store }: { store: DemoStore }) {
           scanned: store.scannedCount(j.id),
           departsAt: j.departsAt,
           hasSummary: store.hasSummary(j.id),
+          customer: j.customer,
+          stillOut: store.stillOut(j.id),
         }))}
         outJobs={store.outJobsDue(now)}
         stats={store.stats()}
@@ -72,10 +74,17 @@ export function TodayScreen({ store }: { store: DemoStore }) {
         onOpenGear={(f) => go({ name: 'gear', query: f === 'all' ? undefined : f })}
         onNewJob={() => setNewJobOpen(true)}
         onEditDate={(jobId) => setDateFor(jobId)}
+        onCloseJob={(jobId) => {
+          // The store refuses while gear is out (the same rule that
+          // disabled the button); a refused close changes nothing to render.
+          store.closeJob(jobId)
+          refresh()
+        }}
       />
 
       {newJobOpen ? (
         <NewJobSheet
+          customers={store.customers()}
           onCreate={(input) => {
             // A walk-in has no kit-list lines; its gear is scanned onto it
             // at the dock, which is how a walk-in actually arrives.

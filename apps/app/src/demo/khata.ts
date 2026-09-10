@@ -137,8 +137,8 @@ export function customerView(db: SqlDriver, id: string): CustomerView | null {
     expected_back: string | null
   }>(
     `select j.id, j.label, j.status, j.expected_back
-       from job_customer jc join jobs j on j.id = jc.job_id
-      where jc.customer_id = ?
+       from jobs j
+      where j.customer_id = ?
       order by j.status = 'open' desc, j.label`,
     [id],
   )
@@ -158,15 +158,44 @@ export function customerView(db: SqlDriver, id: string): CustomerView | null {
   }
 }
 
-/** The customer a job belongs to, or null — how a dock charge finds a khata. */
+/** The customer a job belongs to, or null — how a dock charge finds a khata.
+ *  Reads jobs.customer_id, the real mirror column (0017/0018). */
 export function customerForJob(db: SqlDriver, jobId: string): { id: string; name: string } | null {
   const row = db.get<{ id: string; name: string }>(
-    `select c.id, c.name from job_customer jc
-       join customers c on c.id = jc.customer_id
-      where jc.job_id = ?`,
+    `select c.id, c.name from jobs j
+       join customers c on c.id = j.customer_id
+      where j.id = ?`,
     [jobId],
   )
   return row ?? null
+}
+
+export interface CreateCustomerInput {
+  /** Caller-supplied id, like CreateJobInput's — the store passes a uuid;
+   *  tests pass readable ids. */
+  id?: string
+  orgId: string
+  name: string
+  phone?: string | null
+}
+
+/**
+ * The add-customer door the year simulation ran a whole pilot without
+ * (`no-add-customer`). A row, not a ceremony: customer records are not
+ * evidence — the LEDGER is (0017's words) — so this is plain insert-tier
+ * work, same as the server's direct-DML customers table. Returns the id,
+ * or null for a blank name: a khata with no name cannot be found again,
+ * and a silent empty row is how one gets lost.
+ */
+export function createCustomer(db: SqlDriver, input: CreateCustomerInput): string | null {
+  const name = input.name.trim()
+  if (name.length === 0) return null
+  const id = input.id ?? `cust-${crypto.randomUUID()}`
+  db.exec(
+    `insert into customers (id, org_id, name, phone, note) values (?, ?, ?, ?, null)`,
+    [id, input.orgId, name, input.phone?.trim() || null],
+  )
+  return id
 }
 
 export interface RecordEntryInput {
@@ -226,9 +255,9 @@ export function moneyStrip(db: SqlDriver, nowMs: number): MoneyStrip {
   const dueToday = new Set(
     db
       .all<{ customer_id: string }>(
-        `select distinct jc.customer_id from job_customer jc
-           join jobs j on j.id = jc.job_id
-          where j.status = 'open' and j.expected_back = ?`,
+        `select distinct j.customer_id from jobs j
+          where j.status = 'open' and j.expected_back = ?
+            and j.customer_id is not null`,
         [iso],
       )
       .map((r) => r.customer_id),

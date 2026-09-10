@@ -37,6 +37,8 @@ import { demoCatalogue, seedDemo, type DemoSeed } from './seed.ts'
 import { SessionRegistry, type SessionMode } from './sessions.ts'
 import {
   assetFacts,
+  closedJobs,
+  closeJob,
   collapseHistory,
   createJob,
   dayRateFor,
@@ -49,14 +51,19 @@ import {
   openJobs,
   outItemNames,
   packedProgress,
+  reopenJob,
   sessionScanFacts,
   setExpectedBack,
+  stillOutCount,
+  type CloseJobResult,
+  type ClosedJobRow,
   type OpenJobRow,
 } from './read-model.ts'
 import { dayAccount, type DayAccount } from './hisaab.ts'
 import {
   assetEarnings,
   chargedButReturned,
+  createCustomer,
   customerForJob,
   customersByBalance,
   customerView,
@@ -86,6 +93,13 @@ import type { GearRow } from '../routes/Gear.tsx'
 import type { OutRow, TodayStats } from '../routes/Today.tsx'
 import type { AssetHistoryRow, AssetView } from '../routes/Asset.tsx'
 import { buildSummary, type SessionSummary } from '../session-summary.ts'
+
+/** How a new job names its khata: an existing customer, a fresh name typed
+ *  at the sheet, or none at all (the nephew case — legal, unchargeable). */
+export type JobCustomerChoice =
+  | { kind: 'existing'; id: string }
+  | { kind: 'new'; name: string; phone: string | null }
+  | null
 
 /**
  * The demo's one piece of state: a real local database with the demo house in
@@ -238,6 +252,7 @@ export class DemoStore {
         due: j.due,
         nudgeUrl,
         hasSummary: this.hasSummary(j.id),
+        customer: j.customer,
       }
     })
   }
@@ -751,14 +766,34 @@ export class DemoStore {
    * job_expected table the seed writes, so the new job is on the board,
    * scannable and counted by availability the moment this returns. Lines
    * the matcher never resolved are LEFT OUT, not guessed in.
+   *
+   * The customer rides in at birth — existing, typed fresh at the sheet,
+   * or honestly absent (the nephew case; the job then cannot take a
+   * charge, and the charge buttons never render for it). This is the door
+   * the year simulation ran a whole pilot without: a desk job that cannot
+   * meet a customer makes the money book unreachable from its own front
+   * door (`no-customer-on-desk-job`).
    */
   createJobFromLines(
     lines: MatchedLine[],
-    input: { label: string; contact: string | null; expectedBack: string | null },
+    input: {
+      label: string
+      contact: string | null
+      expectedBack: string | null
+      customer?: JobCustomerChoice
+    },
   ): { jobId: string; allocated: number; requested: number } {
     const wants = lines
       .filter((l): l is MatchedLine & { productId: string } => !!l.productId)
       .map((l) => ({ productId: l.productId, qty: l.quantity }))
+
+    const choice = input.customer ?? null
+    const customerId =
+      choice === null
+        ? null
+        : choice.kind === 'existing'
+          ? choice.id
+          : this.createCustomer(choice.name, choice.phone)
 
     const jobId = `job-${crypto.randomUUID()}`
     const result = createJob(this.db, {
@@ -767,9 +802,40 @@ export class DemoStore {
       label: input.label,
       contact: input.contact,
       expectedBack: input.expectedBack,
+      customerId,
       wants,
     })
     return { jobId, allocated: result.expected.length, requested: result.requested }
+  }
+
+  /** A new khata, by name. Null for a blank name — see createCustomer. */
+  createCustomer(name: string, phone: string | null): string | null {
+    return createCustomer(this.db, { orgId: this.seed.orgId, name, phone })
+  }
+
+  /** The close rule's number for one job — the honest disabled reason. */
+  stillOut(jobId: string): number {
+    return stillOutCount(this.db, jobId)
+  }
+
+  /**
+   * End a job. Mirrors the server's close_job rule exactly (0018 D3):
+   * refused while anything still projects onto the job. The refusal is a
+   * RESULT, not an exception — the button renders it as its disabled
+   * reason, never as a crash.
+   */
+  closeJob(jobId: string, nowMs: number = Date.now()): CloseJobResult {
+    return closeJob(this.db, jobId, nowMs)
+  }
+
+  /** The undo — the job returns to every board and availability answer. */
+  reopenJob(jobId: string): boolean {
+    return reopenJob(this.db, jobId)
+  }
+
+  /** Every closed job, newest first — the "Closed jobs" door. */
+  closedJobs(): ClosedJobRow[] {
+    return closedJobs(this.db)
   }
 
   /** Set or clear a job's due date. ISO in, honest 'no date' when cleared. */

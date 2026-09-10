@@ -75,9 +75,11 @@ create table if not exists product_rates (
 
 -- The money book (vendor-dream-plan Phase B; PLAN.md override #14).
 -- customers and customer_ledger_entries mirror the shapes the server
--- will own; job_customer is demo-only wiring for the same reason job_meta
--- is — the mirrored jobs table's shape is the server's, and widening a
--- mirror for a demo link is how a fake schema drifts from the real one.
+-- will own. The job↔customer link lives on jobs.customer_id itself now:
+-- 0017 gave the server that column and 0018 syncs it, so the mirror
+-- carries it for real and the demo-only job_customer shim is gone — a
+-- fake link table beside a real column is exactly the drift the old
+-- comment warned about.
 -- The ledger is APPEND-ONLY: nothing in this codebase updates or deletes a
 -- row, and the balance is a projection (see @papa/core ledger.ts).
 create table if not exists customers (
@@ -87,12 +89,7 @@ create table if not exists customers (
   phone  text,
   note   text
 );
-
-create table if not exists job_customer (
-  job_id      text primary key,
-  customer_id text not null
-);
-create index if not exists job_customer_customer_idx on job_customer (customer_id);
+create index if not exists jobs_customer_idx on jobs (customer_id);
 
 create table if not exists customer_ledger_entries (
   id           text primary key,
@@ -136,6 +133,8 @@ export interface OpenJobRow {
   contact: string | null
   expectedBack: string | null
   departsAt: string | null
+  /** The khata this job's money lands in — null for the nephew case. */
+  customer: { id: string; name: string } | null
   /** Asset ids this job promises, from job_expected. */
   expected: string[]
 }
@@ -164,9 +163,14 @@ export function openJobs(db: SqlDriver): OpenJobRow[] {
     contact: string | null
     expected_back: string | null
     departs_at: string | null
+    customer_id: string | null
+    customer_name: string | null
   }>(
-    `select j.id, j.label, j.contact, j.expected_back, m.departs_at
-       from jobs j left join job_meta m on m.job_id = j.id
+    `select j.id, j.label, j.contact, j.expected_back, m.departs_at,
+            c.id as customer_id, c.name as customer_name
+       from jobs j
+       left join job_meta m on m.job_id = j.id
+       left join customers c on c.id = j.customer_id
       where j.status = 'open'`,
   )
 
@@ -186,6 +190,10 @@ export function openJobs(db: SqlDriver): OpenJobRow[] {
       contact: r.contact,
       expectedBack: r.expected_back,
       departsAt: r.departs_at,
+      customer:
+        r.customer_id && r.customer_name
+          ? { id: r.customer_id, name: r.customer_name }
+          : null,
       expected: expected.get(r.id) ?? [],
     }))
     .sort(compareJobsByDeparture)
@@ -221,6 +229,8 @@ export interface OutDueRow {
   label: string
   contact: string | null
   expectedBack: string | null
+  /** The khata the return's money will land in, when one is wired. */
+  customer: { id: string; name: string } | null
   /** Items physically out on this job right now. */
   out: number
   /** Locally computed at read time — the CONTRIBUTING time rule. */
@@ -258,6 +268,8 @@ export function dueBoard(
       label: string | null
       contact: string | null
       expected_back: string | null
+      customer_id: string | null
+      customer_name: string | null
     }>(
       // count(r.replacement_minor) counts only non-null values, so priced
       // and n - priced are exactly the split moneyLabel needs — an item
@@ -265,9 +277,11 @@ export function dueBoard(
       `select a.current_job_id as job_id, count(*) as n,
               count(r.replacement_minor) as priced,
               sum(r.replacement_minor) as total_minor,
-              j.label, j.contact, j.expected_back
+              j.label, j.contact, j.expected_back,
+              c.id as customer_id, c.name as customer_name
          from assets a
          left join jobs j on j.id = a.current_job_id
+         left join customers c on c.id = j.customer_id
          left join product_rates r on r.product_id = a.product_id
         where a.current_job_id is not null
           and a.presence in ('out', 'in_transit')
@@ -278,6 +292,10 @@ export function dueBoard(
       label: r.label ?? 'Gear out with no job',
       contact: r.contact,
       expectedBack: r.expected_back,
+      customer:
+        r.customer_id && r.customer_name
+          ? { id: r.customer_id, name: r.customer_name }
+          : null,
       out: Number(r.n),
       due: dueStatus(r.expected_back, nowMs),
       value: {
@@ -307,6 +325,9 @@ export interface CreateJobInput {
   /** ISO date or null. Free text is not offered here — the input is a date
    *  field precisely so new jobs are born with a date the board can rank. */
   expectedBack: string | null
+  /** The khata this job's money will land in. Optional — the nephew case
+   *  (a job with no customer) stays legal, it just cannot take a charge. */
+  customerId?: string | null
   /** Product id and how many units, from resolved kit-list lines. */
   wants: { productId: string; qty: number }[]
 }
@@ -331,9 +352,12 @@ export function createJob(
 
   db.transaction(() => {
     db.exec(
-      `insert into jobs (id, org_id, label, contact, expected_back, status)
-       values (?, ?, ?, ?, ?, 'open')`,
-      [input.id, input.orgId, input.label, input.contact, input.expectedBack],
+      `insert into jobs (id, org_id, label, contact, expected_back, status, customer_id)
+       values (?, ?, ?, ?, ?, 'open', ?)`,
+      [
+        input.id, input.orgId, input.label, input.contact, input.expectedBack,
+        input.customerId ?? null,
+      ],
     )
     db.exec(`insert into job_meta (job_id, departs_at) values (?, null)`, [input.id])
 
@@ -371,6 +395,106 @@ export function setExpectedBack(
   value: string | null,
 ): void {
   db.exec(`update jobs set expected_back = ? where id = ?`, [value, jobId])
+}
+
+/** How many assets the projection still puts on this job — the close rule's
+ *  number, shared by the button's disabled reason and the refusal itself. */
+export function stillOutCount(db: SqlDriver, jobId: string): number {
+  const row = db.get<{ n: number }>(
+    `select count(*) as n from assets
+      where current_job_id = ? and presence in ('out', 'in_transit')`,
+    [jobId],
+  )
+  return Number(row?.n ?? 0)
+}
+
+export type CloseJobResult =
+  | { ok: true }
+  | { ok: false; reason: 'still_out'; stillOut: number }
+  | { ok: false; reason: 'not_open' }
+
+/**
+ * End a job. THE RULE, mirroring the server's close_job (0018 D3) exactly:
+ * a job may close only when no asset still projects onto it — a check_in
+ * clears current_job_id, so a row still pointing here has not come home.
+ * Refused, never forced: the ghost cable and the absconded client keep
+ * their jobs open and their board rows red, because that is the truth
+ * until a terminal state for gear exists.
+ */
+export function closeJob(db: SqlDriver, jobId: string, nowMs: number): CloseJobResult {
+  const job = db.get<{ status: string }>(
+    `select status from jobs where id = ?`,
+    [jobId],
+  )
+  if (!job || job.status !== 'open') return { ok: false, reason: 'not_open' }
+
+  const stillOut = stillOutCount(db, jobId)
+  if (stillOut > 0) return { ok: false, reason: 'still_out', stillOut }
+
+  db.exec(
+    `update jobs set status = 'closed', closed_at = ? where id = ?`,
+    [new Date(nowMs).toISOString(), jobId],
+  )
+  return { ok: true }
+}
+
+/** The undo — the board resurrects the job, commitments and all. On the
+ *  server this is owner/manager-only and audited (0018); the demo has one
+ *  user, so the door is plain. */
+export function reopenJob(db: SqlDriver, jobId: string): boolean {
+  const job = db.get<{ status: string }>(
+    `select status from jobs where id = ?`,
+    [jobId],
+  )
+  if (!job || job.status !== 'closed') return false
+  db.exec(`update jobs set status = 'open', closed_at = null where id = ?`, [jobId])
+  return true
+}
+
+export interface ClosedJobRow {
+  id: string
+  label: string
+  customer: { id: string; name: string } | null
+  /** Epoch ms, or null for a job closed before closed_at existed. */
+  closedAt: number | null
+  /** Assets whose projection STILL points at this closed job — the ghost
+   *  cable, shown honestly instead of hidden by the close. Zero for a
+   *  job closed through closeJob, which refuses while any remain; non-zero
+   *  only for rows closed by older seeds or by sync. */
+  neverCameBack: number
+}
+
+/** Every closed job, newest first — the "Closed jobs" door's list. */
+export function closedJobs(db: SqlDriver): ClosedJobRow[] {
+  return db
+    .all<{
+      id: string
+      label: string | null
+      closed_at: string | null
+      customer_id: string | null
+      customer_name: string | null
+      never_back: number
+    }>(
+      `select j.id, j.label, j.closed_at,
+              c.id as customer_id, c.name as customer_name,
+              (select count(*) from assets a
+                where a.current_job_id = j.id
+                  and a.presence in ('out', 'in_transit')) as never_back
+         from jobs j
+         left join customers c on c.id = j.customer_id
+        where j.status = 'closed'
+        order by j.closed_at desc, j.rowid desc`,
+    )
+    .map((r) => ({
+      id: r.id,
+      label: r.label ?? 'Unnamed job',
+      customer:
+        r.customer_id && r.customer_name
+          ? { id: r.customer_id, name: r.customer_name }
+          : null,
+      closedAt: r.closed_at ? Date.parse(r.closed_at) : null,
+      neverCameBack: Number(r.never_back ?? 0),
+    }))
 }
 
 /**
