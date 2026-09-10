@@ -17,6 +17,8 @@ export type View =
   | { name: 'asset'; assetId: string }
   | { name: 'gear'; query?: string }             // search-first inventory
   | { name: 'hisaab' }                           // din ka hisaab: the day's account
+  | { name: 'customer'; customerId: string }     // the khata page
+  | { name: 'owed' }                             // customers by balance, owed first
   | { name: 'enquiry' }                          // the pasted kit list
   | { name: 'import' }                           // load the house's catalogue
   | { name: 'settings' }
@@ -63,6 +65,10 @@ export function parseHash(hash: string): View {
     }
     case 'hisaab':
       return { name: 'hisaab' }
+    case 'customer':
+      return parts[1] ? { name: 'customer', customerId: parts[1] } : { name: 'owed' }
+    case 'owed':
+      return { name: 'owed' }
     case 'enquiry':
       return { name: 'enquiry' }
     case 'import':
@@ -88,6 +94,10 @@ export function viewToHash(view: View): string {
       return view.query ? `#/gear?q=${encodeURIComponent(view.query)}` : '#/gear'
     case 'hisaab':
       return '#/hisaab'
+    case 'customer':
+      return `#/customer/${view.customerId}`
+    case 'owed':
+      return '#/owed'
     case 'enquiry':
       return '#/enquiry'
     case 'import':

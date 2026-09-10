@@ -71,6 +71,57 @@ create table if not exists product_rates (
   day_rate_minor    integer,
   replacement_minor integer
 );
+
+-- The money book (vendor-dream-plan Phase B; PLAN.md override #14).
+-- customers and customer_ledger_entries mirror the shapes the server
+-- will own; job_customer is demo-only wiring for the same reason job_meta
+-- is — the mirrored jobs table's shape is the server's, and widening a
+-- mirror for a demo link is how a fake schema drifts from the real one.
+-- The ledger is APPEND-ONLY: nothing in this codebase updates or deletes a
+-- row, and the balance is a projection (see @papa/core ledger.ts).
+create table if not exists customers (
+  id     text primary key,
+  org_id text not null,
+  name   text not null,
+  phone  text,
+  note   text
+);
+
+create table if not exists job_customer (
+  job_id      text primary key,
+  customer_id text not null
+);
+create index if not exists job_customer_customer_idx on job_customer (customer_id);
+
+create table if not exists customer_ledger_entries (
+  id           text primary key,
+  org_id       text not null,
+  customer_id  text not null,
+  kind         text not null,
+  amount_minor integer not null,
+  job_id       text,
+  asset_id     text,
+  note         text,
+  created_at   integer not null
+);
+create index if not exists ledger_customer_idx on customer_ledger_entries (customer_id, created_at);
+create index if not exists ledger_asset_idx on customer_ledger_entries (asset_id);
+
+-- The turned-away demand log: one row per shortage the enquiry answer was
+-- actually USED for (reply copied, or a job made) — the buy signal.
+create table if not exists demand_log (
+  id         text primary key,
+  product_id text not null,
+  qty        integer not null,
+  date       text not null
+);
+create index if not exists demand_log_product_idx on demand_log (product_id, date);
+
+-- Small org settings — the payment line and QR the money documents carry.
+create table if not exists app_settings (
+  key   text primary key,
+  value text
+);
 `
 
 export interface OpenJobRow {

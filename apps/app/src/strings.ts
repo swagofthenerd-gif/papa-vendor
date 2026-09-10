@@ -42,6 +42,22 @@ import { STR_UR } from './strings-ur.ts'
 const s = (n: number): string => (n === 1 ? '' : 's')
 
 /**
+ * The ledger's row vocabulary, one word per entry kind. A lookup rather
+ * than eight keys because the kind arrives as data from the book and the
+ * fallback must be the kind itself, never a blank row.
+ */
+const KIND_EN: Record<string, string> = {
+  charge: 'charge',
+  payment: 'payment',
+  deposit_hold: 'deposit held',
+  deposit_apply: 'deposit applied',
+  deposit_refund: 'deposit refunded',
+  late_fee: 'late fee',
+  damage_charge: 'damage',
+  adjustment: 'adjustment',
+}
+
+/**
  * The English table. NOT `as const`: the literal types would make every other
  * language table a type error, and nothing consumes the literals. What the
  * annotation on STR_UR needs is exactly what this widened shape provides —
@@ -121,6 +137,12 @@ const STR_EN = {
   todayContactPlaceholder: 'Name and number — e.g. Bilal 0300 4412233',
   todayExpectedBackOptional: 'Expected back (optional)',
   todayCreateJob: 'Create job',
+  // The money strip — the board's third glance, from the local ledger.
+  todayMoneyHeading: 'Money',
+  todayMoneyOwedToMe: 'owed to me',
+  todayMoneyDueInToday: 'due in today',
+  todayMoneyEarnedThisMonth: 'earned this month',
+  todayMoneyOwedAria: 'Owed to me — open the list',
 
   // ----------------------------------------------------------------- scan
   // The scan screen, the lookup loop, the camera, the manual-add sheet, the
@@ -241,6 +263,23 @@ const STR_EN = {
   sessionChallanAsQrAlt: 'The challan as a QR code',
   sessionAnyPhoneCameraReadsThis:
     'Any phone camera reads this — the challan text opens directly, no app needed. Tap anywhere to close.',
+  // Charge-from-the-dock and the late-fee draft (Phase B item 3). Money
+  // written here is a PAST FACT agreed at the dock; nothing auto-charges.
+  sessionChargeClient: 'Charge client',
+  sessionChargeAria: (name: string): string => `Charge client for ${name}`,
+  sessionChargeAmount: 'Amount (Rs)',
+  sessionChargeNoteOptional: 'Note (optional)',
+  sessionWriteInKhata: 'Write it in the khata',
+  sessionChargeGoesTo: (name: string): string => `Goes on ${name}’s khata`,
+  sessionCameBackLate: 'Came back late',
+  sessionLateFeeSub: (dueLabel: string, rate: string): string =>
+    `${dueLabel} · day rate ${rate} per day`,
+  sessionLateFeeNeverAuto:
+    'A draft — you confirm the figure. Nothing is charged on its own.',
+  sessionDraftLateFee: 'Draft a late fee',
+  sessionLateFee: 'Late fee',
+  sessionUnpricedNotInFee: (n: number): string =>
+    `${n} item${s(n)} carry no day rate and are not in this figure.`,
 
   // ----------------------------------------------------------------- gear
   // The inventory list, the asset page and the photo comparison.
@@ -302,6 +341,18 @@ const STR_EN = {
   gearConditionPhotoAlt: (label: string): string => `${label} condition photo`,
   gearByThisPhonesClock: 'by this phone’s clock',
   gearOnlyOnThisPhone: 'only on this phone',
+  // The asset page's money section: earnings, the payback bar, demand.
+  gearMoneyHeading: 'Money',
+  gearEarnedAcross: (rupees: string, jobs: number): string =>
+    `Earned ${rupees} across ${jobs} job${s(jobs)}`,
+  gearNothingEarnedYet:
+    'Nothing earned yet — a charge naming this unit lands here.',
+  gearPaybackLabel: (pct: number): string =>
+    `${pct}% of its replacement value earned back`,
+  gearPaidForItself: 'This one has paid for itself.',
+  gearNoReplacementValue: 'No replacement value on record, so no payback bar.',
+  gearTurnedAway: (times: number): string =>
+    `Turned away ${times}× this month`,
 
   // -------------------------------------------------------------- enquiry
   // The kit-list reader.
@@ -403,6 +454,61 @@ const STR_EN = {
     'Your names are now what the kit-list reader matches a client’s message against.',
   labelsSeeTheGear: 'See the gear',
   labelsLoadAnotherList: 'Load another list',
+  // The backed-up chip and the payment settings, on the settings surface.
+  labelsBackedUpHeading: 'Backed up',
+  labelsQueueStatus: (n: number): string =>
+    n === 0
+      ? 'Queue empty · demo mode — nothing leaves this device'
+      : `${n} scan${s(n)} queued · demo mode — nothing leaves this device`,
+  labelsPaymentHeading: 'Getting paid',
+  labelsPaymentLineLabel: 'Payment line for statements',
+  labelsPaymentLinePlaceholder: 'e.g. JazzCash: 0300 1234567',
+  labelsPaymentLineHint:
+    'Written under every balance card and statement once set.',
+  labelsPaymentQrLabel: 'Payment QR',
+  labelsAttachQr: 'Attach a QR image',
+  labelsRemoveQr: 'Remove the QR',
+  labelsQrStored: 'Stored on this device only.',
+  labelsSave: 'Save',
+
+  // ------------------------------------------------------------- customer
+  // The khata page, the owed list, and the two money documents (the
+  // balance card and the monthly statement — see @papa/core ledger.ts).
+  customerKhata: 'Khata',
+  customerNoSuchCustomer: 'No such customer.',
+  customerBalanceHeading: 'Balance',
+  customerDepositHeldLine: (rupees: string): string => `Deposit held: ${rupees}`,
+  customerRecordPayment: 'Record payment',
+  customerSendBalance: 'Send balance',
+  customerMonthlyStatement: 'Monthly statement',
+  customerCopied: 'Copied — paste it in WhatsApp',
+  customerBookHeading: 'The book',
+  customerEntriesNewestFirst: (n: number): string =>
+    `${n} entr${n === 1 ? 'y' : 'ies'}, newest first`,
+  customerNothingInBook: 'Nothing in the book yet.',
+  customerLinkedJobs: 'Jobs',
+  customerJobClosed: 'closed',
+  customerPaymentAmount: 'Amount (Rs)',
+  customerPaymentNoteOptional: 'Note (optional)',
+  customerSavePayment: 'Record the payment',
+  customerMethodCash: 'Cash',
+  customerMethodJazzCash: 'JazzCash',
+  customerMethodEasypaisa: 'Easypaisa',
+  customerMethodBank: 'Bank',
+  customerOwedTitle: 'Owed to me',
+  customerOwedSubtitle: (n: number): string => `${n} customer${s(n)} owing`,
+  customerNobodyOwes: 'Nobody owes anything right now.',
+  customerOwedTapOne: 'Tap a name to open the khata',
+  customerCardTitle: (name: string): string => `Hisaab — ${name}`,
+  customerStatementTitle: (name: string, month: string): string =>
+    `Statement — ${name} · ${month}`,
+  customerCardBalanceLine: (rupees: string): string => `Balance: ${rupees}`,
+  customerStatementClosingLine: (rupees: string): string =>
+    `Closing balance: ${rupees}`,
+  customerNothingOwed: 'Nothing owed',
+  customerOwedSince: (date: string): string => `Owed since ${date}`,
+  customerKindLabel: (kind: string): string => KIND_EN[kind] ?? kind,
+  customerNothingThisMonth: 'Nothing recorded this month.',
 }
 
 /**

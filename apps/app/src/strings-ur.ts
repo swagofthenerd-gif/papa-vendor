@@ -23,6 +23,22 @@ import type { StrTable } from './strings.ts'
 /** 'cheez'/'cheezein' — the noun most counters count, named once. */
 const cheezein = (n: number): string => (n === 1 ? 'cheez' : 'cheezein')
 
+/**
+ * The ledger's row vocabulary — same lookup shape as the English table's
+ * KIND_EN, fallback the raw kind, never a blank row. 'late fee' stays the
+ * loanword the trade already uses.
+ */
+const KIND_UR: Record<string, string> = {
+  charge: 'kiraya',
+  payment: 'wusooli',
+  deposit_hold: 'zamanat rakhi',
+  deposit_apply: 'zamanat lagi',
+  deposit_refund: 'zamanat wapas',
+  late_fee: 'late fee',
+  damage_charge: 'nuqsaan',
+  adjustment: 'darusti',
+}
+
 export const STR_UR: StrTable = {
   // ---------------------------------------------------------------- common
   commonTabToday: 'Aaj',
@@ -93,6 +109,11 @@ export const STR_UR: StrTable = {
   todayContactPlaceholder: 'Naam aur number — maslan Bilal 0300 4412233',
   todayExpectedBackOptional: 'Wapsi (zaroori nahi)',
   todayCreateJob: 'Job banayein',
+  todayMoneyHeading: 'Paisa',
+  todayMoneyOwedToMe: 'mera udhaar',
+  todayMoneyDueInToday: 'aaj aana hai',
+  todayMoneyEarnedThisMonth: 'is mahine kamaya',
+  todayMoneyOwedAria: 'Mera udhaar — list kholein',
 
   // ----------------------------------------------------------------- scan
   scanGoingOut: 'Bahar ja raha hai',
@@ -214,6 +235,22 @@ export const STR_UR: StrTable = {
   sessionChallanAsQrAlt: 'Challan, QR code ki shakal mein',
   sessionAnyPhoneCameraReadsThis:
     'Koi bhi phone camera isse parh leta hai — challan ka text seedha khul jata hai, kisi app ki zaroorat nahi. Band karne ke liye kahin bhi tap karein.',
+  sessionChargeClient: 'Client par charge',
+  sessionChargeAria: (name: string): string => `${name} ka charge likhein`,
+  sessionChargeAmount: 'Raqam (Rs)',
+  sessionChargeNoteOptional: 'Note (zaroori nahi)',
+  sessionWriteInKhata: 'Khatay mein likhein',
+  sessionChargeGoesTo: (name: string): string =>
+    `${name} ke khatay mein jayega`,
+  sessionCameBackLate: 'Late wapas aaya',
+  sessionLateFeeSub: (dueLabel: string, rate: string): string =>
+    `${dueLabel} · day rate ${rate} har din`,
+  sessionLateFeeNeverAuto:
+    'Sirf draft — raqam aap pakki karein ge. Khud se kuch nahi likha jata.',
+  sessionDraftLateFee: 'Late fee ka draft',
+  sessionLateFee: 'Late fee',
+  sessionUnpricedNotInFee: (n: number): string =>
+    `${n} ${cheezein(n)} ka day rate nahi, is raqam mein shamil nahi.`,
 
   // ----------------------------------------------------------------- gear
   gearTitle: 'Saaman',
@@ -275,6 +312,18 @@ export const STR_UR: StrTable = {
   gearConditionPhotoAlt: (label: string): string => `${label} haalat ki photo`,
   gearByThisPhonesClock: 'is phone ki clock se',
   gearOnlyOnThisPhone: 'sirf is phone par',
+  gearMoneyHeading: 'Paisa',
+  gearEarnedAcross: (rupees: string, jobs: number): string =>
+    `${jobs} job${jobs === 1 ? '' : 's'} se ${rupees} kamaya`,
+  gearNothingEarnedYet:
+    'Abhi kuch nahi kamaya — is unit ke naam ka charge yahan aayega.',
+  gearPaybackLabel: (pct: number): string =>
+    `${pct}% qeemat wasool ho gayi`,
+  gearPaidForItself: 'Is ne apni qeemat poori kar li.',
+  gearNoReplacementValue:
+    'Replacement value darj nahi, is liye payback bar nahi.',
+  gearTurnedAway: (times: number): string =>
+    `Is mahine ${times} dafa mana karna para`,
 
   // -------------------------------------------------------------- enquiry
   enquiryTitle: 'Kit list',
@@ -375,4 +424,58 @@ export const STR_UR: StrTable = {
     'Ab kit-list reader client ke message ko inhi naamon se milata hai.',
   labelsSeeTheGear: 'Saaman dekhein',
   labelsLoadAnotherList: 'Aur list load karein',
+  labelsBackedUpHeading: 'Backup',
+  labelsQueueStatus: (n: number): string =>
+    n === 0
+      ? 'Queue khali · demo mode — is device se kuch nahi jata'
+      : `${n} scan queue mein · demo mode — is device se kuch nahi jata`,
+  labelsPaymentHeading: 'Paise lene ka tareeqa',
+  labelsPaymentLineLabel: 'Statement ke liye payment line',
+  labelsPaymentLinePlaceholder: 'maslan JazzCash: 0300 1234567',
+  labelsPaymentLineHint:
+    'Set hone par har balance card aur statement ke neechay likhi jati hai.',
+  labelsPaymentQrLabel: 'Payment QR',
+  labelsAttachQr: 'QR image lagayein',
+  labelsRemoveQr: 'QR hatayein',
+  labelsQrStored: 'Sirf isi device par rehta hai.',
+  labelsSave: 'Save karein',
+
+  // ------------------------------------------------------------- customer
+  customerKhata: 'Khata',
+  customerNoSuchCustomer: 'Aisa koi customer nahi.',
+  customerBalanceHeading: 'Balance',
+  customerDepositHeldLine: (rupees: string): string =>
+    `Zamanat rakhi hui: ${rupees}`,
+  customerRecordPayment: 'Wusooli likhein',
+  customerSendBalance: 'Balance bhejein',
+  customerMonthlyStatement: 'Mahine ka hisaab',
+  customerCopied: 'Copy ho gaya — WhatsApp mein paste karein',
+  customerBookHeading: 'Poora hisaab',
+  customerEntriesNewestFirst: (n: number): string =>
+    `${n} ${n === 1 ? 'entry' : 'entries'}, nayi pehle`,
+  customerNothingInBook: 'Khatay mein abhi kuch nahi.',
+  customerLinkedJobs: 'Jobs',
+  customerJobClosed: 'band',
+  customerPaymentAmount: 'Raqam (Rs)',
+  customerPaymentNoteOptional: 'Note (zaroori nahi)',
+  customerSavePayment: 'Wusooli darj karein',
+  customerMethodCash: 'Cash',
+  customerMethodJazzCash: 'JazzCash',
+  customerMethodEasypaisa: 'Easypaisa',
+  customerMethodBank: 'Bank',
+  customerOwedTitle: 'Mera udhaar',
+  customerOwedSubtitle: (n: number): string =>
+    `${n} customer${n === 1 ? '' : 's'} par udhaar`,
+  customerNobodyOwes: 'Abhi kisi par kuch nahi.',
+  customerOwedTapOne: 'Naam par tap karein, khata khulega',
+  customerCardTitle: (name: string): string => `Hisaab — ${name}`,
+  customerStatementTitle: (name: string, month: string): string =>
+    `Statement — ${name} · ${month}`,
+  customerCardBalanceLine: (rupees: string): string => `Balance: ${rupees}`,
+  customerStatementClosingLine: (rupees: string): string =>
+    `Aakhri balance: ${rupees}`,
+  customerNothingOwed: 'Kuch baqaya nahi',
+  customerOwedSince: (date: string): string => `${date} se baqaya`,
+  customerKindLabel: (kind: string): string => KIND_UR[kind] ?? kind,
+  customerNothingThisMonth: 'Is mahine kuch darj nahi hua.',
 }
