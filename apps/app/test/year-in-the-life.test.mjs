@@ -1008,11 +1008,12 @@ describe('a year in the life of the rental house', () => {
     // mark the customer. Finding `no-blacklist-or-theft-export`.
     finding('no-blacklist-or-theft-export')
 
-    // The write-off: an 'adjustment' clears the money — indistinguishable
-    // in kind from a discount or a data fix — and the Rs 2.6M of GEAR he
-    // kept appears on no book at all.
-    post('cust-farhan', 'adjustment', -38_000, { k: 5, d: 8, note: 'Written off — client absconded' })
-    finding('write-off-illegible')
+    // The write-off now has its own kind — legible on every statement as
+    // 'write-off', never mistakable for a discount or a data fix (POLICY,
+    // owner may overrule; no screen writes it yet — `no-adjustment-door`).
+    // The Rs 2.6M of GEAR he kept still appears on no book at all.
+    post('cust-farhan', 'write_off', -38_000, { k: 5, d: 8, note: 'Written off — client absconded' })
+    assert.equal(L.kindLabel('write_off'), 'write-off')
     assert.equal(books.get('cust-farhan').balance, 0)
     assert.ok(
       !customersByBalance(db).some((c) => c.id === 'cust-farhan' && c.balanceMinor > 0),
@@ -1316,7 +1317,6 @@ describe('a year in the life of the rental house', () => {
         'no-utilization-read',
         'turnaway-blind-to-commitments',
         'waived-fee-invisible',
-        'write-off-illegible',
       ],
     )
   })

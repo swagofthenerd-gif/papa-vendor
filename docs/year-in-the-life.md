@@ -128,6 +128,15 @@ tests pin the default instead of the accident.
   own debt is the confident lie in mirror image (`houseOwes` on
   `KhataStrings`; pinned in both languages in `khata.test.mjs`).
 
+- **`write_off` kind — RESOLVED-with-default.** The client-side kind list
+  and both string tables know `write_off` ("write-off" / the loanword
+  "write off"), so a synced server write-off renders as a word instead of
+  leaking snake_case — and February's absconded client is no longer an
+  anonymous `adjustment` indistinguishable from a discount. No screen
+  writes it yet (`no-adjustment-door` stands). POLICY comment at the kind
+  union in `packages/core/src/ledger.ts`; the was-`write-off-illegible`
+  finding is retired.
+
 ## (b) Missing features, ranked by how often the year hit the gap
 
 Ranked by number of months the simulation ran into the wall, worst first.
@@ -203,7 +212,7 @@ the shelf, independent of quoting. A minimal `expense` ledger kind +
 sub-rent intake flag belongs in late B / early C, not E.
 
 ### 4. No terminal state for gear — OCT, FEB, JUL, AUG
-`no-terminal-asset-state`, `write-off-illegible`, `no-blacklist-or-theft-export`
+`no-terminal-asset-state`, `no-blacklist-or-theft-export`
 
 Three ways gear left the fleet this year, none expressible:
 
@@ -211,12 +220,11 @@ Three ways gear left the fleet this year, none expressible:
   cable stays `presence='out'` on a closed job until the end of time. The
   Today board's out-count carries a ghost from October onward.
 - The **absconded client** (FEB): FX6 + lens stolen. The board shows the
-  red overdue row forever (correct!), but the write-off is an anonymous
-  `adjustment` indistinguishable from a discount, the Rs 2.6M gear loss
-  appears on **no book at all** (the money book only knows the Rs 38,000
-  of unbilled rental), there is no blacklist flag for the client, and no
-  theft export (serials + photos + last-scan) to hand police or partner
-  houses.
+  red overdue row forever (correct!), and the money side is now a legible
+  `write_off` line — but the Rs 2.6M gear loss appears on **no book at
+  all** (the money book only knows the Rs 38,000 of unbilled rental),
+  there is no blacklist flag for the client, and no theft export
+  (serials + photos + last-scan) to hand police or partner houses.
 - The **stocktake ghost** (JUL): C-Stand #8 is nowhere on the shelf, the
   mirror says `here` with full confidence, and there is no way to record
   the disagreement.
@@ -232,15 +240,14 @@ and only one side of it exists.
 ### 5. The correction vocabulary is one unlabeled word — DEC, FEB, MAY
 `no-adjustment-door`
 
-Three distinct real events — a double-tapped charge, a write-off, a
-bounced cheque — all had to be written as `adjustment`, and **no screen
-can even write that**: the kind exists in core, nothing in the store or UI
-posts it. Worse, the client-facing statement renders the bounce correction
-as "adjustment +Rs 40,000", reading like the *house* fixed its own error.
-The append-only ledger is the right skeleton; it needs a correction
-vocabulary (`reversal(of=…)`, `write_off`, plus the void guard for
-double-taps: same customer + amount + kind within a few seconds is a
-confirmable duplicate, not a silent second line).
+The correction VOCABULARY now exists — `reversal(of=…)` and `write_off`
+are real kinds, the statement prints "reversed", never a self-blaming
+"adjustment", and the charged-then-returned notice writes a reversal
+from its confirm tap. But the general-purpose door is still missing:
+outside that one notice, **no screen posts a reversal, a write-off or an
+adjustment**, and the void guard for double-taps (same customer + amount
++ kind within a few seconds is a confirmable duplicate, not a silent
+second line) is still unbuilt.
 
 *Plan check:* not in any phase. Slot into Phase B polish — it is pure
 past-fact recording, offline-safe by the CONTRIBUTING rule.

@@ -459,6 +459,9 @@ describe('the money documents, golden', () => {
     const kinds = [
       'charge', 'payment', 'deposit_hold', 'deposit_apply',
       'deposit_refund', 'late_fee', 'damage_charge', 'adjustment',
+      // The correction vocabulary: a synced server reversal or write-off
+      // must render as a word, never leak as a snake_case kind.
+      'reversal', 'write_off',
     ]
     for (const table of [STR_EN, STR_UR]) {
       const labels = khataLabels(table)
