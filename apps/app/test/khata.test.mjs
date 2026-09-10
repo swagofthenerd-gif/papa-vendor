@@ -435,6 +435,26 @@ describe('the money documents, golden', () => {
     assert.ok(clean.includes('Kuch baqaya nahi'))
   })
 
+  test('a negative balance says the house owes — plainly, in both languages', () => {
+    // POLICY (owner may overrule): the vendor owing the client is a fact
+    // the card states, never a 'Nothing owed' shrug.
+    const overpaid = {
+      customerName: 'Bilal Hussain',
+      houseName: 'Lightcraft Rentals',
+      entries: [
+        { kind: 'charge', amountMinor: rs(20_000), createdAt: at(2026, 8, 9) },
+        { kind: 'payment', amountMinor: -rs(35_000), createdAt: at(2026, 8, 12) },
+      ],
+      paymentLine: null,
+    }
+    const en = balanceCardText(overpaid, khataLabels(STR_EN))
+    assert.ok(en.includes('You owe them Rs 15,000'))
+    assert.ok(!en.includes('Nothing owed'))
+    const ur = balanceCardText(overpaid, khataLabels(STR_UR))
+    assert.ok(ur.includes('Aap ke zimme Rs 15,000'))
+    assert.ok(!ur.includes('Kuch baqaya nahi'))
+  })
+
   test('every ledger kind has a word in both tables', () => {
     const kinds = [
       'charge', 'payment', 'deposit_hold', 'deposit_apply',

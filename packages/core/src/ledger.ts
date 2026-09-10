@@ -259,6 +259,11 @@ export interface KhataStrings {
   /** Said when nothing is owed — a khata that only speaks when money is
    *  due reads as a threat, not an account. */
   nothingOwed: string
+  /** POLICY (owner may overrule): a NEGATIVE balance — the house owes the
+   *  customer (overpayment, an unrefunded credit) — is said plainly:
+   *  'You owe them Rs X' / 'Aap ke zimme Rs X'. Never 'Nothing owed';
+   *  hiding the house's own debt is the confident lie in mirror image. */
+  houseOwes: (rupees: string) => string
   /** 'Owed since 9 Aug' */
   owedSince: (date: string) => string
   /** One word per entry kind, the row vocabulary of the book. */
@@ -288,7 +293,11 @@ export function balanceCardText(input: BalanceCardInput, L: KhataStrings): strin
   lines.push(input.houseName)
   lines.push('')
   lines.push(
-    balanceMinor > 0 ? L.balanceLine(formatRupees(balanceMinor)) : L.nothingOwed,
+    balanceMinor > 0
+      ? L.balanceLine(formatRupees(balanceMinor))
+      : balanceMinor < 0
+        ? L.houseOwes(formatRupees(-balanceMinor))
+        : L.nothingOwed,
   )
 
   const recent = [...input.entries].sort(byBookOrder).slice(-3)

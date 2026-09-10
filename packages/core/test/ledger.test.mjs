@@ -44,6 +44,7 @@ const L = {
   balanceLine: (rupees) => `Balance: ${rupees}`,
   closingLine: (rupees) => `Closing balance: ${rupees}`,
   nothingOwed: 'Nothing owed',
+  houseOwes: (rupees) => `You owe them ${rupees}`,
   owedSince: (date) => `Owed since ${date}`,
   kindLabel: (kind) => kind,
   nothingThisMonth: 'Nothing recorded this month.',

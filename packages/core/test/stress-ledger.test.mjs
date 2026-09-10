@@ -121,6 +121,7 @@ const L = {
   balanceLine: (rupees) => `Balance: ${rupees}`,
   closingLine: (rupees) => `Closing balance: ${rupees}`,
   nothingOwed: 'Nothing owed',
+  houseOwes: (rupees) => `You owe them ${rupees}`,
   owedSince: (date) => `Owed since ${date}`,
   kindLabel: (kind) => kind,
   nothingThisMonth: 'Nothing recorded this month.',
@@ -390,10 +391,9 @@ describe('hostile books — pinned behaviour, not policy', () => {
     assert.ok(empty.includes('Nothing owed'))
     assert.ok(!empty.includes('JazzCash'), 'no debt, no payment nag')
 
-    // FINDING (documented, not fixed): when the HOUSE owes the CUSTOMER,
-    // the card's headline is still the neutral 'Nothing owed' — the credit
-    // figure only shows up incidentally, as one of the recited recent
-    // entries, never as the balance. Pinned as observed behaviour.
+    // RESOLVED-with-default (POLICY, owner may overrule): when the HOUSE
+    // owes the CUSTOMER, the card says so plainly — the headline is the
+    // houseOwes line naming the credit, never a shrugged 'Nothing owed'.
     const credit = balanceCardText(
       {
         customerName: 'N',
@@ -403,8 +403,9 @@ describe('hostile books — pinned behaviour, not policy', () => {
       },
       L,
     )
-    assert.ok(credit.includes('Nothing owed'))
-    assert.ok(!credit.includes('Balance:'), 'no balance headline names the credit today')
+    assert.ok(credit.includes('You owe them Rs 9,000'))
+    assert.ok(!credit.includes('Nothing owed'))
+    assert.ok(!credit.includes('Balance:'), 'the credit is not disguised as a debt balance')
   })
 
   test('payback with zero, negative, and missing replacement values refuses a made-up denominator', () => {

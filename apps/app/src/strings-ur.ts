@@ -487,6 +487,7 @@ export const STR_UR: StrTable = {
   customerStatementClosingLine: (rupees: string): string =>
     `Aakhri balance: ${rupees}`,
   customerNothingOwed: 'Kuch baqaya nahi',
+  customerHouseOwes: (rupees: string): string => `Aap ke zimme ${rupees}`,
   customerOwedSince: (date: string): string => `${date} se baqaya`,
   customerKindLabel: (kind: string): string => KIND_UR[kind] ?? kind,
   customerNothingThisMonth: 'Is mahine kuch darj nahi hua.',

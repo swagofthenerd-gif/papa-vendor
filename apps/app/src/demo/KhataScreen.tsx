@@ -89,12 +89,16 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
       }
     >
       {/* The figure of the page. Mono, stat-sized, double-ruled — the
-          challan-total voice. A negative balance renders as itself: the
-          house owing the customer is a fact, not a display bug. */}
+          challan-total voice. A negative balance renders as itself, and
+          — POLICY (owner may overrule) — the sub-line SAYS it plainly:
+          'You owe them Rs X', never a disguised 'Balance'. The house
+          owing the customer is a fact, not a display bug. */}
       <div className="tally khata-balance">
         <p className="tally-line code">{formatRupees(customer.balanceMinor)}</p>
         <p className="tally-sub">
-          {STR.customerBalanceHeading}
+          {customer.balanceMinor < 0
+            ? STR.customerHouseOwes(formatRupees(-customer.balanceMinor))
+            : STR.customerBalanceHeading}
           {customer.depositHeldMinor > 0
             ? ` · ${STR.customerDepositHeldLine(formatRupees(customer.depositHeldMinor))}`
             : null}

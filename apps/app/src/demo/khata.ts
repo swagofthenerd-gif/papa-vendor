@@ -629,6 +629,7 @@ export function khataLabels(str: StrTable): KhataStrings {
     balanceLine: str.customerCardBalanceLine,
     closingLine: str.customerStatementClosingLine,
     nothingOwed: str.customerNothingOwed,
+    houseOwes: str.customerHouseOwes,
     owedSince: str.customerOwedSince,
     kindLabel: (kind) => str.customerKindLabel(kind),
     nothingThisMonth: str.customerNothingThisMonth,

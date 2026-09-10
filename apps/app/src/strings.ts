@@ -517,6 +517,9 @@ const STR_EN = {
   customerStatementClosingLine: (rupees: string): string =>
     `Closing balance: ${rupees}`,
   customerNothingOwed: 'Nothing owed',
+  // POLICY (owner may overrule): a negative balance is the house's own
+  // debt and is said plainly — never disguised as 'Nothing owed'.
+  customerHouseOwes: (rupees: string): string => `You owe them ${rupees}`,
   customerOwedSince: (date: string): string => `Owed since ${date}`,
   customerKindLabel: (kind: string): string => KIND_EN[kind] ?? kind,
   customerNothingThisMonth: 'Nothing recorded this month.',

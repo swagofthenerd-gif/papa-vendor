@@ -122,6 +122,12 @@ tests pin the default instead of the accident.
   (`collapseHistory` in `demo/read-model.ts`; pinned in
   `stress-registry.test.mjs`).
 
+- **Negative balance (the house owes the client) — RESOLVED-with-default.**
+  The balance card and the khata page say it plainly — "You owe them
+  Rs X" / "Aap ke zimme Rs X" — never "Nothing owed": hiding the house's
+  own debt is the confident lie in mirror image (`houseOwes` on
+  `KhataStrings`; pinned in both languages in `khata.test.mjs`).
+
 ## (b) Missing features, ranked by how often the year hit the gap
 
 Ranked by number of months the simulation ran into the wall, worst first.
