@@ -41,6 +41,15 @@ export interface LedgerEntryView {
   amountMinor: number
   /** Epoch ms, device clock — a past fact, labelled as such elsewhere. */
   createdAt: number
+  /**
+   * Insertion order (rowid on device) — the tie-break when two entries
+   * share a millisecond. Without it, a charge/payment pair written in the
+   * same ms flips order after re-sorting the screen's newest-first rows,
+   * momentarily dipping the running balance and resetting the owed-since
+   * clock. Optional so hand-built test entries still type; absent ties
+   * keep their input order.
+   */
+  seq?: number
   jobLabel?: string | null
   note?: string | null
 }
@@ -57,6 +66,12 @@ const DEPOSIT_KINDS: ReadonlySet<LedgerEntryKind> = new Set([
   'deposit_apply',
   'deposit_refund',
 ])
+
+/** Book order: written time, then insertion order — the same tie-break
+ *  `rowsFor`'s SQL uses, so a re-sort can never disagree with the page. */
+function byBookOrder(a: LedgerEntryView, b: LedgerEntryView): number {
+  return a.createdAt - b.createdAt || (a.seq ?? 0) - (b.seq ?? 0)
+}
 
 /** Kinds that put money ON the book — the earned side of the account. */
 export const CHARGE_KINDS: ReadonlySet<LedgerEntryKind> = new Set([
@@ -94,7 +109,7 @@ export function projectLedger(entries: LedgerEntryView[]): LedgerProjection {
  * clock; a partial payment does not). Null when nothing is owed now.
  */
 export function oldestUnpaidMs(entries: LedgerEntryView[]): number | null {
-  const ordered = [...entries].sort((a, b) => a.createdAt - b.createdAt)
+  const ordered = [...entries].sort(byBookOrder)
   let balance = 0
   let since: number | null = null
   for (const e of ordered) {
@@ -233,9 +248,7 @@ export function balanceCardText(input: BalanceCardInput, L: KhataStrings): strin
     balanceMinor > 0 ? L.balanceLine(formatRupees(balanceMinor)) : L.nothingOwed,
   )
 
-  const recent = [...input.entries]
-    .sort((a, b) => a.createdAt - b.createdAt)
-    .slice(-3)
+  const recent = [...input.entries].sort(byBookOrder).slice(-3)
   if (recent.length > 0) {
     lines.push('')
     for (const e of recent) {
@@ -275,7 +288,7 @@ export interface StatementInput {
  */
 export function monthlyStatementText(input: StatementInput, L: KhataStrings): string {
   const month = monthBounds(input.nowMs)
-  const ordered = [...input.entries].sort((a, b) => a.createdAt - b.createdAt)
+  const ordered = [...input.entries].sort(byBookOrder)
   const inMonth = ordered.filter(
     (e) => e.createdAt >= month.startMs && e.createdAt < month.endMs,
   )

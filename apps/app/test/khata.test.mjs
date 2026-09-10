@@ -12,7 +12,7 @@ import { test, describe, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { NodeSqliteDriver } from '@papa/core/node-driver'
-import { LOCAL_SCHEMA, balanceCardText, monthlyStatementText } from '@papa/core'
+import { LOCAL_SCHEMA, balanceCardText, monthlyStatementText, oldestUnpaidMs } from '@papa/core'
 import { seedDemo } from '../src/demo/seed.ts'
 import {
   assetEarnings,
@@ -123,6 +123,29 @@ describe('recordEntry', () => {
     const c = customerView(db, 'cust-ayesha')
     assert.equal(c.balanceMinor, rs(63_000))
     assert.equal(c.entries[0].jobLabel, 'Documentary — Walled City')
+  })
+
+  test('a same-millisecond charge and payment cannot flip the owed-since clock', () => {
+    // A bulk import writes lines faster than the clock ticks. The book
+    // carries rowid as the tie-break (LedgerEntryView.seq), so re-sorting
+    // the screen's newest-first rows reproduces insertion order exactly —
+    // without it, the tied payment sorted ahead of the tied charge, the
+    // running balance dipped to zero mid-walk, and "owed since" jumped
+    // from the original charge to the tie's day.
+    db.exec(`insert into customers (id, org_id, name) values ('cust-tie', ?, 'Tie Case')`, [
+      seed.orgId,
+    ])
+    const t1 = new Date(2030, 2, 1, 12).getTime()
+    const t2 = new Date(2030, 2, 6, 12).getTime()
+    const line = (kind, amountMinor, createdAt) =>
+      recordEntry(db, { orgId: seed.orgId, customerId: 'cust-tie', kind, amountMinor, createdAt })
+    line('charge', rs(100_000), t1)
+    line('charge', rs(40_000), t2)
+    line('payment', -rs(100_000), t2) // same millisecond, written after
+    const v = customerView(db, 'cust-tie')
+    assert.equal(v.balanceMinor, rs(40_000))
+    // The debt has run unbroken since t1: the tied payment never cleared it.
+    assert.equal(oldestUnpaidMs(v.entries), t1)
   })
 })
 

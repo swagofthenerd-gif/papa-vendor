@@ -88,18 +88,14 @@ the best performer in the fleet.
 *Fix direction:* keep damage in the customer's khata but out of the
 asset's payback figure (or show it as a separate strand of the bar).
 
-### 6. Same-millisecond ledger ties can flip the running balance — papercut-grade
+### 6. Same-millisecond ledger ties can flip the running balance — FIXED
 
-`oldestUnpaidMs` re-sorts entries by `createdAt` alone. The khata screen
-holds entries newest-first, so a charge and payment written in the same
-millisecond flip order after the stable re-sort, momentarily dipping the
-running balance negative and resetting the owed-since clock. Unlikely from
-human taps, likely from any future bulk import of ledger history. The
-simulation had to space charge and payment an hour apart to keep its
-assertions deterministic.
-
-*Fix direction:* carry `rowid` (insertion order) into `LedgerEntryView`
-and use it as the tie-break, as `rowsFor` already does in SQL.
+Was the papercut-grade re-sort flip. `LedgerEntryView` now carries `seq`
+(rowid, insertion order) and every pure re-sort — `oldestUnpaidMs`, the
+balance card, the statement — breaks `createdAt` ties with it, exactly as
+`rowsFor`'s SQL always did. A same-millisecond charge/payment pair keeps
+its written order and the owed-since clock cannot jump. (Pinned in
+`khata.test.mjs`.)
 
 ### 7. The clock is welded shut in three places — FIXED
 

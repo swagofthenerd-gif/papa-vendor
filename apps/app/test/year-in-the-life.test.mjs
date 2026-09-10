@@ -320,9 +320,9 @@ function jobBack(jobId, customerId, whenMs, money = {}) {
     })
   }
   if (money.payRs) {
-    // An hour after the charge, never the same millisecond: oldestUnpaidMs
-    // re-sorts the screen's newest-first entries by createdAt, and a tied
-    // charge/payment pair flips order — see the papercut in the year doc.
+    // An hour after the charge — the natural rhythm of a dock settlement.
+    // (Same-millisecond ties are safe now: the book carries rowid as the
+    // re-sort tie-break; pinned in khata.test.mjs.)
     post(customerId, 'payment', -money.payRs, { k, d: money.d, hour: 13, jobId, note: 'Cash' })
   }
   closeJob(jobId)

@@ -66,10 +66,15 @@ function rowsFor(db: SqlDriver, customerId: string): LedgerRow[] {
       asset_id: string | null
       note: string | null
       created_at: number
+      seq: number
       job_label: string | null
     }>(
+      // rowid rides along as `seq` so pure re-sorts downstream
+      // (oldestUnpaidMs, the statement builders) break created_at ties
+      // exactly the way this ORDER BY does — a same-millisecond
+      // charge/payment pair must never flip and dip the running balance.
       `select e.id, e.kind, e.amount_minor, e.job_id, e.asset_id, e.note,
-              e.created_at, j.label as job_label
+              e.created_at, e.rowid as seq, j.label as job_label
          from customer_ledger_entries e
          left join jobs j on j.id = e.job_id
         where e.customer_id = ?
@@ -81,6 +86,7 @@ function rowsFor(db: SqlDriver, customerId: string): LedgerRow[] {
       kind: r.kind as LedgerEntryKind,
       amountMinor: Number(r.amount_minor),
       createdAt: Number(r.created_at),
+      seq: Number(r.seq),
       jobId: r.job_id,
       assetId: r.asset_id,
       note: r.note,
