@@ -213,9 +213,12 @@ const physicallyOut = (jobId) =>
 
 /**
  * Open a session the way the registry does, but on the simulated clock —
- * the registry itself cannot take one (finding `clock-welds`).
+ * the registry itself cannot take one, the outbox stamps rows with the
+ * real Date.now(), and the store's money writes take no timestamp at all
+ * (so a payment can never be backdated). Finding `clock-welds`.
  */
 function openSession(jobId, mode, whenMs) {
+  finding('clock-welds')
   const expected =
     mode === 'out' ? (openJob(db, jobId)?.expected ?? []) : physicallyOut(jobId)
   const session = new ScanSession(db, {
@@ -1274,6 +1277,7 @@ describe('a year in the life of the rental house', () => {
     assert.deepEqual(
       [...FINDINGS].sort(),
       [
+        'clock-welds',
         'debt-age-resets-on-bounce',
         'double-promise',
         'duplicate-asset-code',
