@@ -66,7 +66,7 @@ export type {
 } from './fleet.ts'
 export { rentalDaysBetween } from './project.ts'
 export {
-  DEFAULT_BOOKING_SETTINGS, ESCALATION_LADDER, HOUR_MS, DAY_MS,
+  DEFAULT_BOOKING_SETTINGS, ESCALATION_LADDER, HOUR_MS, DAY_MS, WEEKDAYS_SHORT, MONTHS_SHORT,
   blockedPeriod, isLivePencil, pencilCountdown, overlaps, peakOverlap, msOf,
   loadBooking, loadBookings, loadLines, loadAssetReservations, loadStockReservations,
   bookingAvailability, extendedWindow, extensionCollisions, promisedSoon,

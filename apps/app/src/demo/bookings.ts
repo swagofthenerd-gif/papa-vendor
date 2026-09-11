@@ -1,5 +1,6 @@
 import {
   DEFAULT_BOOKING_SETTINGS,
+  HOUR_MS,
   Outbox,
   blockedPeriod,
   bookingAvailability,
@@ -29,7 +30,7 @@ import {
   type StockReservation,
 } from '@papa/core'
 import { createJob } from './read-model.ts'
-import { getSetting, setSetting } from './khata.ts'
+import { getSetting, isoDate, setSetting } from './khata.ts'
 import type { StrTable } from '../strings.ts'
 
 /**
@@ -270,6 +271,16 @@ export function calendar(db: SqlDriver, monthStartMs: number, nowMs: number): Ca
   return days
 }
 
+/** The month's two headline numbers — distinct confirmed bookings and
+ *  distinct live pencils touching any day of it — for the calendar's
+ *  heading and the desk's calendar door alike. */
+export function monthCounts(days: CalendarDay[]): { confirmed: number; pencilled: number } {
+  return {
+    confirmed: new Set(days.flatMap((d) => d.confirmed.map((b) => b.id))).size,
+    pencilled: new Set(days.flatMap((d) => d.pencilled.map((b) => b.id))).size,
+  }
+}
+
 export interface PromisedStrip {
   /** Confirmed bookings whose customer window begins inside the horizon
    *  and that have not become a job yet — the convert-to-job candidates. */
@@ -279,7 +290,7 @@ export interface PromisedStrip {
 }
 
 /** The board's "Promised" section. Horizon 48h, the scanner's own. */
-export function promisedStrip(db: SqlDriver, nowMs: number, horizonMs: number = 48 * 60 * 60 * 1000): PromisedStrip {
+export function promisedStrip(db: SqlDriver, nowMs: number, horizonMs: number = 48 * HOUR_MS): PromisedStrip {
   const live = listBookings(db, { status: 'live' }, nowMs)
   const d = new Date(nowMs)
   const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime()
@@ -451,7 +462,7 @@ export function createBooking(
   const status: BookingStatus = input.status === 'draft' ? 'draft' : 'pencil'
   const blocked = blockedPeriod(input.startMs, input.endMs, settings)
   const pencilExpiresAtMs = status === 'pencil'
-    ? nowMs + settings.pencilTtlHours * 60 * 60 * 1000
+    ? nowMs + settings.pencilTtlHours * HOUR_MS
     : null
   const note = input.note?.trim() || null
   const bookingId = `bk-${ids.newId()}`
@@ -1154,14 +1165,6 @@ export type ConvertBookingResult =
   | { ok: true; jobId: string; bookingNo: number; expected: number }
   | { ok: false; reason: 'not_found' | 'not_confirmed' | 'already_has_job' }
 
-/** Local YYYY-MM-DD of an instant — what jobs.expected_back holds. */
-function isoDateOf(ms: number): string {
-  const d = new Date(ms)
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${mm}-${dd}`
-}
-
 /**
  * The bridge (D8): a confirmed booking becomes the job the scan world runs,
  * through the SAME createJob path the desk's walk-in uses — label, customer
@@ -1196,7 +1199,7 @@ export function convertBookingToJob(
       orgId,
       label: `B#${b.bookingNo} — ${b.customerName}`,
       contact: customer?.phone ?? null,
-      expectedBack: isoDateOf(b.customerEndMs),
+      expectedBack: isoDate(b.customerEndMs),
       customerId: b.customerId,
       wants: [],
       expectedAssetIds: bound,

@@ -26,9 +26,10 @@ export interface ScanRow extends ScanResult {
    * The unit is CONFIRMED to a booking whose hold begins inside the
    * scanner's horizon (0022 promisedSoon) — an annotation, never a
    * refusal (CONTRIBUTING principle 3: the truck is already leaving).
-   * Carried as the two words the stamp prints, computed at scan time.
+   * Carried as the booking number and the day the hold begins ('Thu 21'),
+   * computed at scan time.
    */
-  promised?: { no: string; day: string }
+  promised?: { bookingNo: number; day: string }
 }
 
 /**

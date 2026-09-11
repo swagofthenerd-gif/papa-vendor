@@ -412,7 +412,6 @@ export const STR_UR: StrTable = {
 
   // --------------------------------------------------------------- labels
   labelsTitle: 'Labels',
-  labelsSectionSub: 'Har unit ka aik sticker — print karo, kaato, chipkao',
   labelsImportDoor: 'List se apna samaan load karo',
   labelsSubtitle: (tags: number): string =>
     `${tags} tags · print karein, ya doosri screen par kholein`,
@@ -695,20 +694,16 @@ export const STR_UR: StrTable = {
 
   // --------------------------------------------------------------- booking
   bookingStatusDraft: 'Draft',
-  bookingStatusPencil: 'Pencil',
   bookingStatusConfirmed: 'Pakki',
   bookingStatusCancelled: 'Cancel',
   bookingStatusExpired: 'Pencil khatam',
   bookingSeasonWedding: 'Shaadi season',
   bookingPencilLeft: (hours: number, minutes: number): string =>
     `Pencil — ${hours}h ${minutes}m baaqi`,
-  bookingPromisedSoon: (no: number, name: string, when: string): string =>
-    `Booking #${no} (${name}) ko ${when} se wada hai`,
   bookingActionNudge: 'WhatsApp yaad dilao',
   bookingActionCall: 'Client ko call karo',
   bookingActionLateFee: 'Late fee ka draft banao',
   bookingActionManager: 'Manager tak le jao',
-  bookingConsiderBlacklist: 'Blacklist ka socho',
   bookingCollision: (code: string, no: number, name: string): string =>
     `${code} pehle se booking #${no} (${name}) ko wada hai`,
   bookingShort: (available: number, wanted: number, product: string): string =>
@@ -720,8 +715,6 @@ export const STR_UR: StrTable = {
   bookingIsCancelled: (no: number): string => `Booking #${no} cancel hai`,
   bookingJobOpen: (no: number, label: string): string =>
     `Booking #${no} job “${label}” pe bahar hai — pehle job band karo`,
-  bookingExtensionBlocked: (n: number): string =>
-    `Barhane se ${n} aur booking${n === 1 ? '' : 's'} toot${n === 1 ? 'i' : 'ti'} hai`,
   bookingConfirmTitle: (house: string): string => `${house} — booking pakki`,
   bookingConfirmNo: (no: number): string => `Booking #${no}`,
   bookingConfirmFor: (name: string): string => `Naam: ${name}`,
@@ -760,7 +753,6 @@ export const STR_UR: StrTable = {
   bookingTitle: (no: number): string => `Booking #${no}`,
   bookingNoSuchBooking: 'Yeh booking is phone pe nahi.',
   bookingBackToCalendar: 'Calendar pe wapas',
-  bookingPeriodHeading: 'Kab',
   bookingFromLabel: 'Se',
   bookingUntilLabel: 'Tak',
   bookingHeldUntil: (until: string): string => `Fleet ${until} tak rukha hua hai`,
@@ -783,7 +775,6 @@ export const STR_UR: StrTable = {
   bookingCancelHint: 'Har unit chhoot jayegi. Daba ke rakho — wapas nahi hoti.',
   bookingCancelReasonLabel: 'Kyun? (optional)',
   bookingCancelReasonPlaceholder: 'jaise: client ne date aage kar di',
-  bookingConvertedToJob: (label: string): string => `Ab board pe “${label}” hai`,
   bookingConvertNotConfirmed: 'Sirf pakki booking job banti hai',
   bookingConvertAlreadyJob: 'Yeh booking pehle se job hai',
 
@@ -807,7 +798,6 @@ export const STR_UR: StrTable = {
   bookingNewTitle: 'Nayi booking',
   bookingNewFromKitList: (n: number): string => `Kit list se ${n} line${n === 1 ? '' : 's'}`,
   bookingNewCustomerLabel: 'Kis ki booking?',
-  bookingNewPickCustomer: 'Customer chuno',
   bookingNewCustomerNeeded: 'Booking ke liye customer chahiye — wada kisi se hota hai.',
   bookingNewCustomerNameLabel: 'Customer ka naam',
   bookingNewCustomerPhoneOptional: 'Phone (optional)',
@@ -834,7 +824,6 @@ export const STR_UR: StrTable = {
   bookingNewBadPeriod: 'Wapsi pickup ke baad honi chahiye.',
   bookingNewPencilStands: (no: number): string =>
     `Pencil #${no} rakhi hai — takraao theek karo, phir uske page se pakki karo.`,
-  bookingNewCreated: (no: number): string => `Booking #${no} pencil ho gayi`,
   bookingNewConsumable: (name: string): string => `${name} consumable hai — bikta hai, book nahi hota`,
   bookingNewUnknownProduct: 'Yeh product catalogue mein nahi',
   bookingNewNoCustomer: 'Yeh customer is phone pe nahi',
@@ -863,7 +852,6 @@ export const STR_UR: StrTable = {
   bookingSubstituteHint: (name: string): string =>
     `Sirf doosra ${name}. Unit pe tap karo — unka dawa us pe chala jayega, booking pakki rahegi.`,
   bookingSubstituteNone: 'Unki dates pe is product ka koi unit khali nahi — sub-rent karo, ya call karo.',
-  bookingSubstituted: (code: string): string => `${code} pe chala gaya`,
   bookingCardSettled: 'Nipat gaya',
   bookingCopied: 'Copy ho gaya',
 

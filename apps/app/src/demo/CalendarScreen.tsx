@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '@papa/icons'
 import { dayStartMs } from '@papa/core'
+import { go } from '../nav.ts'
 import { Shell, SectionHead, SettingsButton } from '../components/Shell.tsx'
 import { BookingList } from './BookingRows.tsx'
 import { NewBookingSheet } from './NewBookingSheet.tsx'
@@ -12,6 +13,7 @@ import {
   monthStartOf,
   shiftMonth,
 } from '../booking-view.ts'
+import { monthCounts } from './bookings.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 
@@ -47,8 +49,7 @@ export function CalendarScreen({ store, initialDayMs }: { store: DemoStore; init
   const byDay = useMemo(() => new Map(days.map((d) => [d.dayMs, d])), [days])
   const rows = useMemo(() => monthGrid(monthMs), [monthMs])
   const wedding = days.length > 0 && days[0].season === 'wedding'
-  const confirmedCount = new Set(days.flatMap((d) => d.confirmed.map((b) => b.id))).size
-  const pencilledCount = new Set(days.flatMap((d) => d.pencilled.map((b) => b.id))).size
+  const counts = monthCounts(days)
   const today = dayStartMs(nowMs)
   const selected = dayMs !== null ? byDay.get(dayMs) : undefined
 
@@ -78,7 +79,7 @@ export function CalendarScreen({ store, initialDayMs }: { store: DemoStore; init
           <div className="cal-title">
             <h2>{monthLabel(monthMs)}</h2>
             <p className="section-sub">
-              {STR.bookingMonthCounts(confirmedCount, pencilledCount)}
+              {STR.bookingMonthCounts(counts.confirmed, counts.pencilled)}
               {wedding ? <span className="cal-season"> · {STR.bookingSeasonWedding}</span> : null}
             </p>
           </div>
@@ -147,7 +148,7 @@ export function CalendarScreen({ store, initialDayMs }: { store: DemoStore; init
           onDone={(bookingId) => {
             setCreating(false)
             setTick((t) => t + 1)
-            if (bookingId) window.location.hash = `#/booking/${bookingId}`
+            if (bookingId) go({ name: 'booking', bookingId })
           }}
           onClose={() => setCreating(false)}
         />

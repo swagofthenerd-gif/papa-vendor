@@ -9,7 +9,7 @@ import { PhotoCapture, type CapturedPhoto } from '../camera/PhotoCapture.tsx'
 import { CaseManifestSheet } from './CaseManifest.tsx'
 import { go, type ScanMode } from '../nav.ts'
 import { scanRowClass, type ScanRow } from '../scan-row.ts'
-import { promisedStampParts } from '../booking-view.ts'
+import { shortDayLabel } from '../booking-view.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 
@@ -74,7 +74,7 @@ function SessionScanScreen({
       // annotated and the warning rhythm plays — the scan is never refused
       // (principle 3). Coming back it is only good news, so no annotation.
       const soon = mode === 'out' && result.assetId ? store.promisedSoon(result.assetId) : null
-      const promised = soon ? promisedStampParts(soon.bookingNo, soon.blockedStartMs) : undefined
+      const promised = soon ? { bookingNo: soon.bookingNo, day: shortDayLabel(soon.blockedStartMs) } : undefined
       setRows((prev) => [
         {
           ...result,

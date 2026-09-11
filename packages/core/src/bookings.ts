@@ -711,8 +711,10 @@ export function promisedSoon(
 
 // ------------------------------------------------------------- calendar
 
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const MONTHS = [
+/** The short day and month names every booking label is written in —
+ *  the calendar's day cells and headings build from these same two lists. */
+export const WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+export const MONTHS_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ]
@@ -724,7 +726,7 @@ export function bookingDateLabel(ms: number): string {
   const d = new Date(ms)
   const hh = String(d.getHours()).padStart(2, '0')
   const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}, ${hh}:${mm}`
+  return `${WEEKDAYS_SHORT[d.getDay()]} ${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}, ${hh}:${mm}`
 }
 
 /** Local calendar midnight of an instant — the calendar's day key. */

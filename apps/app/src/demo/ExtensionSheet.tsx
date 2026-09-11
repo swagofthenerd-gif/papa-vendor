@@ -1,9 +1,9 @@
 import { useMemo, useRef, useState } from 'react'
 import { Icon } from '@papa/icons'
-import { bookingDateLabel, telUrl, type ExtensionCollision } from '@papa/core'
+import { DAY_MS, bookingDateLabel, telUrl, type ExtensionCollision } from '@papa/core'
 import { SwapSheet } from './SwapSheet.tsx'
 import { collisionKey, type BookingView } from './bookings.ts'
-import { collisionStarts, collisionSubject, fromLocalInput, toLocalInput } from '../booking-view.ts'
+import { collisionSentence, collisionStarts, collisionSubject, fromLocalInput, toLocalInput } from '../booking-view.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 
@@ -42,7 +42,7 @@ export function ExtensionSheet({
   onClose: () => void
 }) {
   const nowMs = Date.now()
-  const [end, setEnd] = useState(toLocalInput(booking.customerEndMs + 24 * 60 * 60 * 1000))
+  const [end, setEnd] = useState(toLocalInput(booking.customerEndMs + DAY_MS))
   const [settled, setSettled] = useState<Map<string, ExtensionCollision>>(new Map())
   const [substituting, setSubstituting] = useState<ExtensionCollision | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
@@ -263,11 +263,7 @@ function SubstituteSheet({
         if (!reservationId) return
         const r = store.reallocateReservation(reservationId, assetId, forBookingId)
         if (!r.ok) {
-          setProblem(
-            'collision' in r
-              ? STR.bookingCollision(r.collision.assetCode, r.collision.bookingNo, r.collision.customerName)
-              : STR.bookingSubstituteNone,
-          )
+          setProblem('collision' in r ? collisionSentence(r.collision) : STR.bookingSubstituteNone)
           return
         }
         onDone()

@@ -13,7 +13,7 @@ import {
   monthGrid,
   monthLabel,
   monthStartOf,
-  promisedStampParts,
+  shortDayLabel,
   shiftMonth,
   toLocalInput,
 } from '../src/booking-view.ts'
@@ -63,11 +63,8 @@ describe('the datetime-local round trip', () => {
 })
 
 describe('the stamps', () => {
-  test('the promised stamp is the number and the day the hold begins', () => {
-    assert.deepEqual(
-      promisedStampParts(5, new Date(2026, 8, 17, 7).getTime()),
-      { no: '#5', day: 'Thu 17' },
-    )
+  test('the promised stamp\'s day is the weekday and date the hold begins', () => {
+    assert.equal(shortDayLabel(new Date(2026, 8, 17, 7).getTime()), 'Thu 17')
   })
 
   test('a collision card is the unit for a unit, the shortfall for bulk', () => {

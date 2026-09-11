@@ -446,7 +446,6 @@ const STR_EN = {
   // --------------------------------------------------------------- labels
   // The label sheet, plus the catalogue import that lives under this tab.
   labelsTitle: 'Labels',
-  labelsSectionSub: 'One sticker per unit — print, cut, stick',
   labelsImportDoor: 'Load your gear from a list',
   labelsSubtitle: (tags: number): string =>
     `${tags} tags · print, or open on another screen`,
@@ -771,20 +770,16 @@ const STR_EN = {
   // returns as data, and the WhatsApp confirmation the client receives
   // (demo/bookings.ts bookingConfirmText — golden-tested in both tables).
   bookingStatusDraft: 'Draft',
-  bookingStatusPencil: 'Pencil',
   bookingStatusConfirmed: 'Confirmed',
   bookingStatusCancelled: 'Cancelled',
   bookingStatusExpired: 'Pencil expired',
   bookingSeasonWedding: 'Wedding season',
   bookingPencilLeft: (hours: number, minutes: number): string =>
     `Pencil — ${hours}h ${minutes}m left`,
-  bookingPromisedSoon: (no: number, name: string, when: string): string =>
-    `Promised to booking #${no} (${name}) from ${when}`,
   bookingActionNudge: 'Send a WhatsApp nudge',
   bookingActionCall: 'Call the client',
   bookingActionLateFee: 'Draft the late fee',
   bookingActionManager: 'Escalate to the manager',
-  bookingConsiderBlacklist: 'Consider blacklisting',
   bookingCollision: (code: string, no: number, name: string): string =>
     `${code} is already promised to booking #${no} (${name})`,
   bookingShort: (available: number, wanted: number, product: string): string =>
@@ -796,8 +791,6 @@ const STR_EN = {
   bookingIsCancelled: (no: number): string => `Booking #${no} is cancelled`,
   bookingJobOpen: (no: number, label: string): string =>
     `Booking #${no} is out on job “${label}” — close the job first`,
-  bookingExtensionBlocked: (n: number): string =>
-    `Extending breaks ${n} other booking${s(n)}`,
   bookingConfirmTitle: (house: string): string => `${house} — booking confirmed`,
   bookingConfirmNo: (no: number): string => `Booking #${no}`,
   bookingConfirmFor: (name: string): string => `For: ${name}`,
@@ -840,7 +833,6 @@ const STR_EN = {
   bookingTitle: (no: number): string => `Booking #${no}`,
   bookingNoSuchBooking: 'No such booking on this phone.',
   bookingBackToCalendar: 'Back to the calendar',
-  bookingPeriodHeading: 'When',
   bookingFromLabel: 'From',
   bookingUntilLabel: 'Until',
   bookingHeldUntil: (until: string): string => `Held for the fleet until ${until}`,
@@ -863,7 +855,6 @@ const STR_EN = {
   bookingCancelHint: 'Releases every unit. Hold to cancel — it cannot be un-cancelled.',
   bookingCancelReasonLabel: 'Why? (optional)',
   bookingCancelReasonPlaceholder: 'e.g. client postponed',
-  bookingConvertedToJob: (label: string): string => `Now on the board as “${label}”`,
   bookingConvertNotConfirmed: 'Only a confirmed booking becomes a job',
   bookingConvertAlreadyJob: 'This booking is already a job',
 
@@ -890,7 +881,6 @@ const STR_EN = {
   bookingNewTitle: 'New booking',
   bookingNewFromKitList: (n: number): string => `${n} line${s(n)} from the kit list`,
   bookingNewCustomerLabel: 'Whose booking?',
-  bookingNewPickCustomer: 'Pick a customer',
   bookingNewCustomerNeeded: 'A booking needs a customer — a promise has to be to someone.',
   bookingNewCustomerNameLabel: 'Customer name',
   bookingNewCustomerPhoneOptional: 'Phone (optional)',
@@ -917,7 +907,6 @@ const STR_EN = {
   bookingNewBadPeriod: 'The return must come after the pickup.',
   bookingNewPencilStands: (no: number): string =>
     `Pencil #${no} stands — fix the clash and confirm from its page.`,
-  bookingNewCreated: (no: number): string => `Booking #${no} pencilled`,
   bookingNewConsumable: (name: string): string => `${name} is a consumable — it is sold, not booked`,
   bookingNewUnknownProduct: 'That product is not in the catalogue',
   bookingNewNoCustomer: 'That customer is not on this phone',
@@ -947,7 +936,6 @@ const STR_EN = {
   bookingSubstituteHint: (name: string): string =>
     `Another ${name} only. Tapping a unit moves their claim onto it — their booking stays confirmed.`,
   bookingSubstituteNone: 'No free unit of this product for their dates — sub-rent, or call them.',
-  bookingSubstituted: (code: string): string => `Moved onto ${code}`,
   bookingCardSettled: 'Settled',
   bookingCopied: 'Copied',
 

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Icon } from '@papa/icons'
 import { bookingDateLabel, formatRupees } from '@papa/core'
+import { explainConfirmRefusal } from '../booking-view.ts'
 import type { DemoStore } from './store.ts'
 import type { BookingView, ConfirmPlan } from './bookings.ts'
 import { STR } from '../strings.ts'
@@ -58,11 +59,11 @@ export function ConfirmSheet({
   )
 
   const gate = !plan.ok && 'reason' in plan && plan.reason === 'needs_credentials' ? plan : null
-  const refusal = !plan.ok && !gate ? explainPlan(plan, booking.bookingNo) : null
+  const refusal = !plan.ok && !gate ? explainConfirmRefusal(plan, booking.bookingNo) : null
 
   const confirm = () => {
     const r = store.confirmBooking(booking.id, opts, nowMs)
-    if (!r.ok) { setProblem(explainPlan(r, booking.bookingNo)); return }
+    if (!r.ok) { setProblem(explainConfirmRefusal(r, booking.bookingNo)); return }
     onConfirmed(r.allocations.map((a) => a.assetCode).join(', '))
   }
 
@@ -164,20 +165,4 @@ export function ConfirmSheet({
 function productOfAsset(store: DemoStore, assetId: string | null): string | null {
   if (!assetId) return null
   return store.assetView(assetId)?.productId ?? null
-}
-
-/** A confirm refusal as one sentence. */
-export function explainPlan(p: Exclude<ConfirmPlan, { ok: true }>, bookingNo: number): string {
-  if ('collision' in p) {
-    return STR.bookingCollision(p.collision.assetCode, p.collision.bookingNo, p.collision.customerName)
-  }
-  switch (p.reason) {
-    case 'short': return STR.bookingShort(p.short.available, p.short.wanted, p.short.productName)
-    case 'needs_credentials': return STR.bookingNeedsCredentials(formatRupees(p.exposureMinor))
-    case 'blacklisted': return STR.bookingBlacklisted
-    case 'not_found': return STR.bookingNotFound
-    case 'cancelled': return STR.bookingIsCancelled(bookingNo)
-    case 'already_confirmed': return STR.bookingAlreadyConfirmed(bookingNo)
-    case 'blocked_period_uncovers_customer': return STR.bookingBlockedPeriodUncovers
-  }
 }

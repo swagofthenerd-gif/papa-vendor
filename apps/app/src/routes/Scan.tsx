@@ -72,7 +72,7 @@ const ScanRowItem = memo(function ScanRowItem({
             the warning tone. */}
         {row.promised ? (
           <span className="stamp stamp-small">
-            {STR.bookingPromisedStamp(Number(row.promised.no.replace('#', '')), row.promised.day)}
+            {STR.bookingPromisedStamp(row.promised.bookingNo, row.promised.day)}
           </span>
         ) : null}
       </span>

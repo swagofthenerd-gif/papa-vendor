@@ -307,43 +307,14 @@ export function Today({
           <SectionHead icon="calendar" title={STR.todayPromisedHeading} sub={STR.todayPromisedSub} />
           <ul className="line-list">
             {promised.startingSoon.map((b) => (
-              <li key={b.id} className="line promised-line">
-                <button
-                  className="line-tap pressable promised-main"
-                  onClick={() => go({ name: 'booking', bookingId: b.id })}
-                >
-                  <span className="line-name">
-                    <span className="code booking-no">{STR.bookingRowNo(b.bookingNo)}</span> {b.customerName}
-                  </span>
-                  <span className="line-note">
-                    {STR.todayStartsAt(bookingDateLabel(b.customerStartMs))} · {STR.bookingItems(b.itemCount)}
-                  </span>
+              <PromisedLine key={b.id} row={b} note={STR.todayStartsAt(bookingDateLabel(b.customerStartMs))}>
+                <button className="btn btn-sm btn-outline" onClick={() => onConvertBooking(b.id)}>
+                  <Icon name="truck" size={16} /> {STR.bookingDoorConvert}
                 </button>
-                <span className="promised-side">
-                  <BookingStamp row={b} />
-                  <button className="btn btn-sm btn-outline" onClick={() => onConvertBooking(b.id)}>
-                    <Icon name="truck" size={16} /> {STR.bookingDoorConvert}
-                  </button>
-                </span>
-              </li>
+              </PromisedLine>
             ))}
             {promised.pencilsToday.map((b) => (
-              <li key={b.id} className="line promised-line">
-                <button
-                  className="line-tap pressable promised-main"
-                  onClick={() => go({ name: 'booking', bookingId: b.id })}
-                >
-                  <span className="line-name">
-                    <span className="code booking-no">{STR.bookingRowNo(b.bookingNo)}</span> {b.customerName}
-                  </span>
-                  <span className="line-note">
-                    {STR.todayPencilDies(b.pencil.hours, b.pencil.minutes)} · {STR.bookingItems(b.itemCount)}
-                  </span>
-                </button>
-                <span className="promised-side">
-                  <BookingStamp row={b} />
-                </span>
-              </li>
+              <PromisedLine key={b.id} row={b} note={STR.todayPencilDies(b.pencil.hours, b.pencil.minutes)} />
             ))}
           </ul>
         </section>
@@ -565,6 +536,57 @@ function EditDateButton({
 }
 
 /**
+ * One row of the Promised section: the booking's number and customer as
+ * the door to its page, a note (when it starts, or when the pencil dies),
+ * the stamp, and whatever door the row carries beside it — the convert
+ * button for a booking about to start, nothing for a dying pencil.
+ */
+function PromisedLine({
+  row,
+  note,
+  children,
+}: {
+  row: BookingRow
+  note: string
+  children?: React.ReactNode
+}) {
+  return (
+    <li className="line promised-line">
+      <button
+        className="line-tap pressable promised-main"
+        onClick={() => go({ name: 'booking', bookingId: row.id })}
+      >
+        <span className="line-name">
+          <span className="code booking-no">{STR.bookingRowNo(row.bookingNo)}</span> {row.customerName}
+        </span>
+        <span className="line-note">
+          {note} · {STR.bookingItems(row.itemCount)}
+        </span>
+      </button>
+      <span className="promised-side">
+        <BookingStamp row={row} />
+        {children}
+      </span>
+    </li>
+  )
+}
+
+/** The ladder's nudge door: the client's own thread when a number parsed,
+ *  otherwise the same words shared to anyone — the app's one sharing rule. */
+function NudgeLink({ row }: { row: OutRow }) {
+  return (
+    <a
+      className="btn btn-sm btn-outline"
+      href={row.nudgeUrl ?? whatsAppShareUrl(row.nudgeText)}
+      target="_blank"
+      rel="noopener"
+    >
+      <Icon name="send" size={16} /> {STR.bookingActionNudge}
+    </a>
+  )
+}
+
+/**
  * The overdue ladder on the card (ASSUMPTION #escalation-ladder): the
  * rung's label and ONE primary action for it — nudge, call, late fee,
  * escalate. Kept to a single line plus a button so the card stays compact;
@@ -586,31 +608,16 @@ function EscalationRow({
   let action: React.ReactNode
   switch (step.action) {
     case 'whatsapp_nudge':
-      action = (
-        <a
-          className="btn btn-sm btn-outline"
-          href={row.nudgeUrl ?? whatsAppShareUrl(row.nudgeText)}
-          target="_blank"
-          rel="noopener"
-        >
-          <Icon name="send" size={16} /> {STR.bookingActionNudge}
-        </a>
-      )
+      action = <NudgeLink row={row} />
       break
     case 'call':
+      // No confident number to dial: the nudge stands in for the call.
       action = row.phone ? (
         <a className="btn btn-sm btn-outline" href={telUrl(row.phone)}>
           <Icon name="phone" size={16} /> {STR.bookingActionCall}
         </a>
       ) : (
-        <a
-          className="btn btn-sm btn-outline"
-          href={whatsAppShareUrl(row.nudgeText)}
-          target="_blank"
-          rel="noopener"
-        >
-          <Icon name="send" size={16} /> {STR.bookingActionNudge}
-        </a>
+        <NudgeLink row={row} />
       )
       break
     case 'late_fee_draft':

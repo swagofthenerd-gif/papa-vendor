@@ -6,6 +6,7 @@ import { BookingList } from './BookingRows.tsx'
 import { NewBookingSheet, type PrefillLine } from './NewBookingSheet.tsx'
 import { monthLabel, monthStartOf } from '../booking-view.ts'
 import { go } from '../nav.ts'
+import { monthCounts } from './bookings.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 
@@ -27,9 +28,7 @@ export function DeskScreen({ store }: { store: DemoStore }) {
   void tick
   const nowMs = Date.now()
   const monthMs = monthStartOf(nowMs)
-  const month = store.calendar(monthMs, nowMs)
-  const confirmed = new Set(month.flatMap((d) => d.confirmed.map((b) => b.id))).size
-  const pencilled = new Set(month.flatMap((d) => d.pencilled.map((b) => b.id))).size
+  const counts = monthCounts(store.calendar(monthMs, nowMs))
   const live = store.bookings({ status: 'live' }, nowMs)
 
   return (
@@ -48,7 +47,7 @@ export function DeskScreen({ store }: { store: DemoStore }) {
         <SectionHead
           icon="calendar"
           title={STR.bookingCalendarHeading}
-          sub={`${monthLabel(monthMs)} · ${STR.bookingMonthCounts(confirmed, pencilled)}`}
+          sub={`${monthLabel(monthMs)} · ${STR.bookingMonthCounts(counts.confirmed, counts.pencilled)}`}
           action={
             <button className="btn btn-sm btn-outline" onClick={() => setBooking([])}>
               <Icon name="clapperboard" size={16} /> {STR.bookingNew}

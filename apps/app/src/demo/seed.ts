@@ -1,4 +1,4 @@
-import { DEFAULT_BOOKING_SETTINGS, blockedPeriod, type SqlDriver } from '@papa/core'
+import { DEFAULT_BOOKING_SETTINGS, HOUR_MS, blockedPeriod, type SqlDriver } from '@papa/core'
 import { DEMO_SCHEMA } from './read-model.ts'
 
 /**
@@ -681,7 +681,7 @@ function seedBookings(db: SqlDriver): void {
     const blocked = blockedPeriod(b.startMs, b.endMs, DEFAULT_BOOKING_SETTINGS)
     const name = db.get<{ name: string }>(`select name from customers where id = ?`, [b.customer])?.name ?? ''
     const expires = b.status === 'pencil'
-      ? iso(nowMs + (b.expiresInHours ?? 24) * 60 * 60 * 1000)
+      ? iso(nowMs + (b.expiresInHours ?? 24) * HOUR_MS)
       : null
     db.exec(
       `insert into bookings (id, org_id, booking_no, customer_id, customer_name, status,

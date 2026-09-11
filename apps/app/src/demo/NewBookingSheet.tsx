@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Icon } from '@papa/icons'
-import { formatRupees } from '@papa/core'
+import { HOUR_MS } from '@papa/core'
 import {
   defaultPickupMs,
   defaultReturnMs,
+  explainConfirmRefusal,
   fromLocalInput,
   toLocalInput,
 } from '../booking-view.ts'
@@ -54,7 +55,7 @@ export function NewBookingSheet({
   onClose: () => void
 }) {
   const nowMs = Date.now()
-  const pickup0 = initialStartMs ? initialStartMs + 9 * 60 * 60 * 1000 : defaultPickupMs(nowMs)
+  const pickup0 = initialStartMs ? initialStartMs + 9 * HOUR_MS : defaultPickupMs(nowMs)
   const [who, setWho] = useState<string>('')
   const [newName, setNewName] = useState('')
   const [newPhone, setNewPhone] = useState('')
@@ -306,37 +307,28 @@ export function NewBookingSheet({
   )
 }
 
-/** The refusal as sentences, or null when the create went through. A
- *  confirm refusal leaves the pencil standing and says so. */
+/** The refusal as sentences, or null when the create went through. The
+ *  create's own refusals are one line each; a confirm refusal is worded
+ *  by the Confirm sheet's shared helper, and where it was the calendar
+ *  that said no (a collision, a shortfall, the credential gate, a
+ *  blacklist) a second line says the pencil stands. */
 function explain(r: CreateBookingResult, nameOf: (productId: string) => string): string[] | null {
   if (r.ok) return null
-  if ('collision' in r) {
-    return [
-      STR.bookingCollision(r.collision.assetCode, r.collision.bookingNo, r.collision.customerName),
-      STR.bookingNewPencilStands(r.bookingNo),
-    ]
+  if ('reason' in r) {
+    switch (r.reason) {
+      case 'bad_period': return [STR.bookingNewBadPeriod]
+      case 'no_lines': return [STR.bookingNewNoLines]
+      case 'no_customer': return [STR.bookingNewNoCustomer]
+      case 'bad_qty': return [STR.bookingNewNoLines]
+      case 'unknown_product': return [STR.bookingNewUnknownProduct]
+      case 'consumable': return [STR.bookingNewConsumable(nameOf(r.productId))]
+      case 'unknown_asset':
+      case 'not_rentable': return [STR.bookingNewUnknownProduct]
+    }
   }
-  switch (r.reason) {
-    case 'bad_period': return [STR.bookingNewBadPeriod]
-    case 'no_lines': return [STR.bookingNewNoLines]
-    case 'no_customer': return [STR.bookingNewNoCustomer]
-    case 'bad_qty': return [STR.bookingNewNoLines]
-    case 'unknown_product': return [STR.bookingNewUnknownProduct]
-    case 'consumable': return [STR.bookingNewConsumable(nameOf(r.productId))]
-    case 'unknown_asset':
-    case 'not_rentable': return [STR.bookingNewUnknownProduct]
-    case 'short':
-      return [
-        STR.bookingShort(r.short.available, r.short.wanted, r.short.productName),
-        STR.bookingNewPencilStands(r.bookingNo),
-      ]
-    case 'needs_credentials':
-      return [STR.bookingNeedsCredentials(formatRupees(r.exposureMinor)), STR.bookingNewPencilStands(r.bookingNo)]
-    case 'blacklisted':
-      return [STR.bookingBlacklisted, STR.bookingNewPencilStands(r.bookingNo)]
-    case 'not_found': return [STR.bookingNotFound]
-    case 'cancelled': return [STR.bookingIsCancelled(r.bookingNo)]
-    case 'already_confirmed': return [STR.bookingAlreadyConfirmed(r.bookingNo)]
-    case 'blocked_period_uncovers_customer': return [STR.bookingBlockedPeriodUncovers]
-  }
+  const said = [explainConfirmRefusal(r, r.bookingNo)]
+  const pencilStands = 'collision' in r
+    || r.reason === 'short' || r.reason === 'needs_credentials' || r.reason === 'blacklisted'
+  if (pencilStands) said.push(STR.bookingNewPencilStands(r.bookingNo))
+  return said
 }

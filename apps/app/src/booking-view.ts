@@ -1,10 +1,22 @@
-import { bookingDateLabel, dayStartMs, type ExtensionCollision } from '@papa/core'
+import {
+  DAY_MS,
+  HOUR_MS,
+  MONTHS_SHORT,
+  WEEKDAYS_SHORT,
+  bookingDateLabel,
+  dayStartMs,
+  formatRupees,
+  type ExtensionCollision,
+} from '@papa/core'
+import type { Collision, ConfirmRefusal } from './demo/bookings.ts'
+import { STR } from './strings.ts'
 
 /**
  * The booking screens' pure helpers — month arithmetic for the calendar
- * grid, the date-time input round trip, and the two labels the scanner
- * and the collision cards stamp. In a plain .ts module, like status.ts
- * and scan-row.ts, so every one of them is assertable under Node.
+ * grid, the date-time input round trip, the labels the scanner and the
+ * collision cards stamp, and the refusal sentences the sheets share. In
+ * a plain .ts module, like status.ts and scan-row.ts, so every one of
+ * them is assertable under Node.
  *
  * LOCAL TIME THROUGHOUT. The desk and the client are in the same city;
  * a booking's day is the day on the wall calendar, never the UTC one —
@@ -14,11 +26,6 @@ import { bookingDateLabel, dayStartMs, type ExtensionCollision } from '@papa/cor
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
-]
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const MONTHS_SHORT = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ]
 
 /** Local midnight on the first of the month containing `ms`. */
@@ -39,16 +46,17 @@ export function monthLabel(monthStartMs: number): string {
   return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`
 }
 
-/** 'Thu 21' — a day cell's short name, and the promised stamp's day. */
+/** 'Thu 21' — the scan row's promised stamp, short enough for a row. */
 export function shortDayLabel(ms: number): string {
   const d = new Date(ms)
-  return `${WEEKDAYS[d.getDay()]} ${d.getDate()}`
+  return `${WEEKDAYS_SHORT[d.getDay()]} ${d.getDate()}`
 }
 
-/** 'Thu 21 Sep' — the day heading under the grid. */
+/** 'Thu 21 Sep' — the day heading under the grid, and the asset page's
+ *  promised stamp. */
 export function dayLabel(ms: number): string {
   const d = new Date(ms)
-  return `${WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`
+  return `${WEEKDAYS_SHORT[d.getDay()]} ${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`
 }
 
 /**
@@ -95,21 +103,12 @@ export function fromLocalInput(value: string): number | null {
 
 /** A sensible default pickup: tomorrow 09:00 local. */
 export function defaultPickupMs(nowMs: number): number {
-  return dayStartMs(nowMs) + 24 * 60 * 60 * 1000 + 9 * 60 * 60 * 1000
+  return dayStartMs(nowMs) + DAY_MS + 9 * HOUR_MS
 }
 
 /** A sensible default return: the day after the pickup, 18:00 local. */
 export function defaultReturnMs(pickupMs: number): number {
-  return dayStartMs(pickupMs) + 24 * 60 * 60 * 1000 + 18 * 60 * 60 * 1000
-}
-
-/**
- * The scanner's annotation for a unit promised soon — booking number and
- * the day the hold begins, short enough for a row: ('#5', 'Thu 21').
- * The CSS uppercases the stamp; this returns the words.
- */
-export function promisedStampParts(bookingNo: number, blockedStartMs: number): { no: string; day: string } {
-  return { no: `#${bookingNo}`, day: shortDayLabel(blockedStartMs) }
+  return dayStartMs(pickupMs) + DAY_MS + 18 * HOUR_MS
 }
 
 /** The collision card's first line: which unit or bulk shortfall. */
@@ -120,4 +119,26 @@ export function collisionSubject(c: ExtensionCollision): string {
 /** When the rival's hold begins, in the calendar's one date voice. */
 export function collisionStarts(c: ExtensionCollision): string {
   return bookingDateLabel(c.theirFromMs)
+}
+
+/** 'FX9-02 is already promised to booking #5 (Bilal)' — the one sentence
+ *  for a unit collision, wherever confirm or a substitution meets one. */
+export function collisionSentence(c: Pick<Collision, 'assetCode' | 'bookingNo' | 'customerName'>): string {
+  return STR.bookingCollision(c.assetCode, c.bookingNo, c.customerName)
+}
+
+/** A confirm refusal as one sentence — the Confirm sheet's and the new
+ *  booking sheet's shared voice, so a shortfall or the credential gate
+ *  reads the same whichever door the desk came through. */
+export function explainConfirmRefusal(p: ConfirmRefusal, bookingNo: number): string {
+  if ('collision' in p) return collisionSentence(p.collision)
+  switch (p.reason) {
+    case 'short': return STR.bookingShort(p.short.available, p.short.wanted, p.short.productName)
+    case 'needs_credentials': return STR.bookingNeedsCredentials(formatRupees(p.exposureMinor))
+    case 'blacklisted': return STR.bookingBlacklisted
+    case 'not_found': return STR.bookingNotFound
+    case 'cancelled': return STR.bookingIsCancelled(bookingNo)
+    case 'already_confirmed': return STR.bookingAlreadyConfirmed(bookingNo)
+    case 'blocked_period_uncovers_customer': return STR.bookingBlockedPeriodUncovers
+  }
 }

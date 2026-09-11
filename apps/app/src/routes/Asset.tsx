@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Icon } from '@papa/icons'
 import { bookingDateLabel, formatRupees, type Disposition as MarkDisposition, type PromisedSoon } from '@papa/core'
 import { go } from '../nav.ts'
+import { dayLabel } from '../booking-view.ts'
 import { SectionHead } from '../components/Shell.tsx'
 import { StatusBadge } from '../components/StatusBadge.tsx'
 import { HoldToFinish } from '../components/HoldToFinish.tsx'
@@ -495,7 +496,7 @@ export function Asset({
         {promised ? (
           <p className="asset-promised">
             <span className="stamp stamp-small">
-              {STR.bookingPromisedStamp(promised.bookingNo, bookingDateLabel(promised.blockedStartMs).split(',')[0])}
+              {STR.bookingPromisedStamp(promised.bookingNo, dayLabel(promised.blockedStartMs))}
             </span>{' '}
             <span className="section-sub">
               {STR.bookingPromisedRightNow(promised.bookingNo, promised.customerName, bookingDateLabel(promised.blockedStartMs))}
