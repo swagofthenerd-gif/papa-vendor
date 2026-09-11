@@ -14,6 +14,7 @@ import { EnquiryScreen } from './demo/EnquiryScreen.tsx'
 import { Tags } from './demo/Tags.tsx'
 import { ImportScreen } from './demo/ImportScreen.tsx'
 import { HisaabScreen } from './demo/HisaabScreen.tsx'
+import { KharchaSheet } from './demo/KharchaSheet.tsx'
 import { KhataScreen } from './demo/KhataScreen.tsx'
 import { OwedScreen } from './demo/OwedScreen.tsx'
 import { ClosedJobsScreen } from './demo/ClosedJobsScreen.tsx'
@@ -71,6 +72,70 @@ export function App() {
         <Boot title={STR.commonOpeningWarehouse} />
       )}
     </>
+  )
+}
+
+/**
+ * One asset's page, plus the repair door (0019): "Repair cost" opens the
+ * kharcha sheet with the kind locked to repair and THIS unit pre-wired, so
+ * the workshop bill lands in the unit's cost history and the payback bar's
+ * denominator in one write. `tick` re-reads the money facts after it.
+ */
+function AssetRoute({ store, assetId }: { store: DemoStore; assetId: string }) {
+  const [, setTick] = useState(0)
+  const [repairing, setRepairing] = useState(false)
+
+  const asset = store.assetView(assetId)
+  // The unit's money facts — ledger earnings, the payback bar (its
+  // denominator now carries the unit's repairs), and the month's
+  // turned-away count for its product (the buy signal).
+  const money = asset
+    ? {
+        ...store.assetEarnings(assetId),
+        turnedAwayTimes: asset.productId
+          ? store.turnedAwayFor(asset.productId).times
+          : 0,
+      }
+    : null
+  return (
+    <Shell
+      view={{ name: 'asset', assetId }}
+      title={asset?.name ?? STR.gearItemFallback}
+      subtitle={asset?.code}
+      action={
+        <button className="icon-btn" onClick={() => go({ name: 'gear' })} aria-label={STR.gearBackToTheGearAria}>
+          <Icon name="chevron-left" size={22} />
+        </button>
+      }
+    >
+      <Asset
+        asset={asset}
+        money={money}
+        photoPairs={store.photoPairs(assetId)}
+        onProveIt={() => {
+          const text = store.proveItText(assetId)
+          if (!text) return
+          // Same fallback pair as every share in the app: WhatsApp where
+          // it exists, clipboard where it does not.
+          const win = window.open(whatsAppShareUrl(text), '_blank', 'noopener')
+          if (!win) void navigator.clipboard?.writeText(text).catch(() => {})
+        }}
+        onRepairCost={() => setRepairing(true)}
+      />
+      {repairing && asset ? (
+        <KharchaSheet
+          title={STR.kharchaRepairCost}
+          hint={STR.kharchaForAsset(asset.code)}
+          fixedKind="repair"
+          onSave={(input) => {
+            store.recordExpense({ ...input, assetId }, input.whenMs)
+            setRepairing(false)
+            setTick((t) => t + 1)
+          }}
+          onClose={() => setRepairing(false)}
+        />
+      ) : null}
+    </Shell>
   )
 }
 
@@ -133,45 +198,11 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
       )
     }
 
-    case 'asset': {
-      const asset = store.assetView(view.assetId)
-      // The unit's money facts — ledger earnings, the payback bar, and the
-      // month's turned-away count for its product (the buy signal).
-      const money = asset
-        ? {
-            ...store.assetEarnings(view.assetId),
-            turnedAwayTimes: asset.productId
-              ? store.turnedAwayFor(asset.productId).times
-              : 0,
-          }
-        : null
-      return (
-        <Shell
-          view={view}
-          title={asset?.name ?? STR.gearItemFallback}
-          subtitle={asset?.code}
-          action={
-            <button className="icon-btn" onClick={() => go({ name: 'gear' })} aria-label={STR.gearBackToTheGearAria}>
-              <Icon name="chevron-left" size={22} />
-            </button>
-          }
-        >
-          <Asset
-            asset={asset}
-            money={money}
-            photoPairs={store.photoPairs(view.assetId)}
-            onProveIt={() => {
-              const text = store.proveItText(view.assetId)
-              if (!text) return
-              // Same fallback pair as every share in the app: WhatsApp where
-              // it exists, clipboard where it does not.
-              const win = window.open(whatsAppShareUrl(text), '_blank', 'noopener')
-              if (!win) void navigator.clipboard?.writeText(text).catch(() => {})
-            }}
-          />
-        </Shell>
-      )
-    }
+    case 'asset':
+      // KEYED like the scanner: the repair sheet and the refresh tick live
+      // in instance state, and moving between two assets must not carry an
+      // open sheet (wired to the WRONG unit) across.
+      return <AssetRoute key={view.assetId} store={store} assetId={view.assetId} />
 
     case 'session':
       return <SessionScreen store={store} jobId={view.sessionId} />

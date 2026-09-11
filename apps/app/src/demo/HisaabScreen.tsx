@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { moneyLabel } from '@papa/core'
+import { formatRupees, moneyLabel } from '@papa/core'
 import { Icon } from '@papa/icons'
 import { Shell, SectionHead } from '../components/Shell.tsx'
 import { go, type View } from '../nav.ts'
@@ -28,6 +28,9 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
   const view: View = { name: 'hisaab' }
   // Computed once per mount; the screen is a report, not a live feed.
   const account = useMemo(() => store.dayAccount(), [store])
+  // The month's bottom line (0019): earned − kharcha, the vendor's-dream
+  // figure. Same mount-time snapshot as the day.
+  const month = useMemo(() => store.monthProfit(), [store])
 
   const [copied, setCopied] = useState(false)
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -113,6 +116,36 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
         ))
       )}
 
+      {/* The day's expense side (0019): what the house PAID today, its own
+          section with the day's total — an honest empty line on a day
+          nothing was spent, because "no kharcha" is a fact, not a blank. */}
+      <section className="section">
+        <SectionHead
+          icon="receipt"
+          title={STR.kharchaHeading}
+          sub={
+            account.kharcha.rows.length === 0
+              ? STR.kharchaDayNone
+              : STR.kharchaDaySpent(formatRupees(account.kharcha.totalMinor))
+          }
+        />
+        {account.kharcha.rows.length === 0 ? null : (
+          <ul className="line-list">
+            {account.kharcha.rows.map((e) => (
+              <li key={e.id} className="line">
+                <span className="line-name">{STR.kharchaKindLabel(e.kind)}</span>
+                <span className="line-note">
+                  {[e.counterparty, e.assetCode, e.jobLabel, e.note]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+                <span className="line-code code">{formatRupees(e.amountMinor)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <section className="section">
         <SectionHead
           icon="undo"
@@ -145,6 +178,37 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
             })}
           </ul>
         )}
+      </section>
+
+      {/* The month's statement (0019): earned and spent as plain rows,
+          then the profit line under the accountant's double rule — the
+          same tally voice as the khata balance. When the month recorded
+          no expenses the head SAYS so, and the profit line then honestly
+          equals the billing. */}
+      <section className="section">
+        <SectionHead
+          icon="scroll"
+          title={STR.kharchaMonthHeading}
+          sub={
+            month.expenseCount === 0
+              ? STR.kharchaNoExpensesThisMonth
+              : month.monthLabel
+          }
+        />
+        <ul className="line-list">
+          <li className="line">
+            <span className="line-name">{STR.kharchaMonthEarned}</span>
+            <span className="line-code code">{formatRupees(month.earnedMinor)}</span>
+          </li>
+          <li className="line">
+            <span className="line-name">{STR.kharchaMonthSpent}</span>
+            <span className="line-code code">{formatRupees(month.spentMinor)}</span>
+          </li>
+        </ul>
+        <div className="tally">
+          <p className="tally-line code">{formatRupees(month.profitMinor)}</p>
+          <p className="tally-sub">{STR.kharchaMonthProfitLabel}</p>
+        </div>
       </section>
     </Shell>
   )
