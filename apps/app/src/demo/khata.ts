@@ -12,6 +12,7 @@ import {
   type SqlDriver,
 } from '@papa/core'
 import { decodeScanOps, lastSessionRecord, openJob } from './read-model.ts'
+import { assetCosts } from './kharcha.ts'
 import type { StrTable } from '../strings.ts'
 
 /**
@@ -289,13 +290,23 @@ export interface AssetEarnings {
   /** Distinct jobs those lines belong to. */
   jobs: number
   replacementMinor: number | null
-  /** Earned ÷ replacement, or null when the replacement is unknown —
+  /** Live repair expenses naming this unit — the kharcha book's half of
+   *  the story (org_expenses, 0019). */
+  repairMinor: number
+  repairCount: number
+  /** What the unit has COST: replacement value + repairs. Null when the
+   *  replacement value is unknown — repairs alone are not "the cost of
+   *  this camera", and pretending they are would invert the honesty rule
+   *  (a tiny denominator makes every bar read paid-off). */
+  costMinor: number | null
+  /** Earned ÷ cost, or null when the cost is unknowable —
    *  no bar against a made-up denominator. */
   paybackPct: number | null
 }
 
 /**
- * What one unit has earned, from the lines that name it.
+ * What one unit has earned, from the lines that name it — and what it has
+ * cost, from the expense book's rows that name it.
  *
  * DAMAGE IS NOT EARNINGS. A damage_charge stays on the customer's khata,
  * but a camera that gets broken often must not look like the fleet's best
@@ -303,8 +314,13 @@ export interface AssetEarnings {
  * report's `payback-counts-damage`). POLICY (owner may overrule):
  * corrected charges are out too — a line a 'reversal' later voided never
  * counts, so a charged-then-returned item does not keep phantom earnings.
- * The SERVER's asset_earnings view (db/migrations/0017) still sums damage
- * and knows no reversals: follow-up migration, noted in the year doc.
+ * POLICY (owner may overrule): the payback bar's DENOMINATOR is the
+ * replacement value PLUS the unit's live repair costs — a camera that
+ * needed a Rs 45,000 repair has genuinely cost more to keep earning, and
+ * a bar that ignored that would celebrate payback the house has not had.
+ * The unpriced rules hold: no replacement value on record means no bar,
+ * with or without repairs. The SERVER's asset_earnings view matches the
+ * earnings side (0018 D7); its cost twin is asset_cost_history (0019).
  */
 export function assetEarnings(db: SqlDriver, assetId: string): AssetEarnings {
   const row = db.get<{ total: number | null; jobs: number }>(
@@ -329,11 +345,16 @@ export function assetEarnings(db: SqlDriver, assetId: string): AssetEarnings {
     rate?.replacement_minor === null || rate?.replacement_minor === undefined
       ? null
       : Number(rate.replacement_minor)
+  const costs = assetCosts(db, assetId)
+  const cost = replacement === null ? null : replacement + costs.repairMinor
   return {
     earnedMinor: earned,
     jobs: Number(row?.jobs ?? 0),
     replacementMinor: replacement,
-    paybackPct: paybackPercent(earned, replacement),
+    repairMinor: costs.repairMinor,
+    repairCount: costs.repairCount,
+    costMinor: cost,
+    paybackPct: paybackPercent(earned, cost),
   }
 }
 

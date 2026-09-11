@@ -61,6 +61,15 @@ import {
 } from './read-model.ts'
 import { dayAccount, type DayAccount } from './hisaab.ts'
 import {
+  jobMargin,
+  monthProfit,
+  recordExpense,
+  reverseExpense,
+  type JobMargin,
+  type MonthProfit,
+} from './kharcha.ts'
+import type { ExpenseKind } from '@papa/core'
+import {
   assetEarnings,
   chargedButReturned,
   createCustomer,
@@ -1019,6 +1028,58 @@ export class DemoStore {
       STR.customerReversedNote,
       whenMs,
     )
+  }
+
+  /**
+   * Kharcha — money the house PAID OUT, the ledger's other half (0019).
+   * A past fact like a payment, so `whenMs` backdates it the same way.
+   * Returns false — writing nothing — for a non-positive amount.
+   */
+  recordExpense(
+    input: {
+      kind: ExpenseKind
+      amountMinor: number
+      assetId?: string | null
+      jobId?: string | null
+      counterparty?: string | null
+      note?: string | null
+    },
+    whenMs: number = Date.now(),
+  ): boolean {
+    return (
+      recordExpense(this.db, {
+        orgId: this.seed.orgId,
+        kind: input.kind,
+        amountMinor: input.amountMinor,
+        assetId: input.assetId ?? null,
+        jobId: input.jobId ?? null,
+        counterparty: input.counterparty ?? null,
+        note: input.note ?? null,
+        createdAt: whenMs,
+      }) !== null
+    )
+  }
+
+  /** Void one expense forward-only — the reversal row copies its target;
+   *  a double-tap cannot over-credit the house. See kharcha.ts. */
+  reverseExpense(expenseId: string, whenMs: number = Date.now()): boolean {
+    return reverseExpense(
+      this.db,
+      this.seed.orgId,
+      expenseId,
+      STR.kharchaReversedNote,
+      whenMs,
+    )
+  }
+
+  /** What one job actually made: its ledger income minus its expenses. */
+  jobMargin(jobId: string): JobMargin {
+    return jobMargin(this.db, jobId)
+  }
+
+  /** The month's bottom line — earned − spent, from the local book only. */
+  monthProfit(nowMs: number = Date.now()): MonthProfit {
+    return monthProfit(this.db, nowMs)
   }
 
   /** The demand this product's shortage turned away this month. */

@@ -502,6 +502,33 @@ function seedMoneyBook(db: SqlDriver): void {
       [id, ORG, cust, kind, rupees * 100, job, asset, note, msDaysAgo(daysAgo)],
     )
   }
+
+  // The expense side (0019): one of each story the screens must tell —
+  //   a REPAIR on FX9-01 (the camera the seeded photo dispute is about:
+  //     the payback bar's denominator and the asset cost line read this),
+  //   a SUB-HIRE tied to the drama job it rescued (the job margin line),
+  //   a PURCHASE with no links (the plain consumables-run shape).
+  // ASSUMPTION: plausible Lahore figures, same status as the seeded rates.
+  // [id, kind, rupees, asset, job, counterparty, note, daysAgo]
+  const expenses: [
+    string, string, number, string | null, string | null, string, string, number,
+  ][] = [
+    ['exp-fx9-repair', 'repair', 45_000, 'asset-fx9-1', null,
+     'Sharif Camera Works', 'Top handle + mount — came back marked', 8],
+    ['exp-drama-subhire', 'sub_hire', 18_000, null, 'job-imran-drama',
+     'Noor Light & Grip', '2x 600D for the Bahria set', 5],
+    ['exp-xlr-restock', 'purchase', 16_000, null, null,
+     'Hall Road', 'XLR cables x10', 12],
+  ]
+  for (const [id, kind, rupees, asset, job, counterparty, note, daysAgo] of expenses) {
+    db.exec(
+      `insert into org_expenses
+         (id, org_id, kind, amount_minor, asset_id, job_id, counterparty, note,
+          reversal_of, created_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, null, ?)`,
+      [id, ORG, kind, rupees * 100, asset, job, counterparty, note, msDaysAgo(daysAgo)],
+    )
+  }
 }
 
 /** The catalogue the kit-list reader matches a pasted WhatsApp message against. */

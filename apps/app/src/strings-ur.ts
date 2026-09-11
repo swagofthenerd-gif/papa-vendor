@@ -44,6 +44,19 @@ const KIND_UR: Record<string, string> = {
   write_off: 'write off',
 }
 
+/**
+ * The expense book's row vocabulary (0019) — 'marammat' for a repair,
+ * loanwords where the trade uses them (sub-hire, transport).
+ */
+const KHARCHA_UR: Record<string, string> = {
+  repair: 'marammat',
+  sub_hire: 'sub-hire',
+  purchase: 'khareedari',
+  transport: 'transport',
+  consumables: 'chhota saman',
+  misc: 'deegar',
+}
+
 export const STR_UR: StrTable = {
   // ---------------------------------------------------------------- common
   commonTabToday: 'Aaj',
@@ -336,8 +349,10 @@ export const STR_UR: StrTable = {
     `${jobs} job${jobs === 1 ? '' : 's'} se ${rupees} kamaya`,
   gearNothingEarnedYet:
     'Abhi kuch nahi kamaya — is unit ke naam ka charge yahan aayega.',
+  // "Laagat" (cost), not "qeemat": the bar's denominator now carries the
+  // unit's repairs too (0019).
   gearPaybackLabel: (pct: number): string =>
-    `${pct}% qeemat wasool ho gayi`,
+    `${pct}% laagat wasool ho gayi`,
   gearPaidForItself: 'Is ne apni qeemat poori kar li.',
   gearNoReplacementValue:
     'Replacement value darj nahi, is liye payback bar nahi.',
@@ -508,6 +523,36 @@ export const STR_UR: StrTable = {
   customerReverseConfirm: (rupees: string): string =>
     `Pakka karein — ${rupees} wapas likhein`,
   customerReversedNote: 'Charge hua, phir cheez wapas aa gayi — mansookh',
+
+  // --------------------------------------------------------------- kharcha
+  kharchaHeading: 'Kharcha',
+  kharchaAddExpense: 'Kharcha likhein',
+  kharchaRepairCost: 'Marammat ka kharcha',
+  kharchaKindLabel: (kind: string): string => KHARCHA_UR[kind] ?? kind,
+  kharchaAmount: 'Raqam (Rs)',
+  kharchaPaidToOptional: 'Kis ko diya (zaroori nahi)',
+  kharchaPaidToPlaceholder: 'maslan Sharif Camera Works',
+  kharchaNoteOptional: 'Note (zaroori nahi)',
+  kharchaDatePaid: 'Tareekh',
+  kharchaDatePaidHint:
+    'Pehle kisi din diya tha? Tareekh set karein, hisaab usi din likhega.',
+  kharchaSaveExpense: 'Kharcha darj karein',
+  kharchaForAsset: (code: string): string =>
+    `${code} ke liye — is ki cost history mein jayega`,
+  kharchaAssetCost: (rupees: string, repairs: number): string =>
+    `Laagat ${rupees} (khareed + ${repairs} marammat)`,
+  kharchaAssetRepairsOnly: (rupees: string, repairs: number): string =>
+    `Marammat ${rupees} (${repairs} dafa) — khareed ki qeemat darj nahi`,
+  kharchaJobMarginLine: (earned: string, costs: string): string =>
+    `${earned} kamaya · ${costs} kharcha`,
+  kharchaDaySpent: (rupees: string): string => `Aaj ${rupees} kharch hue`,
+  kharchaDayNone: 'Aaj koi kharcha darj nahi hua.',
+  kharchaMonthHeading: 'Mahine ka hisaab',
+  kharchaMonthEarned: 'Kamai',
+  kharchaMonthSpent: 'Kharcha',
+  kharchaMonthProfitLabel: 'Munafa — kamai minus kharcha',
+  kharchaNoExpensesThisMonth: 'Is mahine koi kharcha darj nahi hua.',
+  kharchaReversedNote: 'Ghalat likha gaya — mansookh',
 
   // --------------------------------------------------------------- closed
   closedJobsTitle: 'Band jobs',

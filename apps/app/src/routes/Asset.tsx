@@ -56,8 +56,15 @@ export interface AssetMoney {
   earnedMinor: number
   jobs: number
   replacementMinor: number | null
-  /** Null when the replacement value is unknown — no bar against a
-   *  made-up denominator. NOT clamped: 130% is the celebration itself. */
+  /** Live repair expenses naming this unit (kharcha.ts) — the cost line
+   *  and the payback bar's honest denominator both read these. */
+  repairMinor: number
+  repairCount: number
+  /** Replacement value + repairs, or null when the replacement value is
+   *  unknown — repairs alone are not "the cost of this camera". */
+  costMinor: number | null
+  /** Null when the cost is unknowable — no bar against a made-up
+   *  denominator. NOT clamped: 130% is the celebration itself. */
   paybackPct: number | null
   /** How many enquiries this unit's product was turned away from this
    *  month — the buy signal. */
@@ -66,14 +73,24 @@ export interface AssetMoney {
 
 /**
  * What this unit has EARNED — the sum of the ledger lines that name it —
- * and how far that has gone toward its replacement value.
+ * and what it has COST: its replacement value plus the kharcha book's
+ * repairs (0019). The payback bar divides the first by the second.
  *
  * The money.ts honesty rule holds throughout: no replacement value on
  * record means NO bar, because a payback bar against a made-up denominator
- * is a confident lie; and past 100% the bar fills and the page says so out
- * loud — that line is the digest's celebration, earned literally.
+ * is a confident lie — repairs alone never stand in for a price; and past
+ * 100% the bar fills and the page says so out loud — that line is the
+ * digest's celebration, earned literally (now against the honest
+ * denominator: a repaired camera has genuinely cost more to keep earning).
  */
-function AssetMoneySection({ money }: { money: AssetMoney }) {
+function AssetMoneySection({
+  money,
+  onRepairCost,
+}: {
+  money: AssetMoney
+  /** Open the kharcha sheet wired to this unit — the repair door. */
+  onRepairCost: () => void
+}) {
   const paidOff = money.paybackPct !== null && money.paybackPct >= 100
   return (
     <section className="section">
@@ -110,11 +127,30 @@ function AssetMoneySection({ money }: { money: AssetMoney }) {
       ) : (
         <p className="section-sub">{STR.gearNoReplacementValue}</p>
       )}
+      {/* The cost line — the payback bar's denominator, said in words so
+          the figure is checkable. Rendered only once a repair exists:
+          before that, cost IS the purchase value the bar already names. */}
+      {money.repairCount > 0 ? (
+        <p className="section-sub">
+          {money.costMinor !== null
+            ? STR.kharchaAssetCost(formatRupees(money.costMinor), money.repairCount)
+            : STR.kharchaAssetRepairsOnly(
+                formatRupees(money.repairMinor),
+                money.repairCount,
+              )}
+        </p>
+      ) : null}
       {money.turnedAwayTimes > 0 ? (
         <p className="payback-demand">
           {STR.gearTurnedAway(money.turnedAwayTimes)}
         </p>
       ) : null}
+      {/* The repair door, wired to THIS unit — a write, so it lives here
+          in the money section, away from the read-only share button
+          above (adjacency, not size, prevents mis-taps). */}
+      <button className="btn btn-outline btn-block" onClick={onRepairCost}>
+        <Icon name="wrench" size={18} /> {STR.kharchaRepairCost}
+      </button>
     </section>
   )
 }
@@ -140,12 +176,16 @@ export function Asset({
   money,
   photoPairs,
   onProveIt,
+  onRepairCost,
 }: {
   asset: AssetView | null
   money: AssetMoney | null
   photoPairs: PhotoPair[]
   /** Share the alibi card built from this item's local history. */
   onProveIt: () => void
+  /** Open the kharcha sheet with the kind locked to repair and this unit
+   *  pre-wired — the asset page's quick action (0019). */
+  onRepairCost: () => void
 }) {
   if (!asset) {
     return (
@@ -205,7 +245,7 @@ export function Asset({
         <Icon name="send" size={18} /> {STR.gearProveIt}
       </button>
 
-      {money ? <AssetMoneySection money={money} /> : null}
+      {money ? <AssetMoneySection money={money} onRepairCost={onRepairCost} /> : null}
 
       <section className="section">
         <SectionHead

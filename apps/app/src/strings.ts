@@ -63,6 +63,19 @@ const KIND_EN: Record<string, string> = {
 }
 
 /**
+ * The expense book's row vocabulary (0019) — same lookup shape as KIND_EN:
+ * the kind arrives as data and the fallback must be the kind itself.
+ */
+const KHARCHA_EN: Record<string, string> = {
+  repair: 'repair',
+  sub_hire: 'sub-hire',
+  purchase: 'purchase',
+  transport: 'transport',
+  consumables: 'consumables',
+  misc: 'other',
+}
+
+/**
  * The English table. NOT `as const`: the literal types would make every other
  * language table a type error, and nothing consumes the literals. What the
  * annotation on STR_UR needs is exactly what this widened shape provides —
@@ -368,8 +381,10 @@ const STR_EN = {
     `Earned ${rupees} across ${jobs} job${s(jobs)}`,
   gearNothingEarnedYet:
     'Nothing earned yet — a charge naming this unit lands here.',
+  // "Cost", not "replacement value": since the kharcha book (0019) the
+  // bar's denominator is the replacement value PLUS the unit's repairs.
   gearPaybackLabel: (pct: number): string =>
-    `${pct}% of its replacement value earned back`,
+    `${pct}% of its cost earned back`,
   gearPaidForItself: 'This one has paid for itself.',
   gearNoReplacementValue: 'No replacement value on record, so no payback bar.',
   gearTurnedAway: (times: number): string =>
@@ -546,6 +561,46 @@ const STR_EN = {
   customerReverseConfirm: (rupees: string): string =>
     `Confirm — write ${rupees} back`,
   customerReversedNote: 'Charged, then it came back — reversed',
+
+  // --------------------------------------------------------------- kharcha
+  // The expense side of the book (0019): the entry sheet, the asset page's
+  // cost line, the job margin line, and the hisaab's Kharcha + month block.
+  kharchaHeading: 'Kharcha',
+  kharchaAddExpense: 'Add expense',
+  kharchaRepairCost: 'Repair cost',
+  kharchaKindLabel: (kind: string): string => KHARCHA_EN[kind] ?? kind,
+  kharchaAmount: 'Amount (Rs)',
+  kharchaPaidToOptional: 'Paid to (optional)',
+  kharchaPaidToPlaceholder: 'e.g. Sharif Camera Works',
+  kharchaNoteOptional: 'Note (optional)',
+  // Backdatable, like a payment: "paid the workshop last Tuesday,
+  // recording it now" must land on the day the money actually left.
+  kharchaDatePaid: 'Date paid',
+  kharchaDatePaidHint:
+    'Paid on an earlier day? Set the date and the book files it there.',
+  kharchaSaveExpense: 'Record the expense',
+  kharchaForAsset: (code: string): string =>
+    `For ${code} — lands in its cost history`,
+  // The asset page's cost line, under the earnings: the other half of the
+  // payback question.
+  kharchaAssetCost: (rupees: string, repairs: number): string =>
+    `Cost ${rupees} (purchase + ${repairs} repair${s(repairs)})`,
+  kharchaAssetRepairsOnly: (rupees: string, repairs: number): string =>
+    `Repairs ${rupees} (${repairs}×) — no purchase value on record`,
+  // Margin at a glance on the job's handover, shown when the job carries
+  // expenses: what it billed beside what it cost.
+  kharchaJobMarginLine: (earned: string, costs: string): string =>
+    `Earned ${earned} · costs ${costs}`,
+  kharchaDaySpent: (rupees: string): string => `${rupees} spent today`,
+  kharchaDayNone: 'No kharcha recorded today.',
+  kharchaMonthHeading: 'Mahine ka hisaab',
+  kharchaMonthEarned: 'Earned',
+  kharchaMonthSpent: 'Kharcha',
+  // The month's bottom line, double-ruled like the balance: the
+  // vendor's-dream figure, earned minus spent.
+  kharchaMonthProfitLabel: 'Profit — earned minus kharcha',
+  kharchaNoExpensesThisMonth: 'No expenses recorded this month.',
+  kharchaReversedNote: 'Entered wrong — reversed',
 
   // --------------------------------------------------------------- closed
   // The "Closed jobs" door — the smallest honest surface for jobs that

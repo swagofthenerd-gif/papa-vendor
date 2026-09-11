@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import QRCode from 'qrcode'
 import { Icon } from '@papa/icons'
-import { moneyLabel } from '@papa/core'
+import { formatRupees, moneyLabel } from '@papa/core'
 import { Session } from '../routes/Session.tsx'
 import { CloseJobButton, CustomerChip } from '../routes/Today.tsx'
 import { manifestText } from '../session-summary.ts'
@@ -40,6 +40,10 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
   // render for it — done twice is not more done). `tick` re-reads both.
   const jobOpen = store.job(jobId) !== undefined
   const stillOut = store.stillOut(jobId)
+  // Margin at a glance (0019): when the job carries expenses (the sub-hire
+  // that rescued it), what it billed renders beside what it cost. A job
+  // with no expenses shows nothing — earnings already live on the khata.
+  const margin = store.jobMargin(jobId)
 
   const onShare = useCallback(() => {
     if (!summary) return
@@ -95,6 +99,15 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
         onChargeClient={() => setSheet('charge')}
         onDraftLateFee={() => setSheet('latefee')}
       />
+
+      {margin.expenseCount > 0 ? (
+        <p className="section-sub job-margin code">
+          {STR.kharchaJobMarginLine(
+            formatRupees(margin.incomeMinor),
+            formatRupees(margin.expenseMinor),
+          )}
+        </p>
+      ) : null}
 
       {/* The job's doors, under the handover: the khata chip (when a
           customer is wired) and Close job — live only once everything is

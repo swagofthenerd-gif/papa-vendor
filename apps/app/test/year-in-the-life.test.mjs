@@ -86,6 +86,12 @@ import {
   recordTurnedAway,
   turnedAwayThisMonth,
 } from '../src/demo/khata.ts'
+import {
+  assetCosts,
+  jobMargin,
+  monthProfit,
+  recordExpense,
+} from '../src/demo/kharcha.ts'
 import { buildSummary } from '../src/session-summary.ts'
 import { STR_EN } from '../src/strings.ts'
 
@@ -133,6 +139,38 @@ const CHARGE_KINDS = new Set(['charge', 'late_fee', 'damage_charge'])
 
 /** Charge-side minor units posted per simulated month. */
 const monthCharged = new Array(12).fill(0)
+
+/** Expense minor units posted per simulated month — the OTHER book. The
+ *  seed's own expense history sits in the real current month, before
+ *  simulated month 0, so it never drifts into these windows. */
+const monthSpent = new Array(12).fill(0)
+
+/** Every kharcha line the year posts goes through here — the expense
+ *  twin of post(). Returns the id so a reversal could name it. */
+function spend(kind, rupees, opts) {
+  const id = recordExpense(db, {
+    orgId: seed.orgId,
+    kind,
+    amountMinor: rs(rupees),
+    assetId: opts.assetId ?? null,
+    jobId: opts.jobId ?? null,
+    counterparty: opts.counterparty ?? null,
+    note: opts.note ?? null,
+    createdAt: at(opts.k, opts.d ?? 0, opts.hour ?? 12),
+  })
+  assert.ok(id, 'the expense wrote')
+  monthSpent[opts.k] += rs(rupees)
+  return id
+}
+
+/** The month's bottom line agrees with the hand-kept books to the paisa:
+ *  earned − spent, both sides re-derived from the real tables. */
+function assertMonthProfit(k) {
+  const p = monthProfit(db, at(k, 10, 0))
+  assert.equal(p.earnedMinor, monthCharged[k], `month ${k} earned`)
+  assert.equal(p.spentMinor, monthSpent[k], `month ${k} spent`)
+  assert.equal(p.profitMinor, monthCharged[k] - monthSpent[k], `month ${k} profit`)
+}
 
 /** Every ledger line this year posts goes through here. Returns the entry
  *  id, so a later 'reversal' can name the line it voids. */
@@ -570,6 +608,12 @@ describe('a year in the life of the rental house', () => {
       k: 1, d: -4, jobId: o1.id, assetId: missingCable, note: 'XLR not returned',
     })
     post('cust-farhan', 'payment', -40_000, { k: 1, d: -4, note: 'Cash' })
+    // The replacement cable is BOUGHT — and the buying lands on a book:
+    // a purchase expense, counterparty and all (the expense side shipped;
+    // was part of `no-expense-book`).
+    spend('purchase', 1_500, {
+      k: 1, d: -3, counterparty: 'Hall Road', note: 'Replacement XLR 5m',
+    })
     // The cable was paid for — but it stays presence='out' on this job,
     // so the CLOSE RULE refuses: a job cannot end while its projection
     // says gear is still at the client's. The refusal is honest and the
@@ -647,6 +691,7 @@ describe('a year in the life of the rental house', () => {
     assert.equal(monthCharged[1], rs(40_000 + 8_000 + 55_000 + 15_000 + 25_000 + 28_000 + 30_000 + 12_000))
     assert.equal(books.get('cust-farhan').balance, rs(8_000))
     assert.equal(books.get('cust-bilal').balance, rs(78_000))
+    assertMonthProfit(1)
   })
 
   // -------------------------------------------------------------- NOV (k=2)
@@ -938,6 +983,27 @@ describe('a year in the life of the rental house', () => {
     assert.equal(earnings.earnedMinor, rs(60_000 + 45_000 + 35_000))
     assert.equal(earnings.jobs, 3)
 
+    // THE REPAIR ITSELF — Rs 45,000 to the workshop — finally has a book
+    // to land on (was `no-expense-book`, the wall JUN used to mourn): a
+    // repair expense naming the camera it fixed, counterparty and all.
+    spend('repair', 45_000, {
+      k: 4, d: 0, assetId: 'asset-fx9-1',
+      counterparty: 'Sharif Camera Works', note: 'Top handle + mount',
+    })
+    // The camera's cost history knows it — this January's bill beside the
+    // seed's own Rs 45,000 repair story on the same unit — and the
+    // payback bar's denominator honestly carries both: replacement value
+    // plus every live repair.
+    const costs = assetCosts(db, 'asset-fx9-1')
+    assert.equal(costs.repairMinor, rs(45_000 + 45_000))
+    assert.equal(costs.repairCount, 2)
+    const after = assetEarnings(db, 'asset-fx9-1')
+    assert.equal(after.costMinor, rs(3_500_000 + 90_000))
+    assert.equal(
+      after.paybackPct,
+      Math.round((after.earnedMinor / rs(3_590_000)) * 100),
+    )
+
     // Farhan's last job — it will never come back (see FEB).
     const f1 = jobOut('Music video — night shoot', 'cust-farhan',
       [{ productId: 'prod-fx6', qty: 1 }, { productId: 'prod-sigma50100', qty: 1 }],
@@ -950,6 +1016,9 @@ describe('a year in the life of the rental house', () => {
     assertNoLostScans()
     const strip = moneyStrip(db, at(4, 10))
     assert.equal(strip.earnedMonthMinor, monthCharged[4])
+    // January's bottom line carries the repair: the crisis month is the
+    // first whose profit is not simply its billing.
+    assertMonthProfit(4)
   })
 
   // -------------------------------------------------------------- FEB (k=5)
@@ -1064,7 +1133,7 @@ describe('a year in the life of the rental house', () => {
   })
 
   // -------------------------------------------------------------- APR (k=7)
-  test('APR — Eid rush, and the partner house gear that has to pretend to be owned', () => {
+  test('APR — Eid rush: the partner house helps out, and its bill lands on the book', () => {
     // The rush finds the shelf short: six big lights wanted, five fit to rent.
     const ask = checkAvailability(
       db,
@@ -1079,10 +1148,12 @@ describe('a year in the life of the rental house', () => {
       times: 1, units: 1,
     })
 
-    // The vendor borrows two from a partner house. There is no sub-rent-in
-    // intake: the only door is the import, which stamps ownership='owned'.
-    // The partner's lights become indistinguishable from the fleet, and the
-    // cost owed to the partner lands on no book. Finding `no-subrent-intake`.
+    // The vendor borrows two from a partner house. The import puts the
+    // units on the shelf (still stamped ownership='owned' — flipping that
+    // flag from an intake door is Phase E1 cross-hire polish, noted in
+    // the year doc), and the COST owed to the partner now lands on the
+    // book as a sub-hire expense tied to the job it rescues — the money
+    // half of what was `no-subrent-intake`, shipped.
     const csv = 'Item,Qty,Code\nAputure 600D Pro,2,AP600P'
     const { rows, rejected } = readRows(parseCsv(csv), { name: 0, quantity: 1, code: 2 })
     applyPlan(planImport(rows, currentCatalogue(), rejected))
@@ -1090,8 +1161,7 @@ describe('a year in the life of the rental house', () => {
       `select count(*) as n from assets a join products p on p.id = a.product_id
         where p.display_name = 'Aputure 600D Pro' and a.ownership = 'owned'`,
     )
-    assert.equal(Number(borrowed.n), 8) // all eight read as owned — two are not
-    finding('no-subrent-intake')
+    assert.equal(Number(borrowed.n), 8) // shelf count; the partner's bill is below
 
     const again = checkAvailability(
       db,
@@ -1106,7 +1176,18 @@ describe('a year in the life of the rental house', () => {
       [{ productId: 'prod-aputure600', qty: 6 }, { productId: 'prod-cstand', qty: 6 }],
       iso(7, -2), at(7, -5))
     assert.equal(e1.expected.length, 12)
+    // The partner house's bill, tied to the job its lights rescued.
+    spend('sub_hire', 30_000, {
+      k: 7, d: -5, jobId: e1.id,
+      counterparty: 'Roshan Light House', note: '2x 600D, Eid week',
+    })
     jobBack(e1.id, 'cust-ayesha', at(7, -2), { k: 7, d: -2, chargeRs: 90_000, payRs: 90_000 })
+    // Margin at a glance: what the Eid job billed, minus what the partner
+    // was owed for making it possible — the read the handover now shows.
+    const eidMargin = jobMargin(db, e1.id)
+    assert.equal(eidMargin.incomeMinor, rs(90_000))
+    assert.equal(eidMargin.expenseMinor, rs(30_000))
+    assert.equal(eidMargin.marginMinor, rs(60_000))
     const e2 = jobOut('Eid day 2 — family films', 'cust-hamza',
       [{ productId: 'prod-fx6', qty: 2 }, { productId: 'prod-ronin', qty: 1 }],
       iso(7, 0), at(7, -1))
@@ -1116,6 +1197,8 @@ describe('a year in the life of the rental house', () => {
     assertPhysical()
     assertNoLostScans()
     assert.equal(moneyStrip(db, at(7, 10)).earnedMonthMinor, monthCharged[7])
+    // Eid's bottom line nets the partner out: rush income minus sub-hire.
+    assertMonthProfit(7)
   })
 
   // -------------------------------------------------------------- MAY (k=8)
@@ -1170,10 +1253,13 @@ describe('a year in the life of the rental house', () => {
     assert.equal(assetEarnings(db, 'asset-fx9-1').jobs, 3)
     finding('no-service-tracking')
 
-    // The repair itself — Rs 45,000 to the camera technician — has NOWHERE
-    // to go. The ledger is customer-only; there is no expense side, so
-    // "what did this camera COST me" and any profit figure are unknowable.
-    finding('no-expense-book')
+    // The repair itself — Rs 45,000 to the camera technician — HAS a
+    // book now (was `no-expense-book`): January recorded it against the
+    // camera, so "what did this camera COST me" answers from the same
+    // page that says what it earned, and June can ask January's profit.
+    const fx9Costs = assetCosts(db, 'asset-fx9-1')
+    assert.equal(fx9Costs.repairMinor, rs(90_000)) // this Jan + the seed's story
+    assert.equal(monthProfit(db, at(4, 10, 0)).spentMinor, monthSpent[4])
 
     const jun1 = jobOut('Session video — studio day', 'cust-sana',
       [{ productId: 'prod-c300', qty: 1 }, { productId: 'prod-mkh416', qty: 1 }],
@@ -1241,6 +1327,17 @@ describe('a year in the life of the rental house', () => {
     const simCharges = monthCharged.reduce((a, b) => a + b, 0)
     assert.equal(sqlTotal, seededCharges + simCharges)
 
+    // Q1b — "What did the year actually MAKE?" The vendor's-dream question
+    // the expense book existed to answer (was `no-expense-book`): earned
+    // minus spent, month by month, agrees with the hand-kept books to the
+    // paisa. (The seeded rows live before month 0, so the simulated
+    // months sum clean.)
+    const yearSpent = monthSpent.reduce((a, b) => a + b, 0)
+    assert.ok(yearSpent > 0, 'the year recorded real expenses')
+    let profitSum = 0
+    for (let k = 0; k < 12; k++) profitSum += monthProfit(db, at(k, 10, 0)).profitMinor
+    assert.equal(profitSum, simCharges - yearSpent)
+
     // Q2 — "Who is my best client?" Lifetime value is IN the entries every
     // khata page loads, but no list ranks it; the owed list ranks debt.
     const lifetime = (id) =>
@@ -1294,7 +1391,10 @@ describe('a year in the life of the rental house', () => {
     // down, remove its id here AND its section in docs/year-in-the-life.md.
     // Phase B0 took three ids off this list — `no-add-customer`,
     // `no-customer-on-desk-job`, `no-close-job` — by shipping the doors;
-    // the simulation now walks through them above.
+    // the expense book (0019) took two more — `no-expense-book`,
+    // `no-subrent-intake` — the simulation now records the JAN repair,
+    // the OCT cable purchase and the APR sub-hire on the real book and
+    // asserts the margins above.
     assert.deepEqual(
       [...FINDINGS].sort(),
       [
@@ -1305,12 +1405,10 @@ describe('a year in the life of the rental house', () => {
         'no-bookings',
         'no-cycle-count',
         'no-deposit-door',
-        'no-expense-book',
         'no-health-door',
         'no-lifetime-value-view',
         'no-month-history-screen',
         'no-service-tracking',
-        'no-subrent-intake',
         'no-swap-flow',
         'no-terminal-asset-state',
         'no-utilization-read',

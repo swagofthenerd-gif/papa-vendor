@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { Icon } from '@papa/icons'
 import { formatRupees } from '@papa/core'
 import { Shell, SectionHead } from '../components/Shell.tsx'
+import { KharchaSheet } from './KharchaSheet.tsx'
 import { go, type View } from '../nav.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
@@ -15,10 +17,16 @@ import { STR } from '../strings.ts'
  * the debts on top, because that is the question the owner arrived with.
  *
  * Balances here are the same projection the khata page shows (khata.ts);
- * this screen adds nothing but rows.
+ * this screen adds nothing but rows — plus ONE header door: "Add expense",
+ * the general kharcha entry (0019). It lives here because this is the money
+ * surface the owner already visits, and the smallest honest door beats a
+ * new tab. A header icon-btn, far from every row tap, so a thumb reaching
+ * for a khata cannot land on a write.
  */
 export function OwedScreen({ store }: { store: DemoStore }) {
   const view: View = { name: 'owed' }
+  const [, setTick] = useState(0)
+  const [adding, setAdding] = useState(false)
   const customers = store.customers()
   const owing = customers.filter((c) => c.balanceMinor > 0)
 
@@ -28,13 +36,22 @@ export function OwedScreen({ store }: { store: DemoStore }) {
       title={STR.customerOwedTitle}
       subtitle={STR.customerOwedSubtitle(owing.length)}
       action={
-        <button
-          className="icon-btn"
-          onClick={() => go({ name: 'jobs' })}
-          aria-label={STR.commonBackToToday}
-        >
-          <Icon name="chevron-left" size={22} />
-        </button>
+        <>
+          <button
+            className="icon-btn"
+            onClick={() => setAdding(true)}
+            aria-label={STR.kharchaAddExpense}
+          >
+            <Icon name="receipt" size={22} />
+          </button>
+          <button
+            className="icon-btn"
+            onClick={() => go({ name: 'jobs' })}
+            aria-label={STR.commonBackToToday}
+          >
+            <Icon name="chevron-left" size={22} />
+          </button>
+        </>
       }
     >
       {owing.length === 0 ? (
@@ -72,6 +89,19 @@ export function OwedScreen({ store }: { store: DemoStore }) {
           ))}
         </ul>
       </section>
+
+      {adding ? (
+        <KharchaSheet
+          title={STR.kharchaAddExpense}
+          hint={null}
+          onSave={(input) => {
+            store.recordExpense(input, input.whenMs)
+            setAdding(false)
+            setTick((t) => t + 1)
+          }}
+          onClose={() => setAdding(false)}
+        />
+      ) : null}
     </Shell>
   )
 }

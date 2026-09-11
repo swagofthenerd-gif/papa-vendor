@@ -1,4 +1,4 @@
-import { moneyLabel, type SqlDriver } from '@papa/core'
+import { formatRupees, moneyLabel, type SqlDriver } from '@papa/core'
 import {
   assetFacts,
   decodeScanOps,
@@ -6,6 +6,7 @@ import {
   type DecodedScanOp,
   type OutDueRow,
 } from './read-model.ts'
+import { kharchaBetween, type KharchaSlice } from './kharcha.ts'
 
 /**
  * Din ka hisaab — the day's account.
@@ -56,6 +57,9 @@ export interface DayAccount {
    *  the same dueBoard read the Today board renders from. */
   stillOut: OutDueRow[]
   jobs: DayJobGroup[]
+  /** What the house SPENT today — the expense book's slice of the same
+   *  day window (kharcha.ts). Live rows only; a voided pair never shows. */
+  kharcha: KharchaSlice
 }
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -192,7 +196,19 @@ export function dayAccount(db: SqlDriver, nowMs: number): DayAccount {
     unknownTags: facts.unknownTags,
     stillOut: dueBoard(db, nowMs).outJobs,
     jobs: groups,
+    kharcha: kharchaBetween(db, startMs, endMs),
   }
+}
+
+/** The share-text word for an expense kind — plain, like the rest of the
+ *  day account's vocabulary (share content, not chrome; see strings.ts). */
+export const KHARCHA_WORD: Record<string, string> = {
+  repair: 'repair',
+  sub_hire: 'sub-hire',
+  purchase: 'purchase',
+  transport: 'transport',
+  consumables: 'consumables',
+  misc: 'other',
 }
 
 /**
@@ -232,6 +248,19 @@ export function dayAccountText(account: DayAccount): string {
       }
       if (g.photos > 0) parts.push(`${g.photos} photo${g.photos === 1 ? '' : 's'}`)
       lines.push(`${g.jobLabel}: ${parts.join(', ')}`)
+    }
+  }
+
+  if (account.kharcha.rows.length > 0) {
+    // The day's expense side, from the same local book the hisaab screen
+    // reads — spending is part of the day's account, not a secret from it.
+    lines.push('')
+    lines.push(`Kharcha: ${formatRupees(account.kharcha.totalMinor)}`)
+    for (const e of account.kharcha.rows) {
+      lines.push(
+        `- ${KHARCHA_WORD[e.kind] ?? e.kind} ${formatRupees(e.amountMinor)}` +
+          (e.counterparty ? ` — ${e.counterparty}` : ''),
+      )
     }
   }
 
