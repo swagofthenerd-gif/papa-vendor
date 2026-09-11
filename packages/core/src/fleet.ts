@@ -61,33 +61,61 @@ export interface FleetOpResult {
  * never-returned item close (the October ghost-cable wall). `markFound`
  * reverses it when the cable turns up.
  */
-export function markTerminal(
+/**
+ * Enqueue one manual scan op and project it, atomically — the shared body of
+ * the single-op fleet writers (markTerminal, markFound). `extra` carries the
+ * per-verb fields (a sale amount, say); `note` is trimmed and dropped when
+ * empty. The append-only queue and the optimistic projection are written in
+ * ONE transaction here, so every caller gets that discipline for free.
+ */
+function enqueueScanOp(
   db: SqlDriver,
-  input: MarkTerminalInput,
+  base: { assetId: string; eventType: string; note?: string | null; extra?: Record<string, unknown> },
+  ids: { now: () => number; newId: () => string },
 ): FleetOpResult {
-  const now = input.now ?? Date.now
-  const newId = input.newId ?? (() => crypto.randomUUID())
-  const outbox = new Outbox(db, now)
-  const id = newId()
+  const id = ids.newId()
+  const outbox = new Outbox(db, ids.now)
 
   const payload: Record<string, unknown> = {
-    asset_id: input.assetId,
-    event_type: MARK_EVENT[input.disposition],
+    asset_id: base.assetId,
+    event_type: base.eventType,
     entry_method: 'manual',
-    device_time: new Date(now()).toISOString(),
+    device_time: new Date(ids.now()).toISOString(),
+    ...base.extra,
   }
-  const note = input.note?.trim()
+  const note = base.note?.trim()
   if (note) payload.note = note
-  if (input.disposition === 'sold' && typeof input.saleAmountMinor === 'number') {
-    payload.sale_amount_minor = input.saleAmountMinor
-  }
 
   db.transaction(() => {
     outbox.enqueue({ id, op: 'submit_scan_batch', payload })
     projectOp(db, payload)
   })
 
-  return { outboxId: id, assetId: input.assetId }
+  return { outboxId: id, assetId: base.assetId }
+}
+
+export function markTerminal(
+  db: SqlDriver,
+  input: MarkTerminalInput,
+): FleetOpResult {
+  const sale =
+    input.disposition === 'sold' && typeof input.saleAmountMinor === 'number'
+      ? { sale_amount_minor: input.saleAmountMinor }
+      : undefined
+
+  return enqueueScanOp(
+    db,
+    {
+      assetId: input.assetId,
+      eventType: MARK_EVENT[input.disposition],
+      note: input.note,
+      extra: sale,
+    },
+    {
+      now: input.now ?? Date.now,
+      newId: input.newId ?? (() => crypto.randomUUID()),
+    },
+  )
 }
 
 /**
@@ -101,26 +129,14 @@ export function markFound(
   db: SqlDriver,
   input: { assetId: string; note?: string | null; now?: () => number; newId?: () => string },
 ): FleetOpResult {
-  const now = input.now ?? Date.now
-  const newId = input.newId ?? (() => crypto.randomUUID())
-  const outbox = new Outbox(db, now)
-  const id = newId()
-
-  const payload: Record<string, unknown> = {
-    asset_id: input.assetId,
-    event_type: 'found',
-    entry_method: 'manual',
-    device_time: new Date(now()).toISOString(),
-  }
-  const note = input.note?.trim()
-  if (note) payload.note = note
-
-  db.transaction(() => {
-    outbox.enqueue({ id, op: 'submit_scan_batch', payload })
-    projectOp(db, payload)
-  })
-
-  return { outboxId: id, assetId: input.assetId }
+  return enqueueScanOp(
+    db,
+    { assetId: input.assetId, eventType: 'found', note: input.note },
+    {
+      now: input.now ?? Date.now,
+      newId: input.newId ?? (() => crypto.randomUUID()),
+    },
+  )
 }
 
 export type SwapFlag = 'flag_damage' | 'quarantine'

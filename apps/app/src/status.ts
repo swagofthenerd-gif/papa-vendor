@@ -31,17 +31,6 @@ export interface AssetStatus {
 }
 
 /**
- * The rubber-stamp word for a terminal item — LOST / STOLEN / SOLD /
- * RETIRED — or null while it is still fleet. The stamp is louder than the
- * 'gone' bucket badge on purpose: a person reading an asset page needs to
- * know WHY it left, not just that it did. Uppercased by the CSS; this is the
- * lowercase word so the string table stays translatable.
- */
-export function dispositionWord(disposition: Disposition): string | null {
-  return disposition ?? null
-}
-
-/**
  * Collapse three axes to one bucket.
  *
  * HEALTH WINS OVER PRESENCE. A camera that is physically on the shelf but
