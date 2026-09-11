@@ -1530,3 +1530,16 @@ h2.stamp .h-ico { display: none; }
 .sub-hire-code { margin: var(--sp-3) 0; font-size: var(--fs-xl); text-align: center; }
 .shortage-list { margin-bottom: var(--sp-2); }
 .partner-head .job-actions { margin-top: var(--sp-2); padding: 0; }
+/* The partner list row: same pinning as .booking-line — auto-placement
+   seats the row-spanning chevron first otherwise. */
+.partner-list .line-tap { min-height: var(--row-h-glove); }
+.partner-list .line-name, .partner-list .line-note { grid-column: 1; }
+.partner-list .line-code { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+/* The network's sheets are long forms: they scroll as a whole, and a
+   results list inside them keeps its own height instead of collapsing
+   (flex:1 + overflow inside an overflowing flex column shrinks to 0). */
+.sheet.sheet-tall { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+/* Every direct child keeps its natural height (a chip row or a results
+   list with overflow of its own would otherwise shrink to a hairline). */
+.sheet-tall > * { flex: none; }
+.sheet-tall .sheet-list { max-height: 40dvh; }

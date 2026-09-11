@@ -103,7 +103,7 @@ export function CrewPickerSheet({
   const left = staff.filter((s) => !on.has(s.id))
   return (
     <div className="sheet-backdrop" role="dialog" aria-label={STR.networkCrewPickTitle}>
-      <div className="sheet">
+      <div className="sheet sheet-tall">
         <header className="sheet-head">
           <span className="sheet-title">{STR.networkCrewPickTitle}</span>
           <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>

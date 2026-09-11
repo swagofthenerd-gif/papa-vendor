@@ -65,7 +65,7 @@ export function PartnerSendSheet({
 
   return (
     <div className="sheet-backdrop" role="dialog" aria-label={title}>
-      <div className="sheet">
+      <div className="sheet sheet-tall">
         <header className="sheet-head">
           <span className="sheet-title">{title}</span>
           <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
@@ -93,7 +93,7 @@ export function PartnerSendSheet({
                     <input type="checkbox" checked={on} onChange={() => toggle(p.id)} />
                     <span>
                       <strong>{p.name}</strong>
-                      <span className="line-note">{phone ?? STR.networkAskMarketNoNumber}</span>
+                      <span className="line-note">{phone ? p.phone : STR.networkAskMarketNoNumber}</span>
                     </span>
                   </label>
                   {on ? (

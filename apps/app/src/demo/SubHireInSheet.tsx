@@ -84,7 +84,7 @@ export function SubHireInSheet({
   if (done) {
     return (
       <div className="sheet-backdrop" role="dialog" aria-label={STR.networkSubHireInTitle}>
-        <div className="sheet">
+        <div className="sheet sheet-tall">
           <header className="sheet-head">
             <span className="sheet-title">{STR.networkSubHireInTitle}</span>
             <button className="icon-btn" onClick={() => onDone(done.id)} aria-label={STR.commonClose}>
@@ -122,7 +122,7 @@ export function SubHireInSheet({
 
   return (
     <div className="sheet-backdrop" role="dialog" aria-label={STR.networkSubHireInTitle}>
-      <div className="sheet">
+      <div className="sheet sheet-tall">
         <header className="sheet-head">
           <span className="sheet-title">{STR.networkSubHireInTitle}</span>
           <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>

@@ -49,7 +49,7 @@ export function PartnerSheet({
 
   return (
     <div className="sheet-backdrop" role="dialog" aria-label={STR.networkPartnerSheetTitle}>
-      <div className="sheet">
+      <div className="sheet sheet-tall">
         <header className="sheet-head">
           <span className="sheet-title">{STR.networkPartnerSheetTitle}</span>
           <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
