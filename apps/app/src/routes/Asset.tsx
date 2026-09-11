@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { Icon } from '@papa/icons'
-import { formatRupees } from '@papa/core'
+import { formatRupees, type Disposition as MarkDisposition } from '@papa/core'
 import { go } from '../nav.ts'
 import { SectionHead } from '../components/Shell.tsx'
 import { StatusBadge } from '../components/StatusBadge.tsx'
-import { statusSentence, type Health, type Presence } from '../status.ts'
+import { HoldToFinish } from '../components/HoldToFinish.tsx'
+import { statusSentence, type Health, type Presence, type Disposition } from '../status.ts'
 import { PhotoCompare } from '../components/PhotoCompare.tsx'
 import type { PhotoPair } from '@papa/core'
 import { STR } from '../strings.ts'
@@ -43,6 +45,7 @@ export interface AssetView {
   category: string
   presence: Presence
   health: Health
+  disposition: Disposition
   locationName: string | null
   jobLabel: string | null
   serial: string | null
@@ -155,6 +158,169 @@ function AssetMoneySection({
   )
 }
 
+/** The rubber-stamp word for a terminal item — the CSS uppercases it. */
+const STAMP_WORD: Record<string, string> = {
+  lost: STR.fleetStampLost,
+  stolen: STR.fleetStampStolen,
+  sold: STR.fleetStampSold,
+  retired: STR.fleetStampRetired,
+}
+
+/**
+ * The fleet-lifecycle section.
+ *
+ * A live item shows the destructive door — 'Mark lost, stolen or sold' —
+ * behind a HOLD, never a tap: an accidental brush must not begin ending a
+ * camera's life. It sits at the very bottom of the page, well away from the
+ * read-only share and repair buttons above (adjacency, not size, prevents
+ * mis-taps). An out item also gets the swap door here.
+ *
+ * A terminal item shows its STAMP and the two doors that still make sense:
+ * the theft report (stolen only) and 'found', the recovery path.
+ */
+function FleetSection({
+  asset,
+  onMarkTerminal,
+  onFound,
+  onTheftReport,
+  onSwap,
+}: {
+  asset: AssetView
+  onMarkTerminal: (d: MarkDisposition, note: string | null, saleMinor: number | null) => void
+  onFound: () => void
+  onTheftReport: () => void
+  onSwap: () => void
+}) {
+  const [open, setOpen] = useState(false)
+
+  if (asset.presence === 'gone') {
+    return (
+      <section className="section">
+        <div className="fleet-stamp-row">
+          <span className="stamp">{STAMP_WORD[asset.disposition ?? 'lost'] ?? asset.disposition}</span>
+        </div>
+        {asset.disposition === 'stolen' ? (
+          <button className="btn btn-outline btn-block" onClick={onTheftReport}>
+            <Icon name="send" size={18} /> {STR.fleetTheftReport}
+          </button>
+        ) : null}
+        <button className="btn btn-ghost btn-block" onClick={onFound}>
+          <Icon name="check" size={18} /> {STR.fleetFound}
+        </button>
+      </section>
+    )
+  }
+
+  const isOut = asset.presence === 'out' || asset.presence === 'in_transit'
+
+  return (
+    <section className="section fleet-danger">
+      {isOut ? (
+        <button className="btn btn-outline btn-block" onClick={onSwap}>
+          <Icon name="repeat" size={18} /> {STR.fleetSwapOntoJob}
+        </button>
+      ) : null}
+
+      {open ? (
+        <MarkTerminalPanel onMark={onMarkTerminal} onCancel={() => setOpen(false)} />
+      ) : (
+        <div className="fleet-disclosure">
+          <p className="section-sub">{STR.fleetMarkGoneHint}</p>
+          <HoldToFinish label={STR.fleetMarkGone} onFinish={() => setOpen(true)} />
+        </div>
+      )}
+    </section>
+  )
+}
+
+/**
+ * The reveal-once panel: pick lost / stolen / sold, add a note, and (for a
+ * sale) an optional amount, then a per-outcome confirm. Nothing writes until
+ * the confirm — the note-and-confirm rule the destructive doors all follow.
+ */
+function MarkTerminalPanel({
+  onMark,
+  onCancel,
+}: {
+  onMark: (d: MarkDisposition, note: string | null, saleMinor: number | null) => void
+  onCancel: () => void
+}) {
+  const [kind, setKind] = useState<MarkDisposition>('lost')
+  const [note, setNote] = useState('')
+  const [amount, setAmount] = useState('')
+
+  const confirmLabel =
+    kind === 'lost' ? STR.fleetConfirmLost
+      : kind === 'stolen' ? STR.fleetConfirmStolen
+        : STR.fleetConfirmSold
+
+  const chips: { key: MarkDisposition; label: string }[] = [
+    { key: 'lost', label: STR.fleetLost },
+    { key: 'stolen', label: STR.fleetStolen },
+    { key: 'sold', label: STR.fleetSold },
+  ]
+
+  return (
+    <div className="fleet-mark">
+      <div className="chip-row" role="group" aria-label={STR.fleetMarkGone}>
+        {chips.map((c) => (
+          <button
+            key={c.key}
+            className={`filter-chip${kind === c.key ? ' active' : ''}`}
+            aria-pressed={kind === c.key}
+            onClick={() => setKind(c.key)}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      <label className="field-label" htmlFor="mark-note">{STR.fleetMarkNoteLabel}</label>
+      <input
+        id="mark-note"
+        className="sheet-search"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        autoCorrect="off"
+        spellCheck={false}
+      />
+
+      {kind === 'sold' ? (
+        <>
+          <label className="field-label" htmlFor="mark-amount">{STR.fleetSaleAmountLabel}</label>
+          <input
+            id="mark-amount"
+            className="sheet-search code"
+            type="number"
+            inputMode="decimal"
+            min="0"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+          <p className="sheet-hint">{STR.fleetSaleAmountHint}</p>
+        </>
+      ) : null}
+
+      <button
+        className="btn btn-danger btn-block"
+        onClick={() => {
+          const rupees = Number(amount)
+          const saleMinor =
+            kind === 'sold' && Number.isFinite(rupees) && rupees > 0
+              ? Math.round(rupees * 100)
+              : null
+          onMark(kind, note.trim() || null, saleMinor)
+        }}
+      >
+        {confirmLabel}
+      </button>
+      <button className="btn btn-ghost btn-block" onClick={onCancel}>
+        {STR.commonClose}
+      </button>
+    </div>
+  )
+}
+
 /** How an entry got into the log, said plainly. */
 const METHOD_LABEL: Record<string, string> = {
   scanned: STR.gearMethodScanned,
@@ -177,6 +343,10 @@ export function Asset({
   photoPairs,
   onProveIt,
   onRepairCost,
+  onMarkTerminal,
+  onFound,
+  onTheftReport,
+  onSwap,
 }: {
   asset: AssetView | null
   money: AssetMoney | null
@@ -186,6 +356,14 @@ export function Asset({
   /** Open the kharcha sheet with the kind locked to repair and this unit
    *  pre-wired — the asset page's quick action (0019). */
   onRepairCost: () => void
+  /** Declare the item lost/stolen/sold — behind the hold-gated disclosure. */
+  onMarkTerminal: (d: MarkDisposition, note: string | null, saleMinor: number | null) => void
+  /** Bring a terminal item back into the fleet. */
+  onFound: () => void
+  /** Build and share the theft report (stolen items). */
+  onTheftReport: () => void
+  /** Open the swap sheet for an item out on a live job. */
+  onSwap: () => void
 }) {
   if (!asset) {
     return (
@@ -297,6 +475,16 @@ export function Asset({
           </ol>
         )}
       </section>
+
+      {/* The fleet-lifecycle door — last on the page, behind a hold, well
+          clear of the read-only actions above (0020). */}
+      <FleetSection
+        asset={asset}
+        onMarkTerminal={onMarkTerminal}
+        onFound={onFound}
+        onTheftReport={onTheftReport}
+        onSwap={onSwap}
+      />
     </>
   )
 }

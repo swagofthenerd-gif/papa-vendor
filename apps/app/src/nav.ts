@@ -22,6 +22,7 @@ export type View =
   | { name: 'closed' }                           // finished jobs, off the boards
   | { name: 'enquiry' }                          // the pasted kit list
   | { name: 'import' }                           // load the house's catalogue
+  | { name: 'ginti' }                            // cycle count: shelf vs book
   | { name: 'settings' }
 
 /**
@@ -76,6 +77,8 @@ export function parseHash(hash: string): View {
       return { name: 'enquiry' }
     case 'import':
       return { name: 'import' }
+    case 'ginti':
+      return { name: 'ginti' }
     case 'settings':
       return { name: 'settings' }
     default:
@@ -107,6 +110,8 @@ export function viewToHash(view: View): string {
       return '#/enquiry'
     case 'import':
       return '#/import'
+    case 'ginti':
+      return '#/ginti'
     case 'settings':
       return '#/settings'
   }

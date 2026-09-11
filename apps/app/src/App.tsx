@@ -18,6 +18,8 @@ import { KharchaSheet } from './demo/KharchaSheet.tsx'
 import { KhataScreen } from './demo/KhataScreen.tsx'
 import { OwedScreen } from './demo/OwedScreen.tsx'
 import { ClosedJobsScreen } from './demo/ClosedJobsScreen.tsx'
+import { GintiScreen } from './demo/GintiScreen.tsx'
+import { SwapSheet } from './demo/SwapSheet.tsx'
 
 /**
  * The app shell.
@@ -82,9 +84,14 @@ export function App() {
  * denominator in one write. `tick` re-reads the money facts after it.
  */
 function AssetRoute({ store, assetId }: { store: DemoStore; assetId: string }) {
-  const [, setTick] = useState(0)
+  const [tick, setTick] = useState(0)
   const [repairing, setRepairing] = useState(false)
+  const [swapping, setSwapping] = useState(false)
+  const bump = () => setTick((t) => t + 1)
 
+  // tick is read so the lint stays honest that a re-render is the point — the
+  // fleet writes below mutate the mirror in place, and bump() re-reads it.
+  void tick
   const asset = store.assetView(assetId)
   // The unit's money facts — ledger earnings, the payback bar (its
   // denominator now carries the unit's repairs), and the month's
@@ -121,6 +128,18 @@ function AssetRoute({ store, assetId }: { store: DemoStore; assetId: string }) {
           if (!win) void navigator.clipboard?.writeText(text).catch(() => {})
         }}
         onRepairCost={() => setRepairing(true)}
+        onMarkTerminal={(disposition, note, saleMinor) => {
+          store.markTerminal(assetId, disposition, { note, saleAmountMinor: saleMinor })
+          bump()
+        }}
+        onFound={() => { store.markFound(assetId); bump() }}
+        onTheftReport={() => {
+          const text = store.theftReportText(assetId)
+          if (!text) return
+          const win = window.open(whatsAppShareUrl(text), '_blank', 'noopener')
+          if (!win) void navigator.clipboard?.writeText(text).catch(() => {})
+        }}
+        onSwap={() => setSwapping(true)}
       />
       {repairing && asset ? (
         <KharchaSheet
@@ -130,9 +149,22 @@ function AssetRoute({ store, assetId }: { store: DemoStore; assetId: string }) {
           onSave={(input) => {
             store.recordExpense({ ...input, assetId }, input.whenMs)
             setRepairing(false)
-            setTick((t) => t + 1)
+            bump()
           }}
           onClose={() => setRepairing(false)}
+        />
+      ) : null}
+      {swapping && asset ? (
+        <SwapSheet
+          brokenCode={asset.code}
+          jobLabel={asset.jobLabel ?? STR.gearOutFallback}
+          substitutes={store.substitutesFor(assetId)}
+          onPick={(substituteId) => {
+            store.swapOntoJob(assetId, substituteId)
+            setSwapping(false)
+            bump()
+          }}
+          onClose={() => setSwapping(false)}
         />
       ) : null}
     </Shell>
@@ -190,6 +222,11 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
               not gone. Lives on the search surface because "where did that
               job go" is a search question. */}
           <div className="session-actions">
+            {/* Ginti lives on the search surface because a stocktake is a
+                "walk the shelves" job, reached from where the gear lives. */}
+            <button className="btn btn-ghost btn-block" onClick={() => go({ name: 'ginti' })}>
+              <Icon name="scan" size={18} /> {STR.fleetGinti}
+            </button>
             <button className="btn btn-ghost btn-block" onClick={() => go({ name: 'closed' })}>
               <Icon name="clipboard-check" size={18} /> {STR.closedJobsDoor}
             </button>
@@ -235,6 +272,13 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
       return (
         <Shell view={view} title={STR.labelsLoadYourGear} subtitle={STR.labelsImportSubtitle}>
           <ImportScreen store={store} />
+        </Shell>
+      )
+
+    case 'ginti':
+      return (
+        <Shell view={view} title={STR.fleetGinti} subtitle={STR.fleetGintiSubtitle}>
+          <GintiScreen store={store} />
         </Shell>
       )
 

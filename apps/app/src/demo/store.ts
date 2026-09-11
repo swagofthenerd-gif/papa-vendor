@@ -5,7 +5,15 @@ import {
   allocateUnitCodes,
   lookupTag,
   voidScan,
+  markTerminal,
+  markFound,
+  swapAsset,
+  cycleCountDiff,
   type VoidScanResult,
+  type Disposition,
+  type SwapFlag,
+  type SwapResult,
+  type CountDiff,
   caseManifest,
   hasContents,
   pairBySide,
@@ -54,10 +62,15 @@ import {
   reopenJob,
   sessionScanFacts,
   setExpectedBack,
+  shelfContents,
+  shelves,
   stillOutCount,
+  substitutesFor,
+  expectedOnShelf,
   type CloseJobResult,
   type ClosedJobRow,
   type OpenJobRow,
+  type SubstituteRow,
 } from './read-model.ts'
 import { dayAccount, type DayAccount } from './hisaab.ts'
 import {
@@ -97,6 +110,8 @@ import {
 import { STR } from '../strings.ts'
 import { buildParchi } from '../parchi.ts'
 import { buildProveIt } from '../prove-it.ts'
+import { buildTheftReport, theftLabels } from '../theft-report.ts'
+import { buildGintiReport, gintiLabels } from '../ginti-report.ts'
 import { statusSentence } from '../status.ts'
 import type { GearRow } from '../routes/Gear.tsx'
 import type { OutRow, TodayStats } from '../routes/Today.tsx'
@@ -508,11 +523,12 @@ export class DemoStore {
         category: string | null
         presence: string
         health: string
+        disposition: string | null
         location_name: string | null
         job_label: string | null
       }>(
         `select a.id, a.asset_code, coalesce(p.display_name, a.display_name) as display_name,
-                p.category, a.presence, a.health,
+                p.category, a.presence, a.health, a.disposition,
                 l.name as location_name, j.label as job_label
            from assets a
            left join products  p on p.id = a.product_id
@@ -527,6 +543,7 @@ export class DemoStore {
         category: r.category ?? 'other',
         presence: (r.presence as GearRow['presence']) ?? 'here',
         health: (r.health as GearRow['health']) ?? 'ok',
+        disposition: (r.disposition as GearRow['disposition']) ?? null,
         locationName: r.location_name,
         jobLabel: r.job_label,
       }))
@@ -572,6 +589,7 @@ export class DemoStore {
       category: string | null
       presence: string
       health: string
+      disposition: string | null
       serial_number: string | null
       product_id: string | null
       location_name: string | null
@@ -579,7 +597,7 @@ export class DemoStore {
       tag_code: string | null
     }>(
       `select a.id, a.asset_code, coalesce(p.display_name, a.display_name) as display_name,
-              p.category, a.presence, a.health, a.serial_number, a.product_id,
+              p.category, a.presence, a.health, a.disposition, a.serial_number, a.product_id,
               l.name as location_name, j.label as job_label, t.tag_code
          from assets a
          left join products   p on p.id = a.product_id
@@ -614,6 +632,7 @@ export class DemoStore {
       category: row.category ?? 'other',
       presence: (row.presence as AssetView['presence']) ?? 'here',
       health: (row.health as AssetView['health']) ?? 'ok',
+      disposition: (row.disposition as AssetView['disposition']) ?? null,
       locationName: row.location_name,
       jobLabel: row.job_label,
       serial: row.serial_number,
@@ -1112,6 +1131,163 @@ export class DemoStore {
 
   setPaymentQr(dataUrl: string | null): void {
     setPaymentQr(this.db, dataUrl)
+  }
+
+  // ---- the fleet lifecycle (Wave 2, migration 0020) ---------------------
+  // Thin doors onto @papa/core's fleet.ts and the app's report builders. The
+  // owner/manager gate is the server's (submit_scan_batch); the demo has one
+  // user, so the door is plain — the projection is the whole truth offline.
+
+  /**
+   * Declare an item lost, stolen or sold — it leaves the fleet, off its job,
+   * with a reason. A sale amount rides the event note, NOT the money book
+   * (0020 D3). See markTerminal in @papa/core.
+   */
+  markTerminal(
+    assetId: string,
+    disposition: Disposition,
+    opts: { note?: string | null; saleAmountMinor?: number | null } = {},
+  ): void {
+    markTerminal(this.db, {
+      assetId,
+      disposition,
+      note: opts.note ?? null,
+      saleAmountMinor: opts.saleAmountMinor ?? null,
+    })
+  }
+
+  /** Bring a terminal item home — the recovery door. */
+  markFound(assetId: string): void {
+    markFound(this.db, { assetId })
+  }
+
+  /** Substitutes fit to swap onto a job — same product first. */
+  substitutesFor(brokenAssetId: string): SubstituteRow[] {
+    return substitutesFor(this.db, brokenAssetId)
+  }
+
+  /**
+   * The crisis-day swap: a substitute onto the broken item's live job in one
+   * atomic flow — both movements recorded, the broken one flagged. Refusals
+   * are RESULTS, not throws, so the sheet can render them. See swapAsset.
+   */
+  swapOntoJob(
+    brokenAssetId: string,
+    substituteAssetId: string,
+    opts: { flag?: SwapFlag; note?: string | null } = {},
+  ): SwapResult {
+    const broken = this.db.get<{ current_job_id: string | null }>(
+      `select current_job_id from assets where id = ?`,
+      [brokenAssetId],
+    )
+    if (!broken?.current_job_id) return { outcome: 'not_on_job' }
+    return swapAsset(this.db, {
+      jobId: broken.current_job_id,
+      brokenAssetId,
+      substituteAssetId,
+      flag: opts.flag,
+      note: opts.note ?? null,
+    })
+  }
+
+  /**
+   * The theft report for a stolen item — the police / insurance card, built
+   * from local facts (the mirror, the queue, the photo table) in the app's
+   * language. Null unless the item is actually stolen: the loud card is only
+   * honest when the state behind it is.
+   */
+  theftReportText(assetId: string): string | null {
+    const asset = this.assetView(assetId)
+    if (!asset || asset.disposition !== 'stolen') return null
+
+    const last = decodeScanOps(this.db)
+      .filter((op) => op.assetId === assetId && op.eventType !== 'mark_stolen')
+      .at(-1)
+    const photos = this.db.get<{ n: number }>(
+      `select count(*) as n from condition_photos where asset_id = ?`,
+      [assetId],
+    )
+
+    return buildTheftReport(
+      {
+        houseName: this.seed.houseName,
+        item: { code: asset.code, name: asset.name, serial: asset.serial },
+        photoCount: Number(photos?.n ?? 0),
+        lastSeen: last
+          ? {
+              whenMs: last.createdAt,
+              jobLabel: last.jobId ? (this.job(last.jobId)?.label ?? null) : null,
+              place: asset.locationName,
+            }
+          : null,
+        contactLine: this.paymentLine(),
+      },
+      theftLabels(STR),
+    )
+  }
+
+  /** Shelves to count against, for the ginti picker. */
+  shelves(): { id: string; name: string }[] {
+    return shelves(this.db)
+  }
+
+  /** A shelf's live contents — the ginti checklist rows. */
+  gearOnShelf(locationId: string): { id: string; code: string; name: string }[] {
+    return shelfContents(this.db, locationId)
+  }
+
+  /**
+   * A ginti (cycle count) session against one shelf. Opens a count session,
+   * takes the ids the tech scanned, writes an inventory_count event for each
+   * SEEN item (non-destructive: last_scanned_at moves, presence does not),
+   * and returns the diff plus a copyable discrepancy report. Missing items
+   * are surfaced for the owner to decide — never auto-marked lost (0020 D6).
+   */
+  runGinti(
+    locationId: string,
+    seenAssetIds: string[],
+  ): { diff: CountDiff; report: string; shelfName: string } {
+    const shelfName =
+      this.db.get<{ name: string | null }>(`select name from locations where id = ?`, [locationId])
+        ?.name ?? 'Shelf'
+    const expected = expectedOnShelf(this.db, locationId)
+    const diff = cycleCountDiff(expected, seenAssetIds)
+
+    // Write the SEEN sightings as counted events, one session. Non-destructive
+    // by the reducer's design: inventory_count moves last_scanned_at and the
+    // shelf, never presence.
+    const session = new ScanSession(this.db, {
+      deviceId: 'demo-device',
+      expected: new Set(expected),
+    })
+    for (const id of seenAssetIds) {
+      session.scan(this.tagFor(id) ?? id, 'inventory_count')
+    }
+
+    const facts = (id: string) => {
+      const f = assetFacts(this.db, id)
+      return { code: f?.code ?? null, name: f?.name ?? null }
+    }
+    const report = buildGintiReport(
+      {
+        shelf: shelfName,
+        okCount: diff.ok.length,
+        missing: diff.missing.map(facts),
+        unexpected: diff.unexpected.map(facts),
+      },
+      gintiLabels(STR),
+    )
+    return { diff, report, shelfName }
+  }
+
+  /** The active tag for an asset — how a ginti scan names it. */
+  private tagFor(assetId: string): string | null {
+    return (
+      this.db.get<{ tag_code: string }>(
+        `select tag_code from asset_tags where asset_id = ? and status = 'active' limit 1`,
+        [assetId],
+      )?.tag_code ?? null
+    )
   }
 }
 
