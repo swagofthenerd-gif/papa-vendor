@@ -41,6 +41,7 @@ import {
   markFound,
   swapAsset,
   cycleCountDiff,
+  recordServiced,
   dueStatus,
   lateFeeDraft,
   checkAvailability,
@@ -72,6 +73,8 @@ import {
   openJobs,
   openJobCommitments,
   packedProgress,
+  sehat,
+  serviceFacts,
   sessionScanFacts,
   setExpectedBack,
 } from '../src/demo/read-model.ts'
@@ -1258,13 +1261,10 @@ describe('a year in the life of the rental house', () => {
     assert.equal(fx9.earnedMinor, rs(140_000))
     assert.equal(fx9.paybackPct, Math.round((rs(140_000) / rs(3_500_000)) * 100))
 
-    // Dead stock: the unpriced tripods earned nothing and have no payback
-    // bar — honest. But NOTHING ranks the fleet or reports idle days; the
-    // owner must open every asset page one by one. Finding `no-utilization-read`.
+    // The unpriced tripods earned nothing and have no payback bar — honest.
     const tripod = assetEarnings(db, 'asset-sachdeva-1')
     assert.equal(tripod.earnedMinor, 0)
     assert.equal(tripod.paybackPct, null)
-    finding('no-utilization-read')
 
     // Past months ARE answerable by the API — the strip takes any clock…
     assert.equal(moneyStrip(db, at(1, 0)).earnedMonthMinor, monthCharged[1])
@@ -1277,6 +1277,20 @@ describe('a year in the life of the rental house', () => {
     const m1 = jobOut('Iftar transmission — set light', 'cust-hamza',
       [{ productId: 'prod-forza', qty: 1 }], iso(6, 6), at(6, 3))
     jobBack(m1.id, 'cust-hamza', at(6, 6), { k: 6, d: 6, chargeRs: 12_000, payRs: 12_000 })
+
+    // DEAD STOCK IS NOW A READ, not a wall (0021 D4 — was the idle-days
+    // half of `no-utilization-read`): the Xeen set, never rented all year,
+    // and the idle Sachdeva both surface with the idle capital priced —
+    // while the light that just worked Ramzan does not.
+    const idle = sehat(db, at(6, 10))
+    const deadIds = idle.deadStock.map((r) => r.id)
+    assert.ok(deadIds.includes('asset-samyang-1'), 'the Rs 4.5M Xeen set is dead stock')
+    assert.ok(deadIds.includes('asset-sachdeva-3'), 'the unpriced tripod too')
+    assert.ok(!deadIds.includes(m1.expected[0]), 'a unit rented this month is working, not idle')
+    assert.ok(idle.deadStockValue.totalMinor >= rs(4_500_000), 'the idleness is said in money')
+    // What REMAINS of the finding is the ranking: no fleet leaderboard of
+    // earners — the owner still opens asset pages one by one (AUG Q4).
+    finding('no-utilization-read')
 
     assertBooks()
     assertNoLostScans()
@@ -1392,23 +1406,54 @@ describe('a year in the life of the rental house', () => {
   })
 
   // -------------------------------------------------------------- JUN (k=9)
-  test('JUN — the gear ages, and nothing counts the wear', () => {
+  test('JUN — the gear ages, and now the wear is counted', () => {
     // The FX9's ledger says 3 jobs — but only because two rental charges
     // happened to carry its asset id. The SCANS know the truth: the outbox
-    // holds every checkout this year, and nothing reads it for service.
+    // holds every checkout this year, and since 0021 the projection READS
+    // it — the service meter grew past its synced 120 with every rental
+    // the year recorded. (Was finding `no-service-tracking`, the JUN wall.)
     const fx9Outs = decodeScanOps(db).filter(
       (op) => op.assetId === 'asset-fx9-1' && op.eventType === 'check_out',
     )
     assert.ok(fx9Outs.length >= 3, `${fx9Outs.length} recorded checkouts`)
     assert.equal(assetEarnings(db, 'asset-fx9-1').jobs, 3)
-    finding('no-service-tracking')
 
-    // The repair itself — Rs 45,000 to the camera technician — HAS a
-    // book now (was `no-expense-book`): January recorded it against the
-    // camera, so "what did this camera COST me" answers from the same
-    // page that says what it earned, and June can ask January's profit.
+    const worn = serviceFacts(db, 'asset-fx9-1')
+    assert.ok(worn.daysSinceService > 120, `the meter grew with use (${worn.daysSinceService})`)
+    assert.equal(worn.dueAfter, 100)
+    assert.equal(worn.due, true, 'past the threshold')
+    assert.ok(
+      sehat(db, at(9, 3)).serviceDue.some((r) => r.id === 'asset-fx9-1'),
+      'and the Sehat surface names the unit',
+    )
+
+    // The desk services it — ONE flow: the workshop bill lands on the
+    // kharcha book named to the camera, and the serviced event carries the
+    // link the server validates (0021 D2).
+    const svcExpense = spend('repair', 15_000, {
+      k: 9, d: 3, assetId: 'asset-fx9-1',
+      counterparty: 'Sharif Camera Works', note: 'Annual service',
+    })
+    recordServiced(db, {
+      assetId: 'asset-fx9-1', note: 'Annual service', expenseId: svcExpense,
+      now: () => at(9, 3, 15),
+    })
+    expectedScanOps++
+
+    const rested = serviceFacts(db, 'asset-fx9-1')
+    assert.equal(rested.daysSinceService, 0, 'the meter reset')
+    assert.equal(rested.due, false)
+    assert.ok(
+      !sehat(db, at(9, 4)).serviceDue.some((r) => r.id === 'asset-fx9-1'),
+      'the nudge stands down',
+    )
+
+    // The repair history — Rs 45,000 to the camera technician in January
+    // (was `no-expense-book`), the seed's own story, and today's service
+    // bill: "what did this camera COST me" answers from the same page
+    // that says what it earned, and June can still ask January's profit.
     const fx9Costs = assetCosts(db, 'asset-fx9-1')
-    assert.equal(fx9Costs.repairMinor, rs(90_000)) // this Jan + the seed's story
+    assert.equal(fx9Costs.repairMinor, rs(105_000)) // seed + Jan + today
     assert.equal(monthProfit(db, at(4, 10, 0)).spentMinor, monthSpent[4])
 
     const jun1 = jobOut('Session video — studio day', 'cust-sana',
@@ -1604,14 +1649,15 @@ describe('a year in the life of the rental house', () => {
     // Phase B0 took three ids off this list — `no-add-customer`,
     // `no-customer-on-desk-job`, `no-close-job` — by shipping the doors;
     // the expense book (0019) took two more — `no-expense-book`,
-    // `no-subrent-intake`. Wave 2 (the fleet lifecycle, 0020) takes THREE
-    // MORE: `no-terminal-asset-state` (the OCT cable is marked lost and its
-    // job closes; FEB's absconded gear is marked stolen), `no-swap-flow`
-    // (the real swap ships — NOV and JAN both run it), and `no-cycle-count`
-    // (JUL runs a real ginti and catches the seeded discrepancy). The theft
-    // half of `no-blacklist-or-theft-export` shipped too — the export builds
-    // — so that id narrows to `no-blacklist` (the customer-flag door is the
-    // remaining gap).
+    // `no-subrent-intake`. Wave 2 (the fleet lifecycle, 0020) took three:
+    // `no-terminal-asset-state`, `no-swap-flow`, `no-cycle-count`; the
+    // theft half of `no-blacklist-or-theft-export` shipped too, narrowing
+    // that id to `no-blacklist`. Wave 3 (the living fleet, 0021) takes
+    // `no-service-tracking` off the list — the JUN nudge is real: the
+    // meter grows with the year's scans, the Sehat surface names the
+    // unit, and the desk services it with the cost landing on the book.
+    // Dead stock is a read too, asserted in MAR, so
+    // `no-utilization-read` NARROWS to the missing earners leaderboard.
     assert.deepEqual(
       [...FINDINGS].sort(),
       [
@@ -1624,7 +1670,6 @@ describe('a year in the life of the rental house', () => {
         'no-health-door',
         'no-lifetime-value-view',
         'no-month-history-screen',
-        'no-service-tracking',
         'no-utilization-read',
         'turnaway-blind-to-commitments',
         'waived-fee-invisible',

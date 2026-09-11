@@ -39,6 +39,83 @@ export interface ProjectableOp {
 }
 
 /**
+ * Calendar days a rental touched — THE day-counting rule (0021 D1), stated
+ * once for both sides of the wire: (in's date − out's date) + 1, so a
+ * partial day counts as a full day and an out-and-back on one calendar day
+ * counts 1. Wear is being estimated, not billed; a meter that rounds down
+ * flatters the gear it exists to protect. Clock skew that puts the return
+ * before the departure still counts 1 — the rental happened.
+ *
+ * Dates are taken in the clock that recorded the pair: the device's local
+ * calendar here, the server's on the server — each side is consistent with
+ * its own log, and the server's projection is the one that syncs down.
+ */
+export function rentalDaysBetween(outMs: number, inMs: number): number {
+  const dayStart = (ms: number) => {
+    const d = new Date(ms)
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  }
+  const days = Math.round((dayStart(inMs) - dayStart(outMs)) / 86_400_000) + 1
+  return Math.max(1, days)
+}
+
+/**
+ * What this check_in adds to the service meter (0021 D1): the days of the
+ * out/in pair it closes, found by replaying the queue's ops for the same
+ * asset and job in order — a check_out opens a pair, the next check_in
+ * consumes it. A rescan echo consumes nothing (the pair is already closed)
+ * and adds 0; a loose check_in with no job adds 0.
+ *
+ * The op is matched back to its walk position by device_time, because the
+ * scan path and the pull-replay path both call projectOp per op and neither
+ * hands over a queue id. Two check_ins for one asset+job stamped in the
+ * same millisecond would collide; the later one wins, which mirrors the
+ * walk. This is the OPTIMISTIC copy only — the server derives the same
+ * rule from its own log and its count overwrites this one on every sync,
+ * exactly as presence does. (Voided ops are not special-cased here: a void
+ * re-derives presence, and the meter reconciles on the next pull.)
+ */
+function serviceDaysFor(db: SqlDriver, op: ProjectableOp, assetId: string): number {
+  if (typeof op.job_id !== 'string' || typeof op.device_time !== 'string') return 0
+
+  let pending: string | null = null
+  let days = 0
+  for (const row of db.all<{ payload: string }>(
+    `select payload from outbox where op = 'submit_scan_batch' order by seq`,
+  )) {
+    let p: Record<string, unknown>
+    try {
+      p = JSON.parse(row.payload) as Record<string, unknown>
+    } catch {
+      continue
+    }
+    if (p.asset_id !== assetId || p.job_id !== op.job_id) continue
+    if (p.event_type === 'check_out' && typeof p.device_time === 'string') {
+      pending = p.device_time
+    } else if (p.event_type === 'check_in') {
+      const contribution = pending
+        ? rentalDaysBetween(Date.parse(pending), Date.parse(String(p.device_time)))
+        : 0
+      pending = null
+      if (p.device_time === op.device_time) days = contribution
+    }
+  }
+  return days
+}
+
+/** Whether this asset's product counts check_out cycles (0021 D3) — the
+ *  battery flag, mirrored from the server's products.count_cycles. */
+function countsCycles(db: SqlDriver, assetId: string): boolean {
+  const row = db.get<{ count_cycles: number | null }>(
+    `select p.count_cycles from assets a
+       join products p on p.id = a.product_id
+      where a.id = ?`,
+    [assetId],
+  )
+  return Number(row?.count_cycles ?? 0) === 1
+}
+
+/**
  * The events that move an asset's PRESENCE, mapped to where they leave it.
  * check_out/check_in are the everyday pair; the four fleet-lifecycle verbs
  * (0020) join them because the same rule must be written ONCE — the whole
@@ -98,8 +175,22 @@ export function projectOp(db: SqlDriver, op: ProjectableOp): string | undefined 
   const assetId = op.asset_id
   if (typeof assetId !== 'string') return undefined
 
+  // 0021 D2: a serviced event resets the service meter and touches nothing
+  // else — no presence, no health, no cycles (a battery's cycles are its
+  // life, not its maintenance). Handled before the presence gate because
+  // serviced is deliberately not a movement.
+  if (op.event_type === 'serviced') {
+    db.exec(`update assets set rental_days_since_service = 0 where id = ?`, [assetId])
+    return assetId
+  }
+
   const presence = presenceFor(op.event_type)
   if (!presence) return undefined
+
+  // 0021: the two usage meters ride the same update as presence, so the
+  // optimistic mirror can never show a movement without its wear.
+  const addDays = op.event_type === 'check_in' ? serviceDaysFor(db, op, assetId) : 0
+  const addCycles = op.event_type === 'check_out' && countsCycles(db, assetId) ? 1 : 0
 
   const disposition = dispositionFor(op.event_type)
 
@@ -118,11 +209,15 @@ export function projectOp(db: SqlDriver, op: ProjectableOp): string | undefined 
       `update assets
           set presence = ?,
               current_job_id = ?,
+              rental_days_since_service = rental_days_since_service + ?,
+              cycle_count = cycle_count + ?,
               last_scanned_at = coalesce(?, last_scanned_at)
         where id = ?`,
       [
         presence,
         presence === 'out' ? ((op.job_id as SqlValue) ?? null) : null,
+        addDays,
+        addCycles,
         typeof op.device_time === 'string' ? op.device_time : null,
         assetId,
       ],

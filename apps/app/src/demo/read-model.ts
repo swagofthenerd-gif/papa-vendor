@@ -860,6 +860,216 @@ export function expectedOnShelf(db: SqlDriver, locationId: string): string[] {
     .map((r) => r.id)
 }
 
+// ------------------------------------------------------------------ sehat
+// The fleet-health reads (0021; vendor-dream-plan Phase D 1–2/6): the
+// service nudge, the cycle ceiling and dead stock — all pure reads over the
+// mirror plus the queue, because the inputs were already on the device (the
+// JUN finding's exact words) and only the readers were missing.
+
+/** The default idle window, in days. The server's dead_stock view reads the
+ *  org's own setting; the demo has one org and this constant. */
+export const DEAD_STOCK_DAYS = 90
+
+export interface ServiceFacts {
+  /** Rental days worked since the last serviced event — the usage meter. */
+  daysSinceService: number
+  /** The product's threshold, or null: no threshold, no nudge. */
+  dueAfter: number | null
+  /** Over (or at) the threshold — the NEEDS-A-LOOK state. */
+  due: boolean
+  /** Whether this product counts cycles (the battery flag). */
+  countCycles: boolean
+  cycleCount: number
+  retireAfterCycles: number | null
+  /** At or past the cycle ceiling. */
+  cyclesOver: boolean
+}
+
+/** One unit's wear facts, for the asset page's service and cycle lines. */
+export function serviceFacts(db: SqlDriver, assetId: string): ServiceFacts | null {
+  const row = db.get<{
+    rental_days_since_service: number | null
+    cycle_count: number | null
+    service_due_after_rental_days: number | null
+    count_cycles: number | null
+    retire_after_cycles: number | null
+  }>(
+    `select a.rental_days_since_service, a.cycle_count,
+            p.service_due_after_rental_days, p.count_cycles, p.retire_after_cycles
+       from assets a
+       left join products p on p.id = a.product_id
+      where a.id = ?`,
+    [assetId],
+  )
+  if (!row) return null
+  const days = Number(row.rental_days_since_service ?? 0)
+  const dueAfter =
+    row.service_due_after_rental_days === null || row.service_due_after_rental_days === undefined
+      ? null
+      : Number(row.service_due_after_rental_days)
+  const cycles = Number(row.cycle_count ?? 0)
+  const ceiling =
+    row.retire_after_cycles === null || row.retire_after_cycles === undefined
+      ? null
+      : Number(row.retire_after_cycles)
+  return {
+    daysSinceService: days,
+    dueAfter,
+    due: dueAfter !== null && days >= dueAfter,
+    countCycles: Number(row.count_cycles ?? 0) === 1,
+    cycleCount: cycles,
+    retireAfterCycles: ceiling,
+    cyclesOver: ceiling !== null && cycles >= ceiling,
+  }
+}
+
+export interface SehatServiceRow {
+  id: string
+  code: string
+  name: string
+  days: number
+  dueAfter: number
+}
+
+export interface SehatCycleRow {
+  id: string
+  code: string
+  name: string
+  cycles: number
+  ceiling: number
+}
+
+export interface SehatDeadRow {
+  id: string
+  code: string
+  name: string
+  idleDays: number
+  replacementMinor: number | null
+}
+
+export interface Sehat {
+  serviceDue: SehatServiceRow[]
+  cyclesOver: SehatCycleRow[]
+  deadStock: SehatDeadRow[]
+  /** Replacement value of the dead stock — priced/unpriced split carried,
+   *  so 'Rs 45,00,000 +1 unpriced' stays honest (the moneyLabel rule). */
+  deadStockValue: MoneyTotal
+  deadStockDays: number
+}
+
+/**
+ * The Sehat read — the fleet's health as three lists, each row a door to
+ * its asset page.
+ *
+ * Live fleet only throughout (disposition null): terminal gear is gone,
+ * not sick. DEAD STOCK, the demo's rule: on the shelf (an item OUT is
+ * working, not idle), and its last check_out — from this device's queue,
+ * the only movement record the demo has — or, never rented here, its
+ * last_scanned_at, is older than the window. An asset with NO anchor at
+ * all is excluded rather than declared idle: 'never seen moving' is not
+ * the same fact as '90+ days idle', and the server's dead_stock view
+ * (which has created_at and the whole log) is the authority.
+ */
+export function sehat(
+  db: SqlDriver,
+  nowMs: number,
+  deadStockDays: number = DEAD_STOCK_DAYS,
+): Sehat {
+  const serviceDue: SehatServiceRow[] = db
+    .all<{ id: string; asset_code: string | null; display_name: string | null; days: number; due_after: number }>(
+      `select a.id, a.asset_code, coalesce(p.display_name, a.display_name) as display_name,
+              a.rental_days_since_service as days, p.service_due_after_rental_days as due_after
+         from assets a
+         join products p on p.id = a.product_id
+        where a.disposition is null
+          and p.service_due_after_rental_days is not null
+          and a.rental_days_since_service >= p.service_due_after_rental_days
+        order by a.rental_days_since_service - p.service_due_after_rental_days desc`,
+    )
+    .map((r) => ({
+      id: r.id,
+      code: r.asset_code ?? '—',
+      name: r.display_name ?? 'Unnamed',
+      days: Number(r.days),
+      dueAfter: Number(r.due_after),
+    }))
+
+  const cyclesOver: SehatCycleRow[] = db
+    .all<{ id: string; asset_code: string | null; display_name: string | null; cycles: number; ceiling: number }>(
+      `select a.id, a.asset_code, coalesce(p.display_name, a.display_name) as display_name,
+              a.cycle_count as cycles, p.retire_after_cycles as ceiling
+         from assets a
+         join products p on p.id = a.product_id
+        where a.disposition is null
+          and p.count_cycles = 1
+          and p.retire_after_cycles is not null
+          and a.cycle_count >= p.retire_after_cycles
+        order by a.cycle_count - p.retire_after_cycles desc`,
+    )
+    .map((r) => ({
+      id: r.id,
+      code: r.asset_code ?? '—',
+      name: r.display_name ?? 'Unnamed',
+      cycles: Number(r.cycles),
+      ceiling: Number(r.ceiling),
+    }))
+
+  // Last checkout per asset, from the queue — the demo's movement record.
+  const lastOut = new Map<string, number>()
+  for (const op of decodeScanOps(db)) {
+    if (op.eventType !== 'check_out' || !op.assetId) continue
+    lastOut.set(op.assetId, Math.max(lastOut.get(op.assetId) ?? 0, op.createdAt))
+  }
+
+  const cutoff = nowMs - deadStockDays * 24 * 60 * 60 * 1000
+  const deadStock: SehatDeadRow[] = db
+    .all<{
+      id: string
+      asset_code: string | null
+      display_name: string | null
+      last_scanned_at: string | null
+      replacement_minor: number | null
+    }>(
+      `select a.id, a.asset_code, coalesce(p.display_name, a.display_name) as display_name,
+              a.last_scanned_at, r.replacement_minor
+         from assets a
+         left join products p on p.id = a.product_id
+         left join product_rates r on r.product_id = a.product_id
+        where a.disposition is null
+          and a.presence = 'here'
+        order by a.asset_code`,
+    )
+    .flatMap((r) => {
+      const scanned = r.last_scanned_at ? Date.parse(r.last_scanned_at) : NaN
+      const anchor = lastOut.get(r.id) ?? (Number.isNaN(scanned) ? null : scanned)
+      if (anchor === null || anchor >= cutoff) return []
+      return [{
+        id: r.id,
+        code: r.asset_code ?? '—',
+        name: r.display_name ?? 'Unnamed',
+        idleDays: Math.floor((nowMs - anchor) / (24 * 60 * 60 * 1000)),
+        replacementMinor:
+          r.replacement_minor === null || r.replacement_minor === undefined
+            ? null
+            : Number(r.replacement_minor),
+      }]
+    })
+    .sort((a, b) => b.idleDays - a.idleDays)
+
+  const priced = deadStock.filter((d) => d.replacementMinor !== null)
+  return {
+    serviceDue,
+    cyclesOver,
+    deadStock,
+    deadStockValue: {
+      totalMinor: priced.reduce((n, d) => n + (d.replacementMinor ?? 0), 0),
+      priced: priced.length,
+      unpriced: deadStock.length - priced.length,
+    },
+    deadStockDays,
+  }
+}
+
 /** Names of the items physically out on a job, for the nudge message. */
 export function outItemNames(db: SqlDriver, jobId: string): string[] {
   return db

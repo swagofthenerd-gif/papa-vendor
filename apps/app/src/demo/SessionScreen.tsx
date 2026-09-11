@@ -75,6 +75,17 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
       <Session
         summary={summary}
         chargeCustomerName={customer?.name ?? null}
+        onVoiceNote={(assetId, rec) => {
+          const r = store.captureVoiceNote({
+            assetId,
+            jobId,
+            durationMs: rec.durationMs,
+            dataUri: rec.dataUri,
+            bytes: rec.bytes,
+            mime: rec.mime,
+          })
+          return r.ok ? { ok: true as const } : { ok: false as const, waiting: r.waiting }
+        }}
         lateFee={
           lateFee
             ? {

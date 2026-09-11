@@ -36,6 +36,13 @@ create table if not exists assets (
   -- so create-if-not-exists still covers every real database — but a local
   -- migration path stays a pre-ship requirement before ANY device persists.
   disposition         text,
+  -- The two usage meters (0021): rental days worked since the last
+  -- serviced event, and check_out cycles on flagged products. Projections
+  -- like presence — the device moves its optimistic copy from its own
+  -- queue (project.ts) and the server's authoritative count overwrites it
+  -- on sync. Same create-if-not-exists caveat as disposition above.
+  rental_days_since_service integer default 0,
+  cycle_count         integer default 0,
   current_location_id text,
   current_parent_id   text,
   current_job_id      text,
@@ -122,8 +129,15 @@ create table if not exists jobs (
   expected_back text, status text, customer_id text, closed_at text
 );
 
+-- service_due_after_rental_days / count_cycles / retire_after_cycles mirror
+-- the 0021 server columns: the service threshold (null = no nudge), the
+-- battery flag, and the cycle ceiling — what lets the phone draw the
+-- service line and the Sehat groups with no network.
 create table if not exists products (
-  id text primary key, org_id text, display_name text, category text
+  id text primary key, org_id text, display_name text, category text,
+  service_due_after_rental_days integer,
+  count_cycles integer default 0,
+  retire_after_cycles integer
 );
 
 -- ---------------------------------------------------------------------------
@@ -212,6 +226,35 @@ create table if not exists condition_photos (
 create index if not exists condition_photos_asset_idx on condition_photos (asset_id, side);
 create index if not exists condition_photos_session_idx on condition_photos (session_id);
 
+/*
+ * Voice notes — the awaaz note (0021; vendor-dream-plan Phase D5).
+ *
+ * Bykea's lesson: typing is the barrier. A scratch explained in ten spoken
+ * seconds beats a note field nobody fills in. The storage model is the
+ * condition-photos model, deliberately and exactly: the row is written when
+ * the recording stops and is NEVER deleted by the app; the bytes ride
+ * local_uri (a data URI in the browser, a file path on Android) and are
+ * queued separately in pending_uploads; captured_at is the DEVICE's clock
+ * and is labelled as such wherever shown. Until an upload succeeds this row
+ * is the only copy of somebody's spoken explanation — which is why
+ * VoiceNoteStore refuses new recordings when full instead of evicting old
+ * ones (see voice-notes.ts).
+ */
+create table if not exists voice_notes (
+  id          text primary key,
+  asset_id    text,
+  job_id      text,
+  session_id  text,
+  duration_ms integer not null default 0,
+  captured_at integer not null,       -- device clock, epoch ms
+  bytes       integer not null default 0,
+  mime        text,
+  local_uri   text not null,
+  uploaded    integer not null default 0
+);
+create index if not exists voice_notes_asset_idx on voice_notes (asset_id);
+create index if not exists voice_notes_session_idx on voice_notes (session_id);
+
 create table if not exists sync_meta (
   key   text primary key,
   value text
@@ -226,6 +269,9 @@ export const DEVICE_ONLY_TABLES = [
   // ONLY on the device until an upload succeeds. A wipe destroys the one copy
   // of the evidence, which is why nothing in the app ever deletes one.
   'condition_photos',
+  // Voice notes share the photos' reasoning exactly (0021): the recording
+  // exists nowhere else until it uploads, so nothing in the app deletes one.
+  'voice_notes',
   'sync_meta',
 ] as const
 

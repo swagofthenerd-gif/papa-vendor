@@ -1289,3 +1289,28 @@ h2.stamp .h-ico { display: none; }
   white-space: pre-wrap;
   overflow-x: auto;
 }
+
+/* ---- sehat + awaaz (0021) ------------------------------------- */
+/* A sehat group is a sub-list under the section head, same ledger-line
+   grammar as everything else; the row is a door (line-tap strips the
+   button chrome, the feint rule remains). */
+.sehat-group { margin-top: var(--sp-3); }
+
+/* The awaaz note: hold-to-record. The status line under the button is
+   the honest outcome — kept, refused, or full — in the margin voice. */
+.awaaz { margin-top: var(--sp-2); }
+.awaaz-compact { margin-top: var(--sp-1); grid-column: 1 / -1; }
+.awaaz-status {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-xs); font-weight: 600; color: var(--muted);
+}
+.awaaz-list { list-style: none; margin: var(--sp-2) 0; padding: 0; }
+.awaaz-list li {
+  padding: var(--sp-2) 0;
+  border-bottom: var(--line-w) solid var(--rule-feint);
+}
+.awaaz-audio { width: 100%; height: 36px; }
+.awaaz-meta {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-xs); font-weight: 600; color: var(--muted);
+}

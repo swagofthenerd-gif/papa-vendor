@@ -139,6 +139,49 @@ export function markFound(
   )
 }
 
+export interface RecordServicedInput {
+  assetId: string
+  note?: string | null
+  /** The org_expenses repair that paid for the work, when one was recorded
+   *  in the same flow — the server validates the link (0021 D2: same org,
+   *  kind=repair, this asset when the expense names one). */
+  expenseId?: string | null
+  now?: () => number
+  newId?: () => string
+}
+
+/**
+ * Record that a service was performed — the reset end of the usage nudge
+ * (0021 D1/D2; vendor-dream-plan Phase D1, the Hilti pattern).
+ *
+ * One append-only op, projected optimistically: the local meter goes back
+ * to zero the moment the desk taps confirm, and the server — which gates
+ * this desk-tier like a money write — re-derives the same reset from its
+ * own log. Deliberately NOT a health event: quarantine/release keep their
+ * own vocabulary, and a service that also silently released a quarantined
+ * unit would be two decisions wearing one tap.
+ */
+export function recordServiced(
+  db: SqlDriver,
+  input: RecordServicedInput,
+): FleetOpResult {
+  return enqueueScanOp(
+    db,
+    {
+      assetId: input.assetId,
+      eventType: 'serviced',
+      note: input.note,
+      // Nested under `payload` because that is the key submit_scan_batch
+      // files into scan_events.payload — where the log's view reads it.
+      extra: input.expenseId ? { payload: { expense_id: input.expenseId } } : undefined,
+    },
+    {
+      now: input.now ?? Date.now,
+      newId: input.newId ?? (() => crypto.randomUUID()),
+    },
+  )
+}
+
 export type SwapFlag = 'flag_damage' | 'quarantine'
 
 export interface SwapInput {

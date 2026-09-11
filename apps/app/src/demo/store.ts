@@ -2,6 +2,7 @@ import {
   LOCAL_SCHEMA,
   PhotoStore,
   ScanSession,
+  VoiceNoteStore,
   allocateUnitCodes,
   lookupTag,
   voidScan,
@@ -9,6 +10,9 @@ import {
   markFound,
   swapAsset,
   cycleCountDiff,
+  recordServiced,
+  type VoiceCaptureResult,
+  type VoiceNoteRow,
   type VoidScanResult,
   type Disposition,
   type SwapFlag,
@@ -67,6 +71,10 @@ import {
   stillOutCount,
   substitutesFor,
   expectedOnShelf,
+  sehat,
+  serviceFacts,
+  type Sehat,
+  type ServiceFacts,
   type CloseJobResult,
   type ClosedJobRow,
   type OpenJobRow,
@@ -149,6 +157,7 @@ export class DemoStore {
    */
   private readonly sessions: SessionRegistry
   readonly photos: PhotoStore
+  readonly voice: VoiceNoteStore
 
   private constructor(db: SqlDriver, seed: DemoSeed) {
     this.db = db
@@ -161,6 +170,9 @@ export class DemoStore {
     // 512 — so the "device full" refusal is reachable by a person trying the
     // app for ten minutes, instead of being a branch nobody ever sees.
     this.photos = new PhotoStore(db, { budgetBytes: 6 * 1024 * 1024 })
+    // Same reasoning for the voice budget: ~2MB is twenty-odd notes, so the
+    // honest refusal is a reachable demo state, not a theoretical branch.
+    this.voice = new VoiceNoteStore(db, { budgetBytes: 2 * 1024 * 1024 })
   }
 
   static async open(): Promise<DemoStore> {
@@ -1278,6 +1290,83 @@ export class DemoStore {
       gintiLabels(STR),
     )
     return { diff, report, shelfName }
+  }
+
+  // ---- the living fleet (Wave 3, migration 0021) -------------------------
+
+  /** One unit's wear facts — the asset page's service and cycle lines. */
+  serviceFacts(assetId: string): ServiceFacts | null {
+    return serviceFacts(this.db, assetId)
+  }
+
+  /** The Sehat surface: service-due, cycle-ceiling and dead-stock groups. */
+  sehat(nowMs: number = Date.now()): Sehat {
+    return sehat(this.db, nowMs)
+  }
+
+  /**
+   * The Serviced door — note + optional cost in ONE flow (0021 D2): when a
+   * cost is given, a repair lands on the kharcha book named to this unit
+   * (its cost history and the payback bar's denominator move), and the
+   * serviced event carries the expense link the server validates. One
+   * transaction: the drivers nest, so the meter reset and the money line
+   * cannot land without each other.
+   */
+  recordServiced(
+    assetId: string,
+    input: { note?: string | null; costMinor?: number | null; counterparty?: string | null } = {},
+    whenMs: number = Date.now(),
+  ): void {
+    this.db.transaction(() => {
+      let expenseId: string | null = null
+      if (typeof input.costMinor === 'number' && input.costMinor > 0) {
+        expenseId = recordExpense(this.db, {
+          orgId: this.seed.orgId,
+          kind: 'repair',
+          amountMinor: input.costMinor,
+          assetId,
+          counterparty: input.counterparty ?? null,
+          note: input.note ?? null,
+          createdAt: whenMs,
+        })
+      }
+      recordServiced(this.db, {
+        assetId,
+        note: input.note ?? null,
+        expenseId,
+        now: () => whenMs,
+      })
+    })
+  }
+
+  /**
+   * An awaaz note — spoken evidence, stored like a condition photo: the
+   * refusal is a RESULT the screen renders (how many notes still wait),
+   * never a silent eviction. Demo-honest: nothing uploads.
+   */
+  captureVoiceNote(input: {
+    assetId?: string | null
+    jobId?: string | null
+    sessionId?: string | null
+    durationMs: number
+    dataUri: string
+    bytes: number
+    mime?: string | null
+  }): VoiceCaptureResult {
+    return this.voice.capture({
+      assetId: input.assetId ?? null,
+      jobId: input.jobId ?? null,
+      sessionId: input.sessionId ?? null,
+      durationMs: input.durationMs,
+      localUri: input.dataUri,
+      bytes: input.bytes,
+      mime: input.mime ?? null,
+    })
+  }
+
+  /** Everything spoken over one item, newest first — inline playback. */
+  voiceNotesFor(assetId: string): VoiceNoteRow[] {
+    return this.voice.forAsset(assetId)
   }
 
   /** The active tag for an asset — how a ginti scan names it. */
