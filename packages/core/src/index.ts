@@ -62,6 +62,19 @@ export type {
   SwapInput, SwapResult, SwapFlag, CountDiff, RecordServicedInput,
 } from './fleet.ts'
 export { rentalDaysBetween } from './project.ts'
+export {
+  DEFAULT_BOOKING_SETTINGS, ESCALATION_LADDER, HOUR_MS, DAY_MS,
+  blockedPeriod, isLivePencil, pencilCountdown, overlaps, peakOverlap, msOf,
+  loadBooking, loadBookings, loadLines, loadAssetReservations, loadStockReservations,
+  bookingAvailability, extendedWindow, extensionCollisions, promisedSoon,
+  seasonFor, escalationStep,
+} from './bookings.ts'
+export type {
+  Booking, BookingLine, BookingStatus, TrackingMode, ReservationState,
+  AssetReservation, StockReservation, BookingSettings, PencilCountdown,
+  WeightedInterval, BookingAvailability, ExtensionCollision, PromisedSoon,
+  Season, EscalationAction, EscalationStep,
+} from './bookings.ts'
 export { dueStatus, parseDueDate, compareDueDates, compareJobsByDue } from './overdue.ts'
 export type { DueState, DueStatus } from './overdue.ts'
 export { FEEDBACK, ERROR_FEEDBACK, firstBuzzMs, hapticDurationMs } from './feedback.ts'

@@ -31,10 +31,10 @@ export interface PullPayload {
 
 /** Mirror tables and the columns we keep locally. */
 const MIRROR_COLUMNS: Record<string, string[]> = {
-  products: ['id', 'org_id', 'display_name', 'category'],
+  products: ['id', 'org_id', 'display_name', 'category', 'tracking_mode'],
   assets: [
     'id', 'org_id', 'product_id', 'asset_code', 'serial_number', 'is_container',
-    'presence', 'health', 'ownership', 'disposition', 'current_location_id',
+    'rentable', 'presence', 'health', 'ownership', 'disposition', 'current_location_id',
     'current_parent_id', 'current_job_id', 'last_scanned_at', 'notes', 'updated_at',
   ],
   asset_tags: ['tag_code', 'asset_id', 'status'],
@@ -44,7 +44,27 @@ const MIRROR_COLUMNS: Record<string, string[]> = {
   // for the demo seed; on a real device it simply stays null.
   // customer_id and closed_at arrive as of 0018: the customer chip and the
   // boards that stop accumulating finished jobs both read the mirror.
-  jobs: ['id', 'org_id', 'label', 'expected_back', 'status', 'customer_id', 'closed_at'],
+  // booking_id arrives as of 0023 (the 0022 D8 bridge), read by the
+  // booking write rules on the phone.
+  jobs: ['id', 'org_id', 'label', 'expected_back', 'status', 'customer_id', 'closed_at', 'booking_id'],
+  // The promise calendar (0022, projected by 0023). The server's tstzranges
+  // arrive split into their bounds; customer_name is denormalised onto the
+  // booking so the phone never needs the customers table.
+  bookings: [
+    'id', 'org_id', 'booking_no', 'customer_id', 'customer_name', 'status',
+    'customer_from', 'customer_until', 'blocked_from', 'blocked_until',
+    'pencil_expires_at', 'note', 'cancel_reason', 'updated_at',
+  ],
+  booking_lines: ['id', 'org_id', 'booking_id', 'product_id', 'asset_id', 'qty'],
+  asset_reservations: [
+    'id', 'org_id', 'booking_id', 'booking_line_id', 'asset_id',
+    'blocked_from', 'blocked_until', 'state',
+  ],
+  stock_reservations: [
+    'id', 'org_id', 'booking_id', 'booking_line_id', 'product_id', 'qty',
+    'blocked_from', 'blocked_until', 'state',
+  ],
+  stock_lots: ['id', 'org_id', 'product_id', 'location_id', 'qty_on_hand'],
 }
 
 /** The primary key each mirror is keyed on locally. */
@@ -54,6 +74,11 @@ const MIRROR_KEY: Record<string, string> = {
   asset_tags: 'tag_code',
   locations: 'id',
   jobs: 'id',
+  bookings: 'id',
+  booking_lines: 'id',
+  asset_reservations: 'id',
+  stock_reservations: 'id',
+  stock_lots: 'id',
 }
 
 export interface ApplyReport {
