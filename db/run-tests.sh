@@ -12,9 +12,9 @@
 #
 set -euo pipefail
 
-CONTAINER=papa-pg-test
+CONTAINER="${PAPA_PG_CONTAINER:-papa-pg-test}"
 IMAGE=docker.io/library/postgres:16-bookworm
-PORT=55433
+PORT="${PAPA_PG_PORT:-55433}"
 DB=papa
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
