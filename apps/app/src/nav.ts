@@ -26,6 +26,7 @@ export type View =
   | { name: 'import' }                           // load the house's catalogue
   | { name: 'ginti' }                            // cycle count: shelf vs book
   | { name: 'settings' }
+  | { name: 'rates' }                            // Settings → the rate card and calendar
 
 /**
  * 'out' and 'in' open a real session and write events. 'lookup' is the
@@ -89,7 +90,9 @@ export function parseHash(hash: string): View {
     case 'ginti':
       return { name: 'ginti' }
     case 'settings':
-      return { name: 'settings' }
+      return parts[1] === 'rates' ? { name: 'rates' } : { name: 'settings' }
+    case 'rates':
+      return { name: 'rates' }
     default:
       return { name: 'jobs' }
   }
@@ -127,6 +130,8 @@ export function viewToHash(view: View): string {
       return '#/ginti'
     case 'settings':
       return '#/settings'
+    case 'rates':
+      return '#/settings/rates'
   }
 }
 

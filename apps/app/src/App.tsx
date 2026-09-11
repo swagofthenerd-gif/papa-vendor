@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { whatsAppShareUrl } from '@papa/core'
+import { shareText } from './share.ts'
 import { Icon, IconSketchFilter } from '@papa/icons'
 import { parseHash, go, type View } from './nav.ts'
 import { STR } from './strings.ts'
@@ -14,6 +14,7 @@ import { DeskScreen } from './demo/DeskScreen.tsx'
 import { CalendarScreen } from './demo/CalendarScreen.tsx'
 import { BookingScreen } from './demo/BookingScreen.tsx'
 import { SettingsScreen } from './demo/SettingsScreen.tsx'
+import { RatesScreen } from './demo/RatesScreen.tsx'
 import { ImportScreen } from './demo/ImportScreen.tsx'
 import { HisaabScreen } from './demo/HisaabScreen.tsx'
 import { KharchaSheet } from './demo/KharchaSheet.tsx'
@@ -133,10 +134,7 @@ function AssetRoute({ store, assetId }: { store: DemoStore; assetId: string }) {
         onProveIt={() => {
           const text = store.proveItText(assetId)
           if (!text) return
-          // Same fallback pair as every share in the app: WhatsApp where
-          // it exists, clipboard where it does not.
-          const win = window.open(whatsAppShareUrl(text), '_blank', 'noopener')
-          if (!win) void navigator.clipboard?.writeText(text).catch(() => {})
+          shareText(text)
         }}
         onRepairCost={() => setRepairing(true)}
         onServiced={() => setServicing(true)}
@@ -159,8 +157,7 @@ function AssetRoute({ store, assetId }: { store: DemoStore; assetId: string }) {
         onTheftReport={() => {
           const text = store.theftReportText(assetId)
           if (!text) return
-          const win = window.open(whatsAppShareUrl(text), '_blank', 'noopener')
-          if (!win) void navigator.clipboard?.writeText(text).catch(() => {})
+          shareText(text)
         }}
         onSwap={() => setSwapping(true)}
       />
@@ -326,5 +323,8 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
 
     case 'settings':
       return <SettingsScreen store={store} />
+
+    case 'rates':
+      return <RatesScreen store={store} />
   }
 }

@@ -28,6 +28,7 @@ import {
   monthlyStatementText,
   matchKitList,
   moneyLabel,
+  formatRupees,
   parseKitList,
   overdueNudgeMessage,
   parsePhoneNumber,
@@ -160,10 +161,32 @@ import {
   escalationStep,
   promisedSoon,
   type BookingAvailability,
+  type CalendarKind,
   type ExtensionCollision,
   type BookingSettings,
   type PromisedSoon,
+  type RateCardKnobs,
 } from '@papa/core'
+import {
+  calendarDays,
+  clearCalendarDay,
+  quoteFor,
+  quoteForLines,
+  quoteTextOf,
+  rateCard,
+  setCalendarDay,
+  setLineOverride,
+  setRate,
+  setRateCard,
+  type CalendarDayRow,
+  type EnquiryLine,
+  type QuoteView,
+  type RateCardView,
+  type SetCalendarDayResult,
+  type SetLineOverrideResult,
+  type SetRateCardResult,
+  type SetRateResult,
+} from './quotes.ts'
 import { STR } from '../strings.ts'
 import { buildParchi } from '../parchi.ts'
 import { buildProveIt } from '../prove-it.ts'
@@ -584,14 +607,89 @@ export class DemoStore {
    * Unresolved and rateless lines ride in the label's own '+N unpriced';
    * when nothing is priced the line is omitted entirely.
    */
-  replyText(summary: AvailabilitySummary): string {
+  replyText(summary: AvailabilitySummary, window: AvailabilityWindow | null = null): string {
     const reply = replySummary(summary)
+    // With dates, the reply carries THE quote — the same pipeline the
+    // booking page runs, indicative until it is a confirmed booking.
+    if (window) {
+      const q = this.quoteForLines(enquiryLines(summary), window.startMs, window.endMs, null)
+      if (q.lines.length === 0) return reply
+      const line = STR.quoteReplyLine(formatRupees(q.totals.subtotalMinor), q.steps.weekRule.billableDays)
+      const honesty = q.totals.unpricedCount > 0
+        ? ` ${STR.quoteReplyIndicative(q.totals.unpricedCount)}` : ''
+      return `${reply}\n\n${line}${honesty}`
+    }
     const label = moneyLabel(
       indicativeDayTotal(summary.lines, (id) => dayRateFor(this.db, id)),
     )
     return label === null
       ? reply
       : `${reply}\n\nIndicative: ${label} per day — final quote from the desk.`
+  }
+
+  // ------------------------------------------------------------ quotes
+  // The rate card, the calendar and the quote (0024 on the phone); the
+  // rules live in @papa/core pricing.ts and the reads/writes in quotes.ts.
+
+  /** THE booking's quote — price_booking's trace, from the mirror. */
+  quoteFor(bookingId: string): QuoteView | null {
+    return quoteFor(this.db, bookingId)
+  }
+
+  /** An indicative quote for a kit list BEFORE a booking exists. */
+  quoteForLines(
+    lines: EnquiryLine[],
+    startMs: number,
+    endMs: number,
+    customerId: string | null,
+  ): QuoteView {
+    return quoteForLines(this.db, lines, startMs, endMs, customerId)
+  }
+
+  /** The WhatsApp quote for any quote view — an enquiry's included. */
+  quoteTextOf(quote: QuoteView): string {
+    return quoteTextOf(this.db, STR, this.seed.houseName, quote)
+  }
+
+  /** The owner's last word on one line (0024 D8); a null rate clears it. */
+  setLineOverride(
+    lineId: string,
+    rateMinor: number | null,
+    reason: string,
+    nowMs: number = Date.now(),
+  ): SetLineOverrideResult {
+    return setLineOverride(this.db, lineId, rateMinor, reason, nowMs)
+  }
+
+  rateCard(): RateCardView | null {
+    return rateCard(this.db)
+  }
+
+  /** Set (or with null remove) one product's day rate on the default card. */
+  setRate(productId: string, dayRateMinor: number | null, nowMs: number = Date.now()): SetRateResult {
+    return setRate(this.db, this.seed.orgId, productId, dayRateMinor, nowMs)
+  }
+
+  setRateCard(patch: Partial<RateCardKnobs> & { name?: string }, nowMs: number = Date.now()): SetRateCardResult {
+    return setRateCard(this.db, this.seed.orgId, patch, nowMs)
+  }
+
+  calendarDays(): CalendarDayRow[] {
+    return calendarDays(this.db)
+  }
+
+  setCalendarDay(
+    day: string,
+    kind: CalendarKind,
+    name: string,
+    rateMultiplier: number,
+    nowMs: number = Date.now(),
+  ): SetCalendarDayResult {
+    return setCalendarDay(this.db, this.seed.orgId, day, kind, name, rateMultiplier, nowMs)
+  }
+
+  clearCalendarDay(day: string, kind: CalendarKind, nowMs: number = Date.now()): boolean {
+    return clearCalendarDay(this.db, day, kind, nowMs)
   }
 
   outboxCounts(): { pending: number; failures: number; oldestAgeMs: number } {
@@ -1157,6 +1255,8 @@ export class DemoStore {
       amountMinor: number
       assetId?: string | null
       jobId?: string | null
+      /** The booking this cost belongs to (0024 D9): it nets out of the quote. */
+      bookingId?: string | null
       counterparty?: string | null
       note?: string | null
     },
@@ -1169,6 +1269,7 @@ export class DemoStore {
         amountMinor: input.amountMinor,
         assetId: input.assetId ?? null,
         jobId: input.jobId ?? null,
+        bookingId: input.bookingId ?? null,
         counterparty: input.counterparty ?? null,
         note: input.note ?? null,
         createdAt: whenMs,
@@ -1615,4 +1716,12 @@ export class DemoStore {
 /** A safe, stable id fragment from a product name. */
 function slug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
+}
+
+/** The resolved lines of an answered kit list, as the quote pipeline
+ *  takes them — unresolved lines are not priced, they are named. */
+export function enquiryLines(summary: AvailabilitySummary): EnquiryLine[] {
+  return summary.lines
+    .filter((l) => l.productId)
+    .map((l) => ({ productId: l.productId as string, productName: l.productName ?? l.raw, qty: l.quantity }))
 }

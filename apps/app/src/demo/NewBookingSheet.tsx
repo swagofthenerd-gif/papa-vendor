@@ -42,6 +42,7 @@ export function NewBookingSheet({
   store,
   prefill = [],
   initialStartMs,
+  initialWindow,
   onDone,
   onClose,
 }: {
@@ -50,17 +51,21 @@ export function NewBookingSheet({
   prefill?: PrefillLine[]
   /** A day tapped on the calendar — the pickup defaults onto it. */
   initialStartMs?: number
+  /** The exact dates a quote was priced over — "Book it" keeps them. */
+  initialWindow?: { startMs: number; endMs: number }
   /** The booking's id when one was made (the caller lands on its page). */
   onDone: (bookingId: string | null) => void
   onClose: () => void
 }) {
   const nowMs = Date.now()
-  const pickup0 = initialStartMs ? initialStartMs + 9 * HOUR_MS : defaultPickupMs(nowMs)
+  const pickup0 = initialWindow ? initialWindow.startMs
+    : initialStartMs ? initialStartMs + 9 * HOUR_MS : defaultPickupMs(nowMs)
+  const return0 = initialWindow ? initialWindow.endMs : defaultReturnMs(pickup0)
   const [who, setWho] = useState<string>('')
   const [newName, setNewName] = useState('')
   const [newPhone, setNewPhone] = useState('')
   const [start, setStart] = useState(toLocalInput(pickup0))
-  const [end, setEnd] = useState(toLocalInput(defaultReturnMs(pickup0)))
+  const [end, setEnd] = useState(toLocalInput(return0))
   const [lines, setLines] = useState<DraftLine[]>(
     prefill.map((l) => ({ productId: l.productId, name: l.productName, qty: l.qty })),
   )

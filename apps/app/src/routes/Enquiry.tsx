@@ -61,6 +61,9 @@ export function Enquiry({
   onCopyReply,
   onCreateJob,
   onBook,
+  window,
+  onWindowChange,
+  onPrice,
 }: {
   summary: AvailabilitySummary | null
   reply: string
@@ -70,6 +73,12 @@ export function Enquiry({
   onCreateJob: () => void
   /** Pencil these lines into the calendar instead of making a job today. */
   onBook?: () => void
+  /** The dates the client asked for, as datetime-local values — the
+   *  commitment layer and the quote both read them. */
+  window?: { start: string; end: string; valid: boolean }
+  onWindowChange?: (start: string, end: string) => void
+  /** Price the resolved lines over the window — the Quote sheet. */
+  onPrice?: () => void
 }) {
   const [text, setText] = useState('')
 
@@ -182,6 +191,35 @@ export function Enquiry({
         ))}
       </ul>
 
+      {window && onWindowChange ? (
+        <div className="enquiry-window">
+          <span className="field-label" id="enquiry-window-label">{STR.quoteWindowLabel}</span>
+          <div className="field-pair" role="group" aria-labelledby="enquiry-window-label">
+            <div>
+              <label className="field-label" htmlFor="enquiry-start">{STR.quoteWindowStart}</label>
+              <input
+                id="enquiry-start"
+                className="sheet-search"
+                type="datetime-local"
+                value={window.start}
+                onChange={(e) => onWindowChange(e.target.value, window.end)}
+              />
+            </div>
+            <div>
+              <label className="field-label" htmlFor="enquiry-end">{STR.quoteWindowEnd}</label>
+              <input
+                id="enquiry-end"
+                className="sheet-search"
+                type="datetime-local"
+                value={window.end}
+                onChange={(e) => onWindowChange(window.start, e.target.value)}
+              />
+            </div>
+          </div>
+          {!window.valid ? <p className="sheet-hint">{STR.quoteWindowBad}</p> : null}
+        </div>
+      ) : null}
+
       <div className="enquiry-foot">
         {/* Copy, not send. The conversation is already open in WhatsApp and the
             owner will want to add a line of his own before sending — a
@@ -198,6 +236,13 @@ export function Enquiry({
           </button>
         ) : null}
       </div>
+      {onPrice ? (
+        <div className="enquiry-foot enquiry-price">
+          <button className="btn btn-outline btn-block" onClick={onPrice} disabled={!(window?.valid ?? true)}>
+            <Icon name="receipt" size={18} /> {STR.quoteDoorPrice}
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 }

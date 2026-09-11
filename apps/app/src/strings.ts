@@ -32,7 +32,7 @@
  *
  * Parameterised strings are functions of typed args, so the call site cannot
  * drift from the sentence shape. Grouped by screen: today*, scan*, session*,
- * gear*, enquiry*, hisaab*, labels*, common*.
+ * gear*, enquiry*, hisaab*, labels*, common*, booking*, quote*.
  */
 
 import { getLang } from './lang.ts'
@@ -959,6 +959,137 @@ const STR_EN = {
   bookingPromisedStamp: (no: number, day: string): string => `Promised · #${no} ${day}`,
   bookingPromisedRightNow: (no: number, name: string, when: string): string =>
     `Promised to booking #${no} (${name}) — hold begins ${when}`,
+
+  // ----------------------------------------------------------------- quote
+  // The quote (0024, phase 3): the challan the kit list becomes, the
+  // trace in plain words, the override, the rate card and calendar
+  // settings, and the WhatsApp quote the client receives (demo/quotes.ts
+  // quoteTextOf — golden-tested in both tables).
+  quoteSheetTitle: 'Quote',
+  quoteSheetTitleFor: (no: number): string => `Quote — booking #${no}`,
+  quoteStampIndicative: 'Indicative',
+  quoteStampVerified: 'Verified — lighter deposit',
+  quoteStampUnpriced: 'Unpriced — tell me the rate',
+  quoteLineDays: (qty: number, days: number, rate: string): string =>
+    `${qty} × ${days} day${s(days)} × ${rate}`,
+  quoteLineOverridden: (reason: string): string => `Override: ${reason}`,
+  quoteRateFieldLabel: (name: string): string => `Day rate for ${name}, rupees`,
+  quoteRateFieldPlaceholder: 'e.g. 8000',
+  quoteRateSave: 'Set the rate',
+  quoteTotalLabel: 'Total',
+  quoteTotalUnpriced: (n: number): string => `+${n} unpriced`,
+  quoteSubHireLine: (cost: string, margin: string): string => `sub-hire ${cost} → margin ${margin}`,
+  quoteHowHeading: 'How this was worked out',
+  quoteStepDays: (calendarDays: number, first: string): string =>
+    `${calendarDays} day${s(calendarDays)} from ${first} — 24 hours from pickup, back a minute late is the next day`,
+  quoteStepWeekendDropped: (n: number, dates: string): string =>
+    `${n} weekend day${s(n)} not billed: ${dates}`,
+  quoteStepMinApplied: (min: number): string => `Below the ${min}-day minimum — billed as ${min}`,
+  quoteStepWeekRule: (billable: number, counted: number, weeks: number, weekDays: number, remainder: number): string =>
+    `${billable} billable day${s(billable)}: ${counted} days = ${weeks} week${s(weeks)} (${weeks * weekDays}) + ${remainder}`,
+  quoteStepCardRates: (priced: number, unpriced: number, card: string): string =>
+    `${priced} line${s(priced)} priced from the “${card}” card, ${unpriced} unpriced`,
+  quoteStepNoCard: 'No rate card yet — every line is unpriced until one is set up under Settings → Rates',
+  quoteStepMultiplier: (name: string, day: string, multiplier: string): string =>
+    `${name} on ${day}: ${multiplier} on the whole booking`,
+  quoteStepMultiplierNone: 'No holiday or season inside these dates',
+  quoteStepOverrides: (n: number): string => `${n} line${s(n)} on an owner’s rate — the multiplier does not apply to those`,
+  quoteIndicativeUnpriced: (n: number): string => `${n} item${s(n)} unpriced — the total is not the whole story`,
+  quoteIndicativeNotConfirmed: 'Not confirmed yet — a quote, not a bill',
+  quoteDoorSend: 'Send on WhatsApp',
+  quoteDoorBook: 'Book it',
+  quoteDoorPrice: 'Price it',
+  quoteDoorSendQuote: 'Send quote',
+  quoteOverrideDoor: 'Override a rate',
+  quoteOverrideHint: 'Hold to override — the owner’s number replaces the card rate for this line, and the reason is kept.',
+  quoteOverrideTitle: (name: string): string => `Owner’s rate for ${name}`,
+  quoteOverrideRateLabel: 'Day rate, rupees',
+  quoteOverrideReasonLabel: 'Why?',
+  quoteOverrideReasonPlaceholder: 'e.g. long-standing client, agreed on the phone',
+  quoteOverrideSave: 'Use this rate',
+  quoteOverrideClear: 'Back to the card rate',
+  quoteOverrideNeedsReason: 'An override needs a reason.',
+  quoteCopied: 'Copied — paste it into WhatsApp',
+  quoteNoLines: 'Nothing to price — resolve at least one line first.',
+  quoteDepositHint: (hint: string): string =>
+    hint === 'refuse' ? 'no booking — blacklisted'
+    : hint === 'lighter' ? 'half deposit'
+    : hint === 'standard' ? 'standard deposit'
+    : 'full deposit — first booking',
+  quoteDepositLabel: 'Deposit',
+
+  // The Desk reply card: the date range and the Price it door.
+  quoteWindowLabel: 'For these dates',
+  quoteWindowStart: 'Pickup',
+  quoteWindowEnd: 'Return',
+  quoteWindowBad: 'The return must come after the pickup.',
+  quoteReplyLine: (total: string, days: number): string =>
+    `Quote: ${total} for ${days} billable day${s(days)}`,
+  quoteReplyIndicative: (n: number): string =>
+    `(indicative — ${n} item${s(n)} unpriced, final quote from the desk)`,
+
+  // The booking page's Quote section and the Confirm sheet's honesty line.
+  quoteSectionHeading: 'Quote',
+  quoteSectionSub: (days: number): string => `${days} billable day${s(days)}`,
+  quoteConfirmUnpriced: (n: number): string =>
+    `${n} line${s(n)} unpriced — confirming is fine, the quote stays indicative until a rate is set`,
+
+  // Settings → Rates.
+  quoteRatesDoor: 'Rates and the calendar',
+  quoteRatesDoorSub: 'The rate card, per-product day rates, holidays and seasons',
+  quoteRatesTitle: 'Rates',
+  quoteRatesSubtitle: 'The card, the day rates, the calendar',
+  quoteCardHeading: 'The rate card',
+  quoteCardSub: (name: string): string => `“${name}” — the default card`,
+  quoteCardNone: 'No rate card yet. Set the knobs below to make one.',
+  quoteCardWeekLabel: 'A week bills as (days)',
+  quoteCardMinDaysLabel: 'Minimum billable days',
+  quoteCardWeekendLabel: 'Days that do not bill',
+  quoteCardWeekendHint: 'Every day bills unless a weekday is ticked here. A weekend-only job still bills the minimum.',
+  quoteCardSave: 'Save the card',
+  quoteCardSaved: 'Card saved — waiting to send',
+  quoteRatesListHeading: 'Day rates',
+  quoteRatesListSub: (priced: number, total: number): string => `${priced} of ${total} priced`,
+  quoteRatesSearch: 'Search a product',
+  quoteRateUnpriced: 'unpriced',
+  quoteRateSetAria: (name: string): string => `Set the rate for ${name}`,
+  quoteRatePerDay: (rate: string): string => `${rate}/day`,
+  quoteCalendarHeading: 'Holidays and seasons',
+  quoteCalendarSub: (holidays: number, seasonDays: number): string =>
+    `${holidays} holiday${s(holidays)} · ${seasonDays} season day${s(seasonDays)}`,
+  quoteCalendarAdd: 'Add a day',
+  quoteCalendarDayLabel: 'Date',
+  quoteCalendarKindLabel: 'Kind',
+  quoteCalendarKindHoliday: 'Holiday',
+  quoteCalendarKindSeason: 'Season',
+  quoteCalendarNameLabel: 'Name',
+  quoteCalendarNamePlaceholder: 'e.g. Eid ul-Fitr',
+  quoteCalendarMultiplierLabel: 'Multiplier',
+  quoteCalendarMultiplierHint: '1 = the same price, 1.25 = a quarter more. The highest day inside a booking sets its price.',
+  quoteCalendarSave: 'Save the day',
+  quoteCalendarRemoveAria: (name: string, day: string): string => `Remove ${name} on ${day}`,
+  quoteCalendarSeasonRange: (name: string, from: string, until: string, n: number, multiplier: string): string =>
+    `${name} · ${from} → ${until} · ${n} day${s(n)} · ${multiplier}`,
+  quoteCalendarRow: (name: string, day: string, multiplier: string): string => `${name} · ${day} · ${multiplier}`,
+
+  // The WhatsApp quote text (demo/quotes.ts quoteTextOf).
+  quoteTextTitle: (house: string): string => `${house} — quote`,
+  quoteTextFor: (name: string): string => `For: ${name}`,
+  quoteTextWindow: (from: string, until: string): string => `From ${from} to ${until}`,
+  quoteTextDays: (billable: number, calendarDays: number): string =>
+    `${billable} billable day${s(billable)} (${calendarDays} on the calendar)`,
+  quoteTextLine: (name: string, qty: number, days: number, rate: string, total: string): string =>
+    `${name} × ${qty} · ${days} day${s(days)} · ${rate}/day = ${total}`,
+  quoteTextLineUnpriced: (name: string, qty: number): string => `${name} × ${qty} · unpriced`,
+  quoteTextMultiplier: (name: string, day: string, multiplier: string): string =>
+    `${name} on ${day}: ${multiplier} on the whole booking`,
+  quoteTextTotal: (rupees: string): string => `Total: ${rupees}`,
+  quoteTextIndicativeUnpriced: (n: number): string =>
+    `Indicative — ${n} item${s(n)} unpriced, final quote from the desk.`,
+  quoteTextIndicativeNotConfirmed: 'Indicative — not confirmed yet.',
+  quoteTextDeposit: (hint: string): string => `Deposit: ${hint}`,
+  quoteTextPayment: (line: string): string => `Pay: ${line}`,
+  quoteTextFooter: 'Reply here to confirm or change anything. Thank you.',
 }
 
 /**

@@ -24,7 +24,7 @@ import { STR } from '../strings.ts'
  */
 export function DeskScreen({ store }: { store: DemoStore }) {
   const [tick, setTick] = useState(0)
-  const [booking, setBooking] = useState<PrefillLine[] | null>(null)
+  const [booking, setBooking] = useState<{ lines: PrefillLine[]; window?: { startMs: number; endMs: number } } | null>(null)
   void tick
   const nowMs = Date.now()
   const monthMs = monthStartOf(nowMs)
@@ -40,7 +40,7 @@ export function DeskScreen({ store }: { store: DemoStore }) {
     >
       <section className="section">
         <SectionHead icon="chat" title={STR.bookingKitListHeading} sub={STR.bookingKitListSub} />
-        <EnquiryScreen store={store} onBook={(lines) => setBooking(lines)} />
+        <EnquiryScreen store={store} onBook={(lines, window) => setBooking({ lines, window })} />
       </section>
 
       <section className="section">
@@ -49,7 +49,7 @@ export function DeskScreen({ store }: { store: DemoStore }) {
           title={STR.bookingCalendarHeading}
           sub={`${monthLabel(monthMs)} · ${STR.bookingMonthCounts(counts.confirmed, counts.pencilled)}`}
           action={
-            <button className="btn btn-sm btn-outline" onClick={() => setBooking([])}>
+            <button className="btn btn-sm btn-outline" onClick={() => setBooking({ lines: [] })}>
               <Icon name="clapperboard" size={16} /> {STR.bookingNew}
             </button>
           }
@@ -67,7 +67,8 @@ export function DeskScreen({ store }: { store: DemoStore }) {
       {booking ? (
         <NewBookingSheet
           store={store}
-          prefill={booking}
+          prefill={booking.lines}
+          initialWindow={booking.window}
           onDone={(id) => {
             setBooking(null)
             setTick((t) => t + 1)

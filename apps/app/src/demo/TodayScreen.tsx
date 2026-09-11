@@ -7,7 +7,7 @@ import { Today } from '../routes/Today.tsx'
 import { go } from '../nav.ts'
 import { NewJobSheet } from './NewJobSheet.tsx'
 import { KhataChargeSheet } from './SessionScreen.tsx'
-import { whatsAppShareUrl } from '@papa/core'
+import { shareText } from '../share.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 
@@ -100,8 +100,7 @@ export function TodayScreen({ store }: { store: DemoStore }) {
           const text = store.escalateToManager(jobId, now)
           refresh()
           if (!text) return
-          const win = window.open(whatsAppShareUrl(text), '_blank', 'noopener')
-          if (!win) void navigator.clipboard?.writeText(text).catch(() => {})
+          shareText(text)
         }}
       />
 

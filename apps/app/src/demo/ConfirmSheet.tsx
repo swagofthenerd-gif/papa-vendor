@@ -58,6 +58,9 @@ export function ConfirmSheet({
     [store, booking, holdStart, holdEnd],
   )
 
+  // Money honesty: unpriced lines are COUNTED here, never a reason to
+  // refuse — the promise can stand while the desk finds the rate.
+  const unpriced = store.quoteFor(booking.id)?.totals.unpricedCount ?? 0
   const gate = !plan.ok && 'reason' in plan && plan.reason === 'needs_credentials' ? plan : null
   const refusal = !plan.ok && !gate ? explainConfirmRefusal(plan, booking.bookingNo) : null
 
@@ -121,6 +124,12 @@ export function ConfirmSheet({
         <p className="sheet-hint code">
           {STR.bookingHoldWindow(bookingDateLabel(holdStart), bookingDateLabel(holdEnd))}
         </p>
+        {unpriced > 0 ? (
+          <div className="notice notice-warn">
+            <Icon name="receipt" size={18} />
+            <div><strong>{STR.quoteConfirmUnpriced(unpriced)}</strong></div>
+          </div>
+        ) : null}
 
         {gate ? (
           <>
