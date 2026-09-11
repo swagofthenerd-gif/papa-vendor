@@ -54,8 +54,12 @@ create table if not exists job_expected (
 create index if not exists job_expected_asset_idx on job_expected (asset_id);
 
 create table if not exists job_meta (
-  job_id     text primary key,
-  departs_at text
+  job_id             text primary key,
+  departs_at         text,
+  -- The overdue ladder's last rung (0022 escalationStep, day 14): the desk
+  -- handed this job to the manager, and when. A desk-side note like
+  -- departs_at — the jobs mirror keeps the server's shape.
+  manager_flagged_at text
 );
 
 create table if not exists scan_sessions (
@@ -82,12 +86,20 @@ create table if not exists product_rates (
 -- comment warned about.
 -- The ledger is APPEND-ONLY: nothing in this codebase updates or deletes a
 -- row, and the balance is a projection (see @papa/core ledger.ts).
+-- blacklisted and credentials_verified mirror what the server's confirm
+-- gate reads (0017 customers.blacklisted; 0017 verified_customers, which
+-- is DERIVED there from customer_credentials + clean history). The phone
+-- holds no credential rows, so the demo carries the verdict as one flag —
+-- see confirmBooking in bookings.ts for the honesty note that rides the
+-- result.
 create table if not exists customers (
   id     text primary key,
   org_id text not null,
   name   text not null,
   phone  text,
-  note   text
+  note   text,
+  blacklisted integer not null default 0,
+  credentials_verified integer not null default 0
 );
 create index if not exists jobs_customer_idx on jobs (customer_id);
 
@@ -134,11 +146,15 @@ create index if not exists expenses_job_idx on org_expenses (job_id);
 
 -- The turned-away demand log: one row per shortage the enquiry answer was
 -- actually USED for (reply copied, or a job made) — the buy signal.
+-- reason: 'short' when the shelf itself could not fill the line,
+-- 'committed' when the shelf could but confirmed bookings over the asked
+-- window already spoke for it (year finding turnaway-blind-to-commitments).
 create table if not exists demand_log (
   id         text primary key,
   product_id text not null,
   qty        integer not null,
-  date       text not null
+  date       text not null,
+  reason     text not null default 'short'
 );
 create index if not exists demand_log_product_idx on demand_log (product_id, date);
 
@@ -352,6 +368,9 @@ export interface CreateJobInput {
   customerId?: string | null
   /** Product id and how many units, from resolved kit-list lines. */
   wants: { productId: string; qty: number }[]
+  /** Units already bound elsewhere — a confirmed booking's allocation
+   *  (0022 D4). Promised as-is, in addition to whatever `wants` picks. */
+  expectedAssetIds?: string[]
 }
 
 /**
@@ -382,6 +401,11 @@ export function createJob(
       ],
     )
     db.exec(`insert into job_meta (job_id, departs_at) values (?, null)`, [input.id])
+
+    for (const assetId of input.expectedAssetIds ?? []) {
+      requested++
+      expected.push(assetId)
+    }
 
     for (const want of input.wants) {
       requested += want.qty
@@ -1092,4 +1116,30 @@ export function itemsSummary(names: string[]): string {
   if (names.length === 0) return ''
   if (names.length === 1) return names[0]
   return `${names[0]} + ${names.length - 1} more`
+}
+
+// ----------------------------------------------------- the manager flag
+
+/**
+ * The escalation ladder's last rung: the desk marks an overdue job as
+ * handed to the manager. Idempotent — the first flag's time stands, so a
+ * second tap cannot rewrite when the escalation actually happened.
+ * ASSUMPTION: a local flag is the whole record of a manager escalation.
+ * See docs/assumptions.md#manager-flag
+ */
+export function flagForManager(db: SqlDriver, jobId: string, nowMs: number): boolean {
+  if (!db.get(`select 1 as one from jobs where id = ?`, [jobId])) return false
+  db.exec(`insert or ignore into job_meta (job_id, departs_at, manager_flagged_at) values (?, null, null)`, [jobId])
+  db.exec(
+    `update job_meta set manager_flagged_at = coalesce(manager_flagged_at, ?) where job_id = ?`,
+    [new Date(nowMs).toISOString(), jobId],
+  )
+  return true
+}
+
+/** When the desk escalated this job, or null. */
+export function managerFlaggedAt(db: SqlDriver, jobId: string): string | null {
+  return db.get<{ at: string | null }>(
+    `select manager_flagged_at as at from job_meta where job_id = ?`, [jobId],
+  )?.at ?? null
 }

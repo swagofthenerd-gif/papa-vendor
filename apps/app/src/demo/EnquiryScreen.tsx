@@ -17,7 +17,15 @@ import { STR } from '../strings.ts'
  * lines become the job's promised set, so the yes typed back into WhatsApp
  * and the pull list the tech scans against are the same fact.
  */
-export function EnquiryScreen({ store }: { store: DemoStore }) {
+export function EnquiryScreen({
+  store,
+  onBook,
+}: {
+  store: DemoStore
+  /** Pencil a booking from the answered list — the resolved lines,
+   *  product and quantity, go to the sheet prefilled. */
+  onBook?: (lines: { productId: string; productName: string; qty: number }[]) => void
+}) {
   const [summary, setSummary] = useState<AvailabilitySummary | null>(null)
   const [creating, setCreating] = useState(false)
   // The turned-away demand log records ONCE per answered list, at the
@@ -96,6 +104,18 @@ export function EnquiryScreen({ store }: { store: DemoStore }) {
         onResolve={onResolve}
         onCopyReply={onCopyReply}
         onCreateJob={() => setCreating(true)}
+        onBook={
+          onBook
+            ? () => {
+                if (!summary) return
+                onBook(
+                  summary.lines
+                    .filter((l) => l.productId)
+                    .map((l) => ({ productId: l.productId as string, productName: l.productName ?? l.raw, qty: l.quantity })),
+                )
+              }
+            : undefined
+        }
       />
       {creating && summary ? (
         <NewJobSheet

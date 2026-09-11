@@ -24,7 +24,10 @@ export type { PullPayload, ApplyReport } from './pull.ts'
 export { buildPullList, progressSummary } from './pull-list.ts'
 export { parseKitList, matchKitList, normalise, similarity, editDistance, compact } from './kit-list.ts'
 export { checkAvailability, replySummary, availabilityNote } from './availability.ts'
-export type { AvailabilityLine, AvailabilitySummary, AvailabilityState, JobCommitment, CommitmentNote } from './availability.ts'
+export type {
+  AvailabilityLine, AvailabilitySummary, AvailabilityState, JobCommitment, CommitmentNote,
+  AvailabilityWindow, ShortReason,
+} from './availability.ts'
 export type { ParsedLine, MatchedLine, CatalogueItem, MatchConfidence } from './kit-list.ts'
 export type { PullListItem, PullListView, ShelfGroup } from './pull-list.ts'
 export { caseManifest, hasContents } from './containment.ts'
@@ -62,6 +65,19 @@ export type {
   SwapInput, SwapResult, SwapFlag, CountDiff, RecordServicedInput,
 } from './fleet.ts'
 export { rentalDaysBetween } from './project.ts'
+export {
+  DEFAULT_BOOKING_SETTINGS, ESCALATION_LADDER, HOUR_MS, DAY_MS, WEEKDAYS_SHORT, MONTHS_SHORT,
+  blockedPeriod, isLivePencil, pencilCountdown, overlaps, peakOverlap, msOf,
+  loadBooking, loadBookings, loadLines, loadAssetReservations, loadStockReservations,
+  bookingAvailability, extendedWindow, extensionCollisions, promisedSoon,
+  seasonFor, escalationStep, bookingDateLabel, dayStartMs,
+} from './bookings.ts'
+export type {
+  Booking, BookingLine, BookingStatus, TrackingMode, ReservationState,
+  AssetReservation, StockReservation, BookingSettings, PencilCountdown,
+  WeightedInterval, BookingAvailability, ExtensionCollision, PromisedSoon,
+  Season, EscalationAction, EscalationStep,
+} from './bookings.ts'
 export { dueStatus, parseDueDate, compareDueDates, compareJobsByDue } from './overdue.ts'
 export type { DueState, DueStatus } from './overdue.ts'
 export { FEEDBACK, ERROR_FEEDBACK, firstBuzzMs, hapticDurationMs } from './feedback.ts'

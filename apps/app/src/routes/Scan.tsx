@@ -66,6 +66,15 @@ const ScanRowItem = memo(function ScanRowItem({
       <span className="row-main">
         <span className="row-name">{row.displayName ?? STR.commonUnknownItem}</span>
         {row.message ? <span className="row-note">{row.message}</span> : null}
+        {/* Promised soon: the calendar's warning on the scan row — a small
+            stamp, nothing more. The scan was recorded exactly as it would
+            have been; the desk hears about it from the row, the tech from
+            the warning tone. */}
+        {row.promised ? (
+          <span className="stamp stamp-small">
+            {STR.bookingPromisedStamp(row.promised.bookingNo, row.promised.day)}
+          </span>
+        ) : null}
       </span>
       <span className="row-code code">{row.assetCode ?? '—'}</span>
 

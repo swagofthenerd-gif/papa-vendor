@@ -13,7 +13,7 @@ import { STR } from '../strings.ts'
  *
  * Four destinations, because five is where a tab bar starts being read as a
  * menu rather than as a place. They are the four things a rental house does:
- * today's work, what we own, what a client asked for, and the labels.
+ * today's work, what we own, what a client asked for, and the money.
  */
 
 interface Tab {
@@ -25,13 +25,28 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
-  // The day's account and the money book are Today surfaces, not extra
-  // tabs — the tab bar stays four places (see the comment above).
-  { view: { name: 'jobs' }, label: STR.commonTabToday, icon: 'home', matches: ['jobs', 'session', 'hisaab', 'owed', 'customer'] },
-  { view: { name: 'gear' }, label: STR.commonTabGear, icon: 'box', matches: ['gear', 'asset'] },
-  { view: { name: 'enquiry' }, label: STR.commonTabKitList, icon: 'chat', matches: ['enquiry'] },
-  { view: { name: 'settings' }, label: STR.commonTabLabels, icon: 'ticket', matches: ['settings', 'import'] },
+  // Today · Gear · Desk · Khata — the day's work, what we own, what a
+  // client asked for, and the money. Settings and the import are not
+  // places the day happens in; they open from the gear glyph in the top
+  // bar (SettingsButton) and light no tab.
+  { view: { name: 'jobs' }, label: STR.commonTabToday, icon: 'home', matches: ['jobs', 'session', 'scan'] },
+  { view: { name: 'gear' }, label: STR.commonTabGear, icon: 'box', matches: ['gear', 'asset', 'ginti', 'closed'] },
+  { view: { name: 'desk' }, label: STR.commonTabDesk, icon: 'chat', matches: ['desk', 'calendar', 'booking'] },
+  { view: { name: 'owed' }, label: STR.commonTabKhata, icon: 'scroll', matches: ['owed', 'customer', 'hisaab'] },
 ]
+
+/** The settings door every tab's top bar carries — one glyph, one place. */
+export function SettingsButton() {
+  return (
+    <button
+      className="icon-btn"
+      onClick={() => go({ name: 'settings' })}
+      aria-label={STR.commonOpenSettingsAria}
+    >
+      <Icon name="sliders" size={22} />
+    </button>
+  )
+}
 
 export function Shell({
   view,

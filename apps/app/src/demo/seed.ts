@@ -1,4 +1,4 @@
-import type { SqlDriver } from '@papa/core'
+import { DEFAULT_BOOKING_SETTINGS, HOUR_MS, blockedPeriod, type SqlDriver } from '@papa/core'
 import { DEMO_SCHEMA } from './read-model.ts'
 
 /**
@@ -442,6 +442,7 @@ export function seedDemo(db: SqlDriver): DemoSeed {
     }
 
     seedMoneyBook(db)
+    seedBookings(db)
   })
 
   return {
@@ -493,6 +494,9 @@ function seedMoneyBook(db: SqlDriver): void {
       [id, ORG, name, phone],
     )
   }
+  // Two regulars with paperwork on file, two without — so the credential
+  // gate on confirm (0022 D9) has both a pass and a refusal to show.
+  db.exec(`update customers set credentials_verified = 1 where id in ('cust-bilal', 'cust-hamza')`)
 
   // Closed jobs the histories hang off. status 'closed' keeps them off the
   // Today board (openJobs selects 'open' only) while the khata still links,
@@ -570,6 +574,157 @@ function seedMoneyBook(db: SqlDriver): void {
       [id, ORG, kind, rupees * 100, asset, job, counterparty, note, msDaysAgo(daysAgo)],
     )
   }
+}
+
+/** Local `days` from today at `hour`:00 — a booking instant. Relative for
+ *  the same reason the due dates are: a fixed calendar rots. */
+function atDays(days: number, hour: number): number {
+  const d = new Date()
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days, hour, 0, 0, 0).getTime()
+}
+
+/** The coming 20 December at `hour` — this year's if it is still ahead,
+ *  otherwise next year's — so the wedding-season booking is always a
+ *  future promise, not a stale one. */
+function nextDecember(day: number, hour: number): number {
+  const now = new Date()
+  let y = now.getFullYear()
+  if (new Date(y, 11, 20, 0, 0).getTime() <= now.getTime()) y++
+  return new Date(y, 11, day, hour, 0, 0, 0).getTime()
+}
+
+interface BookingSpec {
+  id: string
+  no: number
+  customer: string
+  status: 'pencil' | 'confirmed'
+  startMs: number
+  endMs: number
+  /** Pencil only: expiry relative to seed time, hours (negative = dead). */
+  expiresInHours?: number
+  note: string | null
+  /** [product key, qty, allocated unit ids (confirmed only)] or a demanded unit. */
+  lines: ({ product: string; qty: number; alloc: string[] } | { asset: string })[]
+}
+
+/**
+ * The promise calendar's seed (0022; PLAN phase 2) — every state the
+ * screens must show, relative to the day the demo opens:
+ *
+ *   B#1, B#2  CONFIRMED next week (Hamza's mehndi, Imran's drama block),
+ *             units bound the way confirm binds them — least-utilised
+ *             first, so B#1 holds FX9-02 (41 days) over FX9-01 (120);
+ *   B#3       a live PENCIL dying in ~5h — the countdown chip's customer;
+ *   B#4       a pencil that EXPIRED yesterday and has not been pruned —
+ *             the predicate must already read it dead, and the next write
+ *             cancels it with reason pencil_expired (D7);
+ *   B#5       CONFIRMED next month on FX9-02 again — so extending B#1 past
+ *             it has a collision to name (D10) — and on FX6-03, the unit
+ *             currently OUT on the documentary, so the scanner's
+ *             promised-soon warning has a target once it comes home;
+ *   B#6       December, wedding season (ASSUMPTION #wedding-season).
+ *
+ * Numbers 1–6 are gapless and the local counter continues at 7 (D12).
+ */
+function seedBookings(db: SqlDriver): void {
+  const specs: BookingSpec[] = [
+    {
+      id: 'bk-1', no: 1, customer: 'cust-hamza', status: 'confirmed',
+      startMs: atDays(7, 9), endMs: atDays(9, 18), note: 'Mehndi + baraat, DHA',
+      lines: [
+        { product: 'fx9', qty: 1, alloc: ['asset-fx9-2'] },
+        { product: 'aputure600', qty: 2, alloc: ['asset-aputure600-1', 'asset-aputure600-2'] },
+      ],
+    },
+    {
+      id: 'bk-2', no: 2, customer: 'cust-imran', status: 'confirmed',
+      startMs: atDays(8, 10), endMs: atDays(10, 10), note: null,
+      lines: [
+        { product: 'fx6', qty: 2, alloc: ['asset-fx6-1', 'asset-fx6-2'] },
+        { product: 'mixpre', qty: 1, alloc: ['asset-mixpre-1'] },
+      ],
+    },
+    {
+      id: 'bk-3', no: 3, customer: 'cust-bilal', status: 'pencil', expiresInHours: 5,
+      startMs: atDays(3, 8), endMs: atDays(4, 20), note: 'Waiting on the agency',
+      lines: [
+        { product: 'c300', qty: 1, alloc: [] },
+        { product: 'sigma1835', qty: 2, alloc: [] },
+      ],
+    },
+    {
+      id: 'bk-4', no: 4, customer: 'cust-ayesha', status: 'pencil', expiresInHours: -24,
+      startMs: atDays(5, 9), endMs: atDays(6, 9), note: null,
+      lines: [{ product: 'komodo', qty: 1, alloc: [] }],
+    },
+    {
+      id: 'bk-5', no: 5, customer: 'cust-bilal', status: 'confirmed',
+      startMs: atDays(30, 9), endMs: atDays(32, 18), note: 'Corporate film, Gulberg',
+      lines: [
+        { product: 'fx9', qty: 1, alloc: ['asset-fx9-2'] },
+        { asset: 'asset-fx6-3' },
+      ],
+    },
+    {
+      id: 'bk-6', no: 6, customer: 'cust-hamza', status: 'confirmed',
+      startMs: nextDecember(20, 9), endMs: nextDecember(22, 20), note: 'Shaadi — Bahria',
+      lines: [
+        { product: 'fx6', qty: 2, alloc: ['asset-fx6-1', 'asset-fx6-2'] },
+        { product: 'ronin', qty: 1, alloc: ['asset-ronin-1'] },
+      ],
+    },
+  ]
+
+  const iso = (ms: number) => new Date(ms).toISOString()
+  const nowMs = Date.now()
+  for (const b of specs) {
+    const blocked = blockedPeriod(b.startMs, b.endMs, DEFAULT_BOOKING_SETTINGS)
+    const name = db.get<{ name: string }>(`select name from customers where id = ?`, [b.customer])?.name ?? ''
+    const expires = b.status === 'pencil'
+      ? iso(nowMs + (b.expiresInHours ?? 24) * HOUR_MS)
+      : null
+    db.exec(
+      `insert into bookings (id, org_id, booking_no, customer_id, customer_name, status,
+         customer_from, customer_until, blocked_from, blocked_until, pencil_expires_at,
+         note, cancel_reason, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null, ?)`,
+      [b.id, ORG, b.no, b.customer, name, b.status, iso(b.startMs), iso(b.endMs),
+       iso(blocked.blockedStartMs), iso(blocked.blockedEndMs), expires, b.note, iso(nowMs)],
+    )
+    b.lines.forEach((line, i) => {
+      const lineId = `${b.id}-line-${i + 1}`
+      if ('asset' in line) {
+        db.exec(
+          `insert into booking_lines (id, org_id, booking_id, product_id, asset_id, qty)
+           values (?, ?, ?, null, ?, 1)`,
+          [lineId, ORG, b.id, line.asset],
+        )
+        if (b.status === 'confirmed') {
+          db.exec(
+            `insert into asset_reservations (id, org_id, booking_id, booking_line_id, asset_id,
+               blocked_from, blocked_until, state) values (?, ?, ?, ?, ?, ?, ?, 'confirmed')`,
+            [`${lineId}-res`, ORG, b.id, lineId, line.asset,
+             iso(blocked.blockedStartMs), iso(blocked.blockedEndMs)],
+          )
+        }
+        return
+      }
+      db.exec(
+        `insert into booking_lines (id, org_id, booking_id, product_id, asset_id, qty)
+         values (?, ?, ?, ?, null, ?)`,
+        [lineId, ORG, b.id, `prod-${line.product}`, line.qty],
+      )
+      line.alloc.forEach((assetId, k) => {
+        db.exec(
+          `insert into asset_reservations (id, org_id, booking_id, booking_line_id, asset_id,
+             blocked_from, blocked_until, state) values (?, ?, ?, ?, ?, ?, ?, 'confirmed')`,
+          [`${lineId}-res-${k + 1}`, ORG, b.id, lineId, assetId,
+           iso(blocked.blockedStartMs), iso(blocked.blockedEndMs)],
+        )
+      })
+    })
+  }
+  db.exec(`insert into app_settings (key, value) values ('booking_next_no', '7')`)
 }
 
 /** The catalogue the kit-list reader matches a pasted WhatsApp message against. */

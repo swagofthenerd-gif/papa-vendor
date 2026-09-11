@@ -269,3 +269,74 @@ Please confirm`)
     assert.equal(summary.needsAttention, 2)
   })
 })
+
+describe('the commitment layer (0022 D6, phase 2)', () => {
+  const DAY = 24 * 60 * 60 * 1000
+  const NOW = new Date(2026, 8, 10, 9, 0).getTime()
+  const iso = (ms) => new Date(ms).toISOString()
+
+  /** One confirmed booking holding `n` FX9 bodies over [start, end). */
+  function hold(n, startMs, endMs) {
+    db.exec(
+      `insert into bookings (id, org_id, booking_no, customer_id, customer_name, status,
+         customer_from, customer_until, blocked_from, blocked_until)
+       values ('bk', ?, 1, 'c', 'Rafi', 'confirmed', ?, ?, ?, ?)`,
+      [ORG, iso(startMs), iso(endMs), iso(startMs), iso(endMs)],
+    )
+    db.exec(`insert into booking_lines (id, org_id, booking_id, product_id, qty) values ('ln', ?, 'bk', 'p1', ?)`, [ORG, n])
+    for (let i = 1; i <= n; i++) {
+      db.exec(
+        `insert into asset_reservations (id, org_id, booking_id, booking_line_id, asset_id,
+           blocked_from, blocked_until, state) values (?, ?, 'bk', 'ln', ?, ?, ?, 'confirmed')`,
+        [`r${i}`, ORG, `a${i}`, iso(startMs), iso(endMs)],
+      )
+    }
+  }
+
+  const ask = (text, window) =>
+    checkAvailability(db, matchKitList(parseKitList(text), CATALOGUE), [], NOW, window)
+
+  test('without dates nothing changes: the shelf count, reason null', () => {
+    addAsset('p1'); addAsset('p1'); addAsset('p1')
+    hold(2, NOW + DAY, NOW + 3 * DAY)
+    const [line] = ask('3x Sony FX9').lines
+    assert.equal(line.state, 'available')
+    assert.equal(line.confirmedOverlap, 0)
+    assert.equal(line.shortReason, null)
+  })
+
+  test('with dates the confirmed claim is subtracted and the refusal is COMMITTED', () => {
+    addAsset('p1'); addAsset('p1'); addAsset('p1')
+    hold(2, NOW + DAY, NOW + 3 * DAY)
+    const [line] = ask('3x Sony FX9', { startMs: NOW + 2 * DAY, endMs: NOW + 4 * DAY }).lines
+    assert.equal(line.onHand, 3, 'the shelf still says three')
+    assert.equal(line.confirmedOverlap, 2)
+    assert.equal(line.state, 'short')
+    assert.equal(line.shortReason, 'committed', 'the shelf could have — the calendar cannot')
+    assert.match(availabilityNote(line), /3 here now · 2 booked for those dates/)
+    assert.match(replySummary({ lines: [line] }), /only 1 of 3 available/)
+  })
+
+  test('a true shelf shortage stays SHORT even under a window', () => {
+    addAsset('p1')
+    hold(1, NOW + DAY, NOW + 3 * DAY)
+    const [line] = ask('3x Sony FX9', { startMs: NOW + 2 * DAY, endMs: NOW + 4 * DAY }).lines
+    assert.equal(line.state, 'none')
+    assert.equal(line.shortReason, 'short')
+  })
+
+  test('a window that misses the hold sees the whole shelf', () => {
+    addAsset('p1'); addAsset('p1'); addAsset('p1')
+    hold(2, NOW + DAY, NOW + 3 * DAY)
+    const [line] = ask('3x Sony FX9', { startMs: NOW + 3 * DAY, endMs: NOW + 5 * DAY }).lines
+    assert.equal(line.confirmedOverlap, 0, "'[)' — a hold ending as the window begins is not in it")
+    assert.equal(line.state, 'available')
+  })
+
+  test('an unresolved line learns nothing from the calendar either', () => {
+    hold(2, NOW + DAY, NOW + 3 * DAY)
+    const [line] = ask('4 batteries', { startMs: NOW + 2 * DAY, endMs: NOW + 4 * DAY }).lines
+    assert.equal(line.state, 'unknown')
+    assert.equal(line.confirmedOverlap, 0)
+  })
+})

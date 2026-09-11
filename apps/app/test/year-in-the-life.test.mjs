@@ -91,8 +91,20 @@ import {
   moneyStrip,
   recordEntry,
   recordTurnedAway,
+  turnedAwayByReason,
   turnedAwayThisMonth,
 } from '../src/demo/khata.ts'
+import {
+  bookingView,
+  confirmBooking,
+  convertBookingToJob,
+  createBooking,
+  extendBooking,
+  extensionPreview,
+  noteSubRent,
+  reallocateReservation,
+  substitutesForReservation,
+} from '../src/demo/bookings.ts'
 import {
   assetCosts,
   jobMargin,
@@ -457,29 +469,48 @@ describe('a year in the life of the rental house', () => {
       at(0, -1, 6),
     )
 
-    // --- Second job out: the wedding, and the overlap ---------------------
+    // --- Second job out: the wedding, through the calendar ----------------
     // The seed promises V-Mount batteries 1-4 to BOTH the TVC and the
-    // wedding: with no reservations, "first N units on the shelf" is the
-    // only allocator anyone has. The batteries left on the TVC truck an
-    // hour ago, so the tech grabs 5-8 — and the screen calls every one of
-    // them 'Not on this job'. Finding `double-promise` (first sighting).
-    const wed = openSession('job-wedding', 'out', at(0, -1, 13))
-    const overlap = wed.expected.filter((id) => outTracker.has(id))
-    assert.deepEqual(overlap, [
-      'asset-vmount-1', 'asset-vmount-2', 'asset-vmount-3', 'asset-vmount-4',
-    ])
-    finding('double-promise')
-    const wedOnShelf = wed.expected.filter((id) => !outTracker.has(id))
-    scanAll(wed, wedOnShelf, 'check_out')
-    scanAll(
-      wed,
-      ['asset-vmount-5', 'asset-vmount-6', 'asset-vmount-7', 'asset-vmount-8'],
-      'check_out',
-      ['unexpected'],
+    // wedding. The year's first run pinned that as `double-promise`: with
+    // no reservations, "first N units on the shelf" was the only allocator
+    // anyone had, and the wedding truck left with four 'Not on this job'
+    // rows. Now the promise lives on the calendar (0022): the TVC's four
+    // batteries are HELD by name for its day, so the wedding's confirm
+    // allocates around them — the other four leave, and every row is
+    // accepted. The seeded wedding job, with its stale list, is closed
+    // unused; the truck runs on the booking's job.
+    const tvcHold = createBooking(db, seed.orgId, {
+      customerId: 'cust-bilal', startMs: at(0, -1, 6), endMs: at(0, 0, 18),
+      lines: ['asset-vmount-1', 'asset-vmount-2', 'asset-vmount-3', 'asset-vmount-4'].map((assetId) => ({ assetId })),
+      status: 'confirmed', note: 'TVC batteries, by name',
+    }, at(0, -2, 10))
+    assert.equal(tvcHold.ok, true, 'the TVC hold confirms')
+    const wedBooking = createBooking(db, seed.orgId, {
+      customerId: 'cust-hamza', startMs: at(0, -1, 13), endMs: at(0, 2, 19),
+      lines: [
+        { productId: 'prod-fx6', qty: 2 }, { productId: 'prod-sigma50100', qty: 1 },
+        { productId: 'prod-ronin', qty: 1 }, { productId: 'prod-vmount', qty: 4 },
+        { productId: 'prod-sachdeva', qty: 2 }, { productId: 'prod-aputure300', qty: 1 },
+      ],
+      status: 'confirmed', note: 'Wedding — Gulberg',
+    }, at(0, -2, 11))
+    assert.equal(wedBooking.ok, true, 'the wedding confirms around the hold')
+    const wedUnits = wedBooking.confirm.allocations.map((a) => a.assetId)
+    assert.equal(wedUnits.length, 11)
+    assert.ok(
+      !wedUnits.some((id) => ['asset-vmount-1', 'asset-vmount-2', 'asset-vmount-3', 'asset-vmount-4'].includes(id)),
+      'the calendar gave the wedding the OTHER batteries',
     )
-    // The ring undercounts: 7 of 11 promised items left, though 11 physical
-    // items are out — off-list swaps are invisible to packedProgress.
-    assert.equal(packedProgress(db, 'job-wedding'), 7)
+    const wedJob = convertBookingToJob(db, seed.orgId, wedBooking.bookingId, at(0, -1, 12))
+    assert.equal(wedJob.ok, true)
+    assert.equal(wedJob.expected, 11, 'the job promises exactly the units confirm bound')
+    mustClose('job-wedding', at(0, -1, 12)) // the seeded duplicate list, never used
+    const wed = openSession(wedJob.jobId, 'out', at(0, -1, 13))
+    const overlap = wed.expected.filter((id) => outTracker.has(id))
+    assert.deepEqual(overlap, [], 'nothing on the wedding list is on the TVC truck')
+    scanAll(wed, wed.expected, 'check_out')
+    // The ring counts the whole list: no off-list swap, no wolf-crying.
+    assert.equal(packedProgress(db, wedJob.jobId), 11)
     const wedSummary = buildSummary({
       jobLabel: 'Wedding', mode: 'out',
       expected: wed.expected,
@@ -488,8 +519,8 @@ describe('a year in the life of the rental house', () => {
       facts: () => undefined,
     })
     assert.equal(wedSummary.scanned, 11)
-    assert.equal(wedSummary.missing.length, 4) // cries wolf on the swap
-    assert.equal(wedSummary.exceptions.length, 4)
+    assert.equal(wedSummary.missing.length, 0)
+    assert.equal(wedSummary.exceptions.length, 0)
 
     // 11 TVC + 11 wedding + 1 pre-existing (FX6-03 on the documentary).
     assertPhysical()
@@ -511,7 +542,7 @@ describe('a year in the life of the rental house', () => {
     post('cust-imran', 'deposit_refund', -50_000, { k: 0, d: 2, note: 'Cheque returned' })
 
     // --- The wedding comes home a day early -------------------------------
-    jobBack('job-wedding', 'cust-hamza', at(0, 2, 19), {
+    jobBack(wedJob.jobId, 'cust-hamza', at(0, 2, 19), {
       k: 0, d: 2, chargeRs: 60_000, payRs: 60_000,
     })
 
@@ -720,57 +751,93 @@ describe('a year in the life of the rental house', () => {
 
   // -------------------------------------------------------------- NOV (k=2)
   test('NOV — three clients want the same camera; a new tech learns to scan', () => {
-    // --- The double promise, now with cameras -----------------------------
-    // Two clients book FX9s for the same weekend. createJob allocates from
-    // presence='here' only — it does not know what OTHER open jobs already
-    // promised. Both jobs are handed the SAME physical cameras.
-    const n1 = makeJob('Shaadi — Bahria', 'cust-bilal',
-      [{ productId: 'prod-fx9', qty: 2 }], iso(2, 4))
-    const n2 = makeJob('Shaadi — Wapda Town', 'cust-sana',
-      [{ productId: 'prod-fx9', qty: 2 }], iso(2, 5))
-    const promisedTwice = n1.expected.filter((id) => n2.expected.includes(id))
-    assert.ok(promisedTwice.length >= 1, 'the same unit promised to two jobs')
-    finding('double-promise')
-    finding('no-bookings')
+    // --- The double promise, now IMPOSSIBLE --------------------------------
+    // Two clients want FX9s for the same weekend. Bilal books first and
+    // his confirm binds two bodies. Sana's DP wants one of THOSE bodies by
+    // name; her confirm is refused BY NAME — 'already promised to booking
+    // #N (Bilal Hussain)' — and her pencil stands. The desk substitutes:
+    // Bilal's claim on that body moves to the third FX9, Sana's confirm
+    // goes through on the one she asked for, and both trucks leave with
+    // different cameras. (Was `double-promise` and `no-bookings`.)
+    const b1 = createBooking(db, seed.orgId, {
+      customerId: 'cust-bilal', startMs: at(2, 2, 6), endMs: at(2, 4, 18),
+      lines: [{ productId: 'prod-fx9', qty: 2 }], status: 'confirmed', note: 'Shaadi — Bahria',
+    }, at(2, 0, 10))
+    assert.equal(b1.ok, true)
+    assert.equal(b1.confirm.allocations.length, 2)
+    const wantedBody = b1.confirm.allocations[0]
+    const b2 = createBooking(db, seed.orgId, {
+      customerId: 'cust-sana', startMs: at(2, 2, 7), endMs: at(2, 5, 18),
+      lines: [{ assetId: wantedBody.assetId }], status: 'confirmed', note: 'Shaadi — Wapda Town',
+      credentialOverrideNote: 'Cheque held at the desk',
+    }, at(2, 0, 13))
+    assert.equal(b2.ok, false)
+    assert.ok('collision' in b2, 'refused as a named collision, never a raw error')
+    assert.equal(b2.collision.bookingNo, b1.bookingNo)
+    assert.equal(b2.collision.customerName, 'Bilal Hussain')
+    assert.equal(b2.collision.assetCode, wantedBody.assetCode)
+    assert.equal(bookingView(db, b2.bookingId, at(2, 0, 13)).stamp, 'pencil', 'her pencil stands')
+    // The substitute door (reallocate_reservation): Bilal keeps two FX9s,
+    // just not that one. The third body is the only free unit for his
+    // dates, and it is exactly what the picker offers.
+    const bilalClaim = db.get(
+      `select id from asset_reservations where booking_id = ? and asset_id = ?`,
+      [b1.bookingId, wantedBody.assetId],
+    )
+    const offered = substitutesForReservation(db, bilalClaim.id)
+    assert.equal(offered.length, 1)
+    const moved = reallocateReservation(db, bilalClaim.id, offered[0].id, at(2, 0, 14))
+    assert.equal(moved.ok, true)
+    const b2c = confirmBooking(db, seed.orgId, b2.bookingId, { credentialOverrideNote: 'Cheque held at the desk' }, at(2, 0, 15))
+    assert.equal(b2c.ok, true)
+    assert.equal(b2c.credentialGate, 'overridden', 'Sana is new; the manager logged why')
+    assert.deepEqual(b2c.allocations.map((a) => a.assetId), [wantedBody.assetId])
+    const bilalUnits = bookingView(db, b1.bookingId, at(2, 0, 15)).assetReservations.map((r) => r.assetId)
+    assert.ok(!bilalUnits.includes(wantedBody.assetId), 'Bilal no longer holds the body Sana asked for')
 
-    // --- The third client, and the blind spot in the demand log -----------
-    // On the shelf everything looks fine (3 FX9s, none out yet), so the
-    // answer is 'available' — with two commitment notes the owner must read
-    // and weigh himself. He turns the third client away… and the turned-away
-    // log records NOTHING, because only shelf-shortage lines count.
+    // --- The third client, and the demand log that now SEES commitments ---
+    // On the shelf all three FX9s are here, so a dateless answer is
+    // 'available'. Asked WITH the weekend's dates, the answer subtracts
+    // the three confirmed claims: none free — and recordTurnedAway counts
+    // the refusal as COMMITTED demand, which is precisely the wedding-
+    // season signal the buy log was built for. (Was
+    // `turnaway-blind-to-commitments`.)
     const enquiry = checkAvailability(
       db,
       matchKitList(parseKitList('2x Sony FX9'), demoCatalogue()),
       openJobCommitments(db),
       at(2, 1),
+      { startMs: at(2, 2, 8), endMs: at(2, 4, 12) },
     )
-    assert.equal(enquiry.lines[0].state, 'available')
     assert.equal(enquiry.lines[0].onHand, 3)
-    assert.equal(enquiry.lines[0].committed.length, 2)
-    assert.equal(recordTurnedAway(db, enquiry.lines, at(2, 1)), 0)
-    assert.deepEqual(turnedAwayThisMonth(db, 'prod-fx9', at(2, 1)), { times: 0, units: 0 })
-    finding('turnaway-blind-to-commitments')
+    assert.equal(enquiry.lines[0].confirmedOverlap, 3)
+    assert.equal(enquiry.lines[0].state, 'none')
+    assert.equal(enquiry.lines[0].shortReason, 'committed')
+    assert.equal(recordTurnedAway(db, enquiry.lines, at(2, 1)), 1)
+    assert.deepEqual(turnedAwayThisMonth(db, 'prod-fx9', at(2, 1)), { times: 1, units: 2 })
+    assert.deepEqual(turnedAwayByReason(db, 'prod-fx9', at(2, 1)), { short: 0, committed: 2 })
 
-    // First truck wins: N1 takes its two cameras.
+    // Both trucks leave — with different FX9s, every row accepted.
+    const n1 = { id: convertBookingToJob(db, seed.orgId, b1.bookingId, at(2, 2, 5)).jobId }
+    const n2 = { id: convertBookingToJob(db, seed.orgId, b2.bookingId, at(2, 2, 5)).jobId }
+    n1.expected = openJob(db, n1.id).expected
+    n2.expected = openJob(db, n2.id).expected
+    assert.equal(n1.expected.length, 2)
+    assert.equal(n2.expected.length, 1)
+    assert.ok(!n1.expected.some((id) => n2.expected.includes(id)), 'no unit promised to two jobs')
+    assert.equal(customerForJob(db, n1.id)?.id, 'cust-bilal', 'born chargeable')
     const n1out = openSession(n1.id, 'out', at(2, 2, 6))
     scanAll(n1out, n1.expected, 'check_out')
-    // N2's session opens against a list that names gear already on
-    // Bilal's truck. The tech scans the one FX9 left ('unexpected' if not
-    // on N2's list) and the summary reports the promised ones missing.
     const n2out = openSession(n2.id, 'out', at(2, 2, 7))
-    const n2gone = n2.expected.filter((id) => outTracker.has(id))
-    assert.ok(n2gone.length >= 1)
-    const fx9Left = db
-      .all(
-        `select id from assets where product_id = 'prod-fx9' and presence = 'here'`,
-      )
-      .map((r) => r.id)
-    assert.equal(fx9Left.length, 1)
-    const onList = n2.expected.includes(fx9Left[0])
-    scanAll(n2out, fx9Left, 'check_out', onList ? ['accepted'] : ['unexpected'])
+    scanAll(n2out, n2.expected, 'check_out')
+    assert.equal(
+      db.get(`select count(*) as n from assets where product_id = 'prod-fx9' and presence = 'out'`).n,
+      3,
+      'all three FX9s out, on two trucks',
+    )
 
     jobBack(n1.id, 'cust-bilal', at(2, 6), { k: 2, d: 6, chargeRs: 50_000, payRs: 50_000 })
-    jobBack(n2.id, 'cust-sana', at(2, 7), { k: 2, d: 7, chargeRs: 25_000, payRs: 25_000, note: 'one camera short' })
+    jobBack(n2.id, 'cust-sana', at(2, 7), { k: 2, d: 7, chargeRs: 25_000, payRs: 25_000 })
 
     // --- The new tech's first week ----------------------------------------
     const n3 = makeJob('Interview setup — DHA', 'cust-hamza',
@@ -980,6 +1047,31 @@ describe('a year in the life of the rental house', () => {
       customerView(db, 'cust-sana').balanceMinor,
       books.get('cust-sana').balance,
     )
+
+    // --- The last week of peak is already promised ------------------------
+    // Hamza's confirmed booking holds two FX9s for the month's last week.
+    // A new client asks for two over the same dates: the shelf has three,
+    // the calendar has one free — the desk turns them away and the log
+    // counts it as COMMITTED demand, the buy signal (was
+    // `turnaway-blind-to-commitments`).
+    const peakHold = createBooking(db, seed.orgId, {
+      customerId: 'cust-hamza', startMs: at(3, 8, 9), endMs: at(3, 10, 18),
+      lines: [{ productId: 'prod-fx9', qty: 2 }], status: 'confirmed',
+    }, at(3, 5, 10))
+    assert.equal(peakHold.ok, true)
+    const peakAsk = checkAvailability(
+      db,
+      matchKitList(parseKitList('2x Sony FX9'), demoCatalogue()),
+      openJobCommitments(db),
+      at(3, 6),
+      { startMs: at(3, 8, 9), endMs: at(3, 10, 18) },
+    )
+    assert.equal(peakAsk.lines[0].onHand, 3)
+    assert.equal(peakAsk.lines[0].confirmedOverlap, 2)
+    assert.equal(peakAsk.lines[0].state, 'short')
+    assert.equal(peakAsk.lines[0].shortReason, 'committed')
+    assert.equal(recordTurnedAway(db, peakAsk.lines, at(3, 6)), 1)
+    assert.deepEqual(turnedAwayByReason(db, 'prod-fx9', at(3, 6)), { short: 0, committed: 1 })
 
     // --- Month end --------------------------------------------------------
     assertBooks()
@@ -1278,6 +1370,57 @@ describe('a year in the life of the rental house', () => {
       [{ productId: 'prod-forza', qty: 1 }], iso(6, 6), at(6, 3))
     jobBack(m1.id, 'cust-hamza', at(6, 6), { k: 6, d: 6, chargeRs: 12_000, payRs: 12_000 })
 
+    // --- A client keeps the gear two days longer ----------------------------
+    // Hamza has the house's one C500 for three days; Sana has it the day
+    // after he brings it back. Hamza calls: two more days. The preview
+    // (0022 D10) names who is waiting — Sana, the unit, when her hold
+    // begins — and nothing changes until the desk settles it. The only
+    // C500 has no substitute, so the desk sub-rents one for Sana: the
+    // intent lands on Hamza's note, and the extension writes behind it.
+    const hamzaC500 = createBooking(db, seed.orgId, {
+      customerId: 'cust-hamza', startMs: at(6, 8, 9), endMs: at(6, 10, 18),
+      lines: [{ productId: 'prod-c500', qty: 1 }], status: 'confirmed', note: 'Drama promo',
+    }, at(6, 1, 10))
+    assert.equal(hamzaC500.ok, true)
+    const sanaC500 = createBooking(db, seed.orgId, {
+      customerId: 'cust-sana', startMs: at(6, 11, 9), endMs: at(6, 12, 18),
+      lines: [{ productId: 'prod-c500', qty: 1 }], status: 'confirmed',
+      credentialOverrideNote: 'Regular since October',
+    }, at(6, 1, 11))
+    assert.equal(sanaC500.ok, true)
+    const preview = extensionPreview(db, hamzaC500.bookingId, at(6, 12, 18), at(6, 10, 9))
+    assert.equal(preview.collisions.length, 1)
+    const waiting = preview.collisions[0]
+    assert.equal(waiting.kind, 'asset')
+    assert.equal(waiting.bookingNo, sanaC500.bookingNo)
+    assert.equal(waiting.customerName, 'Sana Tariq')
+    assert.equal(waiting.assetCode, 'C500-01')
+    assert.equal(waiting.theirFromMs, at(6, 11, 7), 'her hold begins two hours before her pickup')
+    assert.equal(bookingView(db, hamzaC500.bookingId, at(6, 10, 9)).customerEndMs, at(6, 10, 18), 'the preview changed nothing')
+    // No other C500 to move her onto; the extension is refused by name…
+    const theirClaim = db.get(`select id from asset_reservations where booking_id = ?`, [sanaC500.bookingId])
+    assert.deepEqual(substitutesForReservation(db, theirClaim.id), [])
+    const refused = extendBooking(db, hamzaC500.bookingId, at(6, 12, 18), at(6, 10, 9))
+    assert.equal(refused.extended, false)
+    assert.equal(refused.collisions[0].bookingNo, sanaC500.bookingNo)
+    // …until the sub-rent intent is on record.
+    const noted = noteSubRent(db, hamzaC500.bookingId, {
+      productId: waiting.productId, productName: waiting.productName, qty: 1,
+      forBookingId: waiting.bookingId, forBookingNo: waiting.bookingNo,
+    }, STR_EN, at(6, 10, 10))
+    assert.equal(noted.ok, true)
+    assert.match(noted.note, new RegExp(`Sub-rent Canon C500 Mark II ×1 for #${sanaC500.bookingNo}`))
+    const extended = extendBooking(db, hamzaC500.bookingId, at(6, 12, 18), at(6, 10, 11), undefined, { acknowledged: [waiting] })
+    assert.equal(extended.extended, true)
+    assert.equal(extended.customerEndMs, at(6, 12, 18))
+    const chain = db.all(
+      `select op, depends_on, id from outbox where op in ('sub_rent_intent', 'extend_booking') order by seq`,
+    )
+    assert.deepEqual(chain.map((o) => o.op), ['sub_rent_intent', 'extend_booking'])
+    assert.equal(chain[1].depends_on, chain[0].id, 'the extension replays only after the sub-rent lands')
+    assert.equal(bookingView(db, sanaC500.bookingId, at(6, 10, 11)).assetReservations[0].assetId, 'asset-c500-1',
+      'her claim on the unit stands until the partner unit covers it')
+
     // DEAD STOCK IS NOW A READ, not a wall (0021 D4 — was the idle-days
     // half of `no-utilization-read`): the Xeen set, never rented all year,
     // and the idle Sachdeva both surface with the idle capital priced —
@@ -1356,6 +1499,31 @@ describe('a year in the life of the rental house', () => {
       [{ productId: 'prod-fx6', qty: 2 }, { productId: 'prod-ronin', qty: 1 }],
       iso(7, 0), at(7, -1))
     jobBack(e2.id, 'cust-hamza', at(7, 0), { k: 7, d: 0, chargeRs: 45_000, payRs: 45_000 })
+
+    // --- Eid's second week is already promised ---------------------------
+    // Hamza's confirmed booking holds four of the seven fit big lights. A
+    // client asks for six over those dates: seven on the shelf, three
+    // free — short by three, and the log counts them as COMMITTED demand
+    // beside the month's earlier shelf shortage.
+    const eidHold = createBooking(db, seed.orgId, {
+      customerId: 'cust-hamza', startMs: at(7, 5, 9), endMs: at(7, 6, 18),
+      lines: [{ productId: 'prod-aputure600', qty: 4 }], status: 'confirmed',
+    }, at(7, 1, 10))
+    assert.equal(eidHold.ok, true)
+    const eidAsk = checkAvailability(
+      db,
+      matchKitList(parseKitList('6x Aputure 600D Pro'), demoCatalogue()),
+      openJobCommitments(db),
+      at(7, 2),
+      { startMs: at(7, 5, 9), endMs: at(7, 6, 18) },
+    )
+    assert.equal(eidAsk.lines[0].onHand, 7, 'seven fit to rent — the faulty seeded light stays off the count')
+    assert.equal(eidAsk.lines[0].confirmedOverlap, 4)
+    assert.equal(eidAsk.lines[0].state, 'short')
+    assert.equal(eidAsk.lines[0].shortReason, 'committed')
+    assert.equal(recordTurnedAway(db, eidAsk.lines, at(7, 2)), 1)
+    assert.deepEqual(turnedAwayThisMonth(db, 'prod-aputure600', at(7, 2)), { times: 2, units: 4 })
+    assert.deepEqual(turnedAwayByReason(db, 'prod-aputure600', at(7, 2)), { short: 1, committed: 3 })
 
     assertBooks()
     assertPhysical()
@@ -1658,20 +1826,23 @@ describe('a year in the life of the rental house', () => {
     // unit, and the desk services it with the cost landing on the book.
     // Dead stock is a read too, asserted in MAR, so
     // `no-utilization-read` NARROWS to the missing earners leaderboard.
+    // Wave 5 (the promise calendar, 0022 + the client) takes three:
+    // `no-bookings`, `double-promise` — SEP's wedding and NOV's two
+    // shaadi trucks now leave with different units because the calendar
+    // refuses the second promise BY NAME — and
+    // `turnaway-blind-to-commitments`: an enquiry asked with dates
+    // subtracts confirmed claims and the log counts the committed refusal.
     assert.deepEqual(
       [...FINDINGS].sort(),
       [
-        'double-promise',
         'import-apply-welded',
         'no-adjustment-door',
         'no-blacklist',
-        'no-bookings',
         'no-deposit-door',
         'no-health-door',
         'no-lifetime-value-view',
         'no-month-history-screen',
         'no-utilization-read',
-        'turnaway-blind-to-commitments',
         'waived-fee-invisible',
       ],
     )

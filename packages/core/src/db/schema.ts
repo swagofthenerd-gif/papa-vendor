@@ -26,6 +26,11 @@ create table if not exists assets (
   serial_number       text,
   display_name        text,
   is_container        integer default 0,
+  -- Whether the unit may be promised at all (0022 create/confirm_booking
+  -- refuse a non-rentable unit). Mirrored so the phone's availability
+  -- answer counts the same fleet the server does. Same create-if-not-
+  -- exists caveat as disposition below.
+  rentable            integer default 1,
   presence            text default 'here',
   health              text default 'ok',
   ownership           text default 'owned',
@@ -124,21 +129,115 @@ create table if not exists locations (
 -- yet (pre-auth, demo only), so create-if-not-exists still covers every
 -- real database — but a local migration path remains a pre-ship
 -- requirement before ANY device persists this schema.
+-- booking_id mirrors the 0022 D8 bridge, projected as of 0023: the one
+-- live job a confirmed booking became, so the phone can refuse a second
+-- conversion and a cancel while the job is open — the server's own rules.
 create table if not exists jobs (
   id text primary key, org_id text, label text, contact text,
-  expected_back text, status text, customer_id text, closed_at text
+  expected_back text, status text, customer_id text, closed_at text,
+  booking_id text
 );
 
 -- service_due_after_rental_days / count_cycles / retire_after_cycles mirror
 -- the 0021 server columns: the service threshold (null = no nudge), the
 -- battery flag, and the cycle ceiling — what lets the phone draw the
 -- service line and the Sehat groups with no network.
+-- tracking_mode (serialized | bulk | consumable) arrives with 0023: the
+-- booking rules branch on it (units are allocated, bulk is counted), so
+-- the phone must know which kind of product a line names.
 create table if not exists products (
   id text primary key, org_id text, display_name text, category text,
+  tracking_mode text default 'serialized',
   service_due_after_rental_days integer,
   count_cycles integer default 0,
   retire_after_cycles integer
 );
+
+/*
+ * The promise calendar's mirrors (0022, projected by 0023).
+ *
+ * Periods arrive SPLIT — the server's tstzrange is projected as its two
+ * bounds, ISO text like every other mirrored timestamp — because SQLite has
+ * no range type and the rules (packages/core/src/bookings.ts) want epoch
+ * ms, which Date.parse gives from ISO in one step. Both ranges are '[)'.
+ *
+ * customer_name rides the bookings projection (the customers table never
+ * syncs — 0009/0015 keep phone and CNIC off the scanner), so a booking on
+ * the phone can name who it is for without the phone holding the khata.
+ *
+ * The three reservation mirrors are OPTIMISTICALLY authored too: the
+ * demo's write side (apps/app/src/demo/bookings.ts) inserts here while it
+ * enqueues the matching RPC op, so an offline desk sees the same calendar
+ * the server will confirm. A server tombstone (deleted_at) deletes the row
+ * — that is how an expired pencil's claims vanish from every phone.
+ *
+ * stock_lots is the bulk shelf count the availability answer subtracts
+ * confirmed claims from (0022 D6); slim projection, no costs.
+ */
+create table if not exists bookings (
+  id                text primary key,
+  org_id            text not null,
+  booking_no        integer not null,
+  customer_id       text not null,
+  customer_name     text,
+  status            text not null default 'draft',
+  customer_from     text not null,
+  customer_until    text not null,
+  blocked_from      text not null,
+  blocked_until     text not null,
+  pencil_expires_at text,
+  note              text,
+  cancel_reason     text,
+  updated_at        text
+);
+create index if not exists bookings_status_idx on bookings (status);
+create index if not exists bookings_customer_idx on bookings (customer_id);
+
+create table if not exists booking_lines (
+  id          text primary key,
+  org_id      text not null,
+  booking_id  text not null,
+  product_id  text,
+  asset_id    text,
+  qty         integer not null default 1
+);
+create index if not exists booking_lines_booking_idx on booking_lines (booking_id);
+
+create table if not exists asset_reservations (
+  id               text primary key,
+  org_id           text not null,
+  booking_id       text not null,
+  booking_line_id  text not null,
+  asset_id         text not null,
+  blocked_from     text not null,
+  blocked_until    text not null,
+  state            text not null
+);
+create index if not exists asset_reservations_asset_idx on asset_reservations (asset_id);
+create index if not exists asset_reservations_booking_idx on asset_reservations (booking_id);
+
+create table if not exists stock_reservations (
+  id               text primary key,
+  org_id           text not null,
+  booking_id       text not null,
+  booking_line_id  text not null,
+  product_id       text not null,
+  qty              integer not null,
+  blocked_from     text not null,
+  blocked_until    text not null,
+  state            text not null
+);
+create index if not exists stock_reservations_product_idx on stock_reservations (product_id);
+create index if not exists stock_reservations_booking_idx on stock_reservations (booking_id);
+
+create table if not exists stock_lots (
+  id           text primary key,
+  org_id       text not null,
+  product_id   text not null,
+  location_id  text,
+  qty_on_hand  integer not null default 0
+);
+create index if not exists stock_lots_product_idx on stock_lots (product_id);
 
 -- ---------------------------------------------------------------------------
 -- Device-only. NOT mirrored, NOT recoverable from the server.
@@ -278,4 +377,6 @@ export const DEVICE_ONLY_TABLES = [
 /** Tables sync replaces wholesale. Safe to drop and re-seed at any time. */
 export const MIRROR_TABLES = [
   'assets', 'asset_tags', 'asset_containment', 'locations', 'jobs', 'products',
+  'bookings', 'booking_lines', 'asset_reservations', 'stock_reservations',
+  'stock_lots',
 ] as const

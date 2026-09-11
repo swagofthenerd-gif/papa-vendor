@@ -2,6 +2,7 @@ import type { SqlDriver } from './db/driver.ts'
 import { placeholders } from './db/driver.ts'
 import type { MatchedLine } from './kit-list.ts'
 import { compareDueDates, dueStatus } from './overdue.ts'
+import { bookingAvailability } from './bookings.ts'
 
 /**
  * Can we actually give them this?
@@ -25,7 +26,28 @@ import { compareDueDates, dueStatus } from './overdue.ts'
  * So the answer is "3 of these are here today", and the owner still applies
  * their own knowledge of what is promised. That is honest, and it is already
  * far faster than walking the shelves.
+ *
+ * THE COMMITMENT LAYER (phase 2, 0022). When the enquiry carries dates, the
+ * caller passes the asked-for window and each resolved line also learns how
+ * many units are CONFIRMED to bookings over it (bookings.ts, D6 — pencils
+ * are reported there, never subtracted here either). The state is then
+ * judged on shelf − confirmed, and a line the shelf could have filled but
+ * the calendar cannot is flagged `committed`, distinct from a true `short`:
+ * the year simulation found the turned-away log blind to exactly this
+ * refusal (`turnaway-blind-to-commitments`). Without a window nothing
+ * changes — the answer stays the honest shelf count.
  */
+
+/** The asked-for window, epoch ms, '[)'. */
+export interface AvailabilityWindow {
+  startMs: number
+  endMs: number
+}
+
+/** Why a line could not be filled: the shelf itself is short, or the
+ *  shelf had it but confirmed bookings over the window already spoke for
+ *  it. Null on an available or unresolved line. */
+export type ShortReason = 'short' | 'committed'
 
 export type AvailabilityState = 'available' | 'short' | 'none' | 'unknown'
 
@@ -69,7 +91,10 @@ export interface AvailabilityLine extends MatchedLine {
   onHand: number
   /** How many the client asked for, carried through from the parsed line. */
   wanted: number
+  /** Units confirmed to bookings over the asked window (0 without one). */
+  confirmedOverlap: number
   state: AvailabilityState
+  shortReason: ShortReason | null
   /**
    * Which open jobs have a claim on this product, soonest-back first.
    * Empty when no commitments were supplied — the answer degrades to the
@@ -157,6 +182,7 @@ export function availabilityNote(line: AvailabilityLine): string {
   if (line.state === 'unknown') return 'unconfirmed item — no count'
 
   const parts = [`${line.onHand} here now`]
+  if (line.confirmedOverlap > 0) parts.push(`${line.confirmedOverlap} booked for those dates`)
   for (const c of line.committed) {
     const where = c.out ? `out on ${c.jobLabel}` : `going to ${c.jobLabel}`
     parts.push(`${c.count} ${where}, ${c.backLabel}`)
@@ -181,6 +207,9 @@ export function checkAvailability(
   // owner was going to reconstruct from memory anyway.
   commitments: JobCommitment[] = [],
   nowMs: number = Date.now(),
+  // Optional: the dates the client asked about. With it, confirmed
+  // bookings over the window are subtracted before the verdict.
+  window: AvailabilityWindow | null = null,
 ): AvailabilitySummary {
   const ids = [...new Set(matched.map((m) => m.productId).filter((id): id is string => !!id))]
   const counts = onHandByProduct(db, ids)
@@ -192,18 +221,26 @@ export function checkAvailability(
       // No stock figure for a guess — and no commitment notes either, for
       // the same reason: data attached to an unconfirmed match reads as
       // confirmation.
-      return { ...m, onHand: 0, wanted, state: 'unknown', committed: [] }
+      return { ...m, onHand: 0, wanted, confirmedOverlap: 0, state: 'unknown', shortReason: null, committed: [] }
     }
 
     const onHand = counts.get(m.productId) ?? 0
+    const confirmedOverlap = window
+      ? bookingAvailability(db, m.productId, window.startMs, window.endMs, nowMs).confirmedOverlap
+      : 0
+    const free = Math.max(onHand - confirmedOverlap, 0)
     const state: AvailabilityState =
-      onHand >= wanted ? 'available' : onHand > 0 ? 'short' : 'none'
+      free >= wanted ? 'available' : free > 0 ? 'short' : 'none'
+    const shortReason: ShortReason | null =
+      state === 'available' ? null : onHand >= wanted ? 'committed' : 'short'
 
     return {
       ...m,
       onHand,
       wanted,
+      confirmedOverlap,
       state,
+      shortReason,
       committed: commitmentNotes(m.productId, commitments, nowMs),
     }
   })
@@ -232,7 +269,9 @@ export function replySummary(summary: AvailabilitySummary): string {
   for (const l of summary.lines) {
     const name = l.productName ?? l.raw
     if (l.state === 'available') out.push(`✅ ${l.wanted}x ${name}`)
-    else if (l.state === 'short') out.push(`⚠️ ${name} — only ${l.onHand} of ${l.wanted} available`)
+    else if (l.state === 'short') {
+      out.push(`⚠️ ${name} — only ${Math.max(l.onHand - l.confirmedOverlap, 0)} of ${l.wanted} available`)
+    }
     else if (l.state === 'none') out.push(`❌ ${name} — none available`)
     // An unresolved line is reported as UNRESOLVED, never quietly dropped.
     // Dropping it would send a reply that silently ignores something the
