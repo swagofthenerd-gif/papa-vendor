@@ -55,6 +55,12 @@ interface ProductSpec {
    *  Absent means no rate — the honest 'unpriced', never zero. */
   dayRateRs?: number
   replacementRs?: number
+  /** Service due after this many rental days (0021 D1). Absent = no nudge. */
+  serviceDueDays?: number
+  /** Count check_out cycles on this product's units (0021 D3). */
+  countCycles?: boolean
+  /** Cycle ceiling — crossing raises an alert, never a state change. */
+  retireAfterCycles?: number
 }
 
 const LOCATIONS: { id: string; name: string; path: string; kind: string }[] = [
@@ -78,7 +84,12 @@ const LOCATIONS: { id: string; name: string; path: string; kind: string }[] = [
 // C-Stands are LEFT UNPRICED on purpose, so the '+N unpriced' honesty path
 // is visible in the demo. See docs/assumptions.md#demo-rates
 const PRODUCTS: ProductSpec[] = [
-  { key: 'fx9', name: 'Sony FX9', category: 'camera', units: 2, shelf: 'loc-rack-a', code: 'FX9', dayRateRs: 25_000, replacementRs: 3_500_000 },
+  // The FX9s carry the living-fleet config (0021): a usage-service
+  // threshold and the cycle flag with a ceiling — FX9-01 is seeded OVER
+  // the service threshold and FX9-02 NEAR the cycle ceiling below, so the
+  // service line, the cycle line and the Sehat surface all show real
+  // numbers the moment the demo opens.
+  { key: 'fx9', name: 'Sony FX9', category: 'camera', units: 2, shelf: 'loc-rack-a', code: 'FX9', dayRateRs: 25_000, replacementRs: 3_500_000, serviceDueDays: 100, countCycles: true, retireAfterCycles: 30 },
   { key: 'fx6', name: 'Sony FX6', category: 'camera', units: 3, shelf: 'loc-rack-a', code: 'FX6', dayRateRs: 18_000, replacementRs: 2_200_000 },
   { key: 'c300', name: 'Canon C300 Mark III', category: 'camera', units: 2, shelf: 'loc-rack-a', code: 'C300', dayRateRs: 20_000, replacementRs: 2_800_000 },
   { key: 'c500', name: 'Canon C500 Mark II', category: 'camera', units: 1, shelf: 'loc-rack-a', code: 'C500', dayRateRs: 22_000, replacementRs: 3_000_000 },
@@ -259,8 +270,15 @@ export function seedDemo(db: SqlDriver): DemoSeed {
     for (const p of PRODUCTS) {
       const productId = `prod-${p.key}`
       db.exec(
-        `insert into products (id, org_id, display_name, category) values (?, ?, ?, ?)`,
-        [productId, ORG, p.name, p.category],
+        `insert into products (id, org_id, display_name, category,
+           service_due_after_rental_days, count_cycles, retire_after_cycles)
+         values (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          productId, ORG, p.name, p.category,
+          p.serviceDueDays ?? null,
+          p.countCycles ? 1 : 0,
+          p.retireAfterCycles ?? null,
+        ],
       )
 
       // Rates in minor units (paisa), the server's `_minor` convention. A
@@ -341,6 +359,29 @@ export function seedDemo(db: SqlDriver): DemoSeed {
 
     // One light in for repair, so 'available' is not trivially everything.
     db.exec(`update assets set health = 'faulty' where id = ?`, ['asset-aputure600-4'])
+
+    // The living-fleet stories (0021), as synced state — on a real phone
+    // these counters arrive from the server's projection:
+    //   FX9-01 is OVER its 100-day service threshold (the JUN nudge, real),
+    //   FX9-02 is NEAR the 30-cycle ceiling (one busy week crosses it live),
+    //   and two units sit dead: the Xeen set (Rs 4.5M idle — the number
+    //   that sells the surface) and a Sachdeva tripod (unpriced, so the
+    //   value line's '+1 unpriced' honesty path is visible too). Their
+    //   last sighting is stamped 120 days back; nothing else has an
+    //   anchor, so the demo's dead-stock list stays these two.
+    db.exec(
+      `update assets set rental_days_since_service = 120, cycle_count = 24 where id = 'asset-fx9-1'`,
+    )
+    db.exec(
+      `update assets set rental_days_since_service = 41, cycle_count = 28 where id = 'asset-fx9-2'`,
+    )
+    {
+      const idleSince = new Date(msDaysAgo(120)).toISOString()
+      db.exec(
+        `update assets set last_scanned_at = ?, updated_at = ? where id in ('asset-samyang-1', 'asset-sachdeva-3')`,
+        [idleSince, idleSince],
+      )
+    }
 
     // A packed camera case: the A-cam kit as it actually travels. One
     // PERMANENT child (the handle cannot leave without the body) and four

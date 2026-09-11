@@ -180,6 +180,25 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
         )}
       </section>
 
+      {/* The dead-stock line (0021 D4): idle capital said in money, only
+          when it exists — 'Idle 90+ days: 2 items · Rs 45,00,000'. Rows
+          live on the Sehat surface (the Gear screen); the day's account
+          carries the one line the owner forwards. */}
+      {account.deadStock.items > 0 ? (
+        <section className="section">
+          <SectionHead
+            icon="hourglass"
+            title={STR.sehatDeadStock(account.deadStock.days)}
+            sub={
+              STR.gearItemCount(account.deadStock.items) +
+              (moneyLabel(account.deadStock.value) !== null
+                ? ` · ${moneyLabel(account.deadStock.value)}`
+                : '')
+            }
+          />
+        </section>
+      ) : null}
+
       {/* The month's statement (0019): earned and spent as plain rows,
           then the profit line under the accountant's double rule — the
           same tally voice as the khata balance. When the month recorded

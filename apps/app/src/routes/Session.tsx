@@ -1,6 +1,7 @@
 import { Icon } from '@papa/icons'
 import { formatRupees, moneyLabel } from '@papa/core'
 import { SectionHead } from '../components/Shell.tsx'
+import { AwaazNote, type AwaazRecording, type AwaazSaveResult } from '../components/AwaazNote.tsx'
 import { shortfall, type SessionSummary } from '../session-summary.ts'
 import { STR } from '../strings.ts'
 
@@ -34,6 +35,7 @@ export function Session({
   summary,
   chargeCustomerName,
   lateFee,
+  onVoiceNote,
   onShareWhatsApp,
   onShowParchi,
   onBackToScanning,
@@ -47,6 +49,11 @@ export function Session({
   chargeCustomerName: string | null
   /** Present only on an overdue RETURN with a customer — see the store. */
   lateFee: LateFeeOffer | null
+  /** Keep a hold-to-record awaaz note against a discrepancy row's item
+   *  (0021, Phase D5) — ten spoken seconds where nobody types. Null
+   *  renders no recorder at all; the component itself also degrades to
+   *  nothing where MediaRecorder is absent. */
+  onVoiceNote: ((assetId: string, rec: AwaazRecording) => AwaazSaveResult) | null
   onShareWhatsApp: () => void
   /** Show the challan as a full-screen QR — the phone-to-phone gate pass. */
   onShowParchi: () => void
@@ -158,6 +165,16 @@ export function Session({
                   {l.valueMinor !== null ? formatRupees(l.valueMinor) : STR.sessionNoRate}
                 </span>
                 <span className="line-code code">{l.code ?? '—'}</span>
+                {/* The awaaz note, right on the discrepancy: "left with
+                    Hamza's second van, coming back Thursday" is said in
+                    ten seconds and never typed. */}
+                {onVoiceNote ? (
+                  <AwaazNote
+                    compact
+                    targetLabel={l.name ?? l.code ?? STR.commonUnknownItem}
+                    onSave={(rec) => onVoiceNote(l.key, rec)}
+                  />
+                ) : null}
               </li>
             ))}
           </ul>

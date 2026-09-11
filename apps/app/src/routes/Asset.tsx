@@ -7,7 +7,9 @@ import { StatusBadge } from '../components/StatusBadge.tsx'
 import { HoldToFinish } from '../components/HoldToFinish.tsx'
 import { statusSentence, type Health, type Presence, type Disposition } from '../status.ts'
 import { PhotoCompare } from '../components/PhotoCompare.tsx'
-import type { PhotoPair } from '@papa/core'
+import { AwaazNote, type AwaazRecording, type AwaazSaveResult } from '../components/AwaazNote.tsx'
+import type { PhotoPair, VoiceNoteRow } from '@papa/core'
+import type { ServiceFacts } from '../demo/read-model.ts'
 import { STR } from '../strings.ts'
 
 /**
@@ -154,6 +156,89 @@ function AssetMoneySection({
       <button className="btn btn-outline btn-block" onClick={onRepairCost}>
         <Icon name="wrench" size={18} /> {STR.kharchaRepairCost}
       </button>
+    </section>
+  )
+}
+
+/**
+ * The Sehat section of one unit's page (0021): the service line — the
+ * usage meter said in words, with a NEEDS-A-LOOK notice once it passes the
+ * product's threshold — the cycle line for flagged products, the Serviced
+ * door, and the awaaz notes: hold-to-record spoken evidence, played back
+ * inline. Not rendered for terminal gear — a sold camera has no health.
+ */
+function AssetSehatSection({
+  asset,
+  service,
+  voiceNotes,
+  onServiced,
+  onVoiceSave,
+}: {
+  asset: AssetView
+  service: ServiceFacts | null
+  voiceNotes: VoiceNoteRow[]
+  onServiced: () => void
+  onVoiceSave: (rec: AwaazRecording) => AwaazSaveResult
+}) {
+  return (
+    <section className="section">
+      <SectionHead
+        icon="wrench"
+        title={STR.sehatHeading}
+        sub={
+          service && (service.dueAfter !== null || service.daysSinceService > 0)
+            ? STR.sehatSinceLine(service.daysSinceService, service.dueAfter)
+            : undefined
+        }
+      />
+      {service?.due ? (
+        <div className="notice notice-warn">
+          <Icon name="warning" size={18} />
+          <div>
+            <strong>{STR.sehatNeedsALookStamp}</strong>
+          </div>
+        </div>
+      ) : null}
+
+      {service?.countCycles ? (
+        <p className="section-sub">
+          {STR.sehatCycleLine(service.cycleCount, service.retireAfterCycles)}
+        </p>
+      ) : null}
+      {service?.cyclesOver ? (
+        <div className="notice notice-warn">
+          <Icon name="warning" size={18} />
+          <div>
+            <strong>{STR.sehatCycleOverStamp}</strong>
+          </div>
+        </div>
+      ) : null}
+
+      {/* The Serviced door — a write, kept with the other writes and away
+          from the share buttons (adjacency, not size, prevents mis-taps).
+          Always offered: recording a service is legal on any live unit,
+          threshold or not. */}
+      <button className="btn btn-outline btn-block" onClick={onServiced}>
+        <Icon name="wrench" size={18} /> {STR.sehatServicedButton}
+      </button>
+
+      {/* Awaaz notes: spoken evidence, kept like photos, played inline.
+          The device's clock is labelled as the device's, always. */}
+      {voiceNotes.length > 0 ? (
+        <ul className="awaaz-list">
+          {voiceNotes.map((n) => (
+            <li key={n.id}>
+              <audio className="awaaz-audio" controls src={n.localUri} />
+              <p className="awaaz-meta">
+                {STR.awaazRecordedAt(new Date(n.capturedAt).toLocaleString())}
+              </p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="section-sub">{STR.awaazNothingYet}</p>
+      )}
+      <AwaazNote targetLabel={asset.code} onSave={onVoiceSave} />
     </section>
   )
 }
@@ -340,9 +425,13 @@ const EVENT_LABEL: Record<string, string> = {
 export function Asset({
   asset,
   money,
+  service,
+  voiceNotes,
   photoPairs,
   onProveIt,
   onRepairCost,
+  onServiced,
+  onVoiceSave,
   onMarkTerminal,
   onFound,
   onTheftReport,
@@ -350,12 +439,20 @@ export function Asset({
 }: {
   asset: AssetView | null
   money: AssetMoney | null
+  /** The unit's wear facts (0021) — the service and cycle lines. */
+  service: ServiceFacts | null
+  /** Spoken evidence over this unit, newest first — played inline. */
+  voiceNotes: VoiceNoteRow[]
   photoPairs: PhotoPair[]
   /** Share the alibi card built from this item's local history. */
   onProveIt: () => void
   /** Open the kharcha sheet with the kind locked to repair and this unit
    *  pre-wired — the asset page's quick action (0019). */
   onRepairCost: () => void
+  /** Open the Serviced sheet — note + optional cost in one flow (0021). */
+  onServiced: () => void
+  /** Keep a hold-to-record awaaz note about this unit. */
+  onVoiceSave: (rec: AwaazRecording) => AwaazSaveResult
   /** Declare the item lost/stolen/sold — behind the hold-gated disclosure. */
   onMarkTerminal: (d: MarkDisposition, note: string | null, saleMinor: number | null) => void
   /** Bring a terminal item back into the fleet. */
@@ -424,6 +521,18 @@ export function Asset({
       </button>
 
       {money ? <AssetMoneySection money={money} onRepairCost={onRepairCost} /> : null}
+
+      {/* The Sehat section (0021) — wear, service and the spoken record.
+          Terminal gear gets none: a sold camera has no health. */}
+      {asset.presence !== 'gone' ? (
+        <AssetSehatSection
+          asset={asset}
+          service={service}
+          voiceNotes={voiceNotes}
+          onServiced={onServiced}
+          onVoiceSave={onVoiceSave}
+        />
+      ) : null}
 
       <section className="section">
         <SectionHead

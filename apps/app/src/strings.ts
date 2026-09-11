@@ -703,6 +703,62 @@ const STR_EN = {
   fleetGintiReportOkLine: (n: number): string => `${n} matched the book.`,
   fleetGintiReportDecide:
     'Missing items are for you to decide — found elsewhere, or lost.',
+
+  // ---------------------------------------------------------------- sehat
+  // The fleet-health surface (0021; Phase D 1–2/6): the usage-service
+  // nudge, the cycle ceiling and dead stock — a section on the Gear
+  // screen, each row a door to its asset page, plus the asset page's own
+  // service and cycle lines and the Serviced sheet. Groups render only
+  // when non-empty: a health surface with no findings is noise.
+  sehatHeading: 'Sehat',
+  sehatSubtitle: 'What the fleet needs looked at',
+  sehatServiceDue: 'Service due',
+  sehatServiceRow: (days: number, dueAfter: number): string =>
+    `${days} rental days · due at ${dueAfter}`,
+  sehatCyclesOver: 'Past their cycle ceiling',
+  sehatCycleRow: (cycles: number, ceiling: number): string =>
+    `${cycles} cycles · ceiling ${ceiling}`,
+  sehatDeadStock: (days: number): string => `Idle ${days}+ days`,
+  sehatDeadRow: (idleDays: number): string => `idle ${idleDays} days`,
+  // The asset page's service line — the usage meter said in words.
+  sehatSinceLine: (days: number, dueAfter: number | null): string =>
+    dueAfter === null
+      ? `${days} rental days since service`
+      : `${days} rental days since service · due at ${dueAfter}`,
+  sehatNeedsALookStamp: 'Needs a look — past its service point',
+  sehatCycleLine: (cycles: number, ceiling: number | null): string =>
+    ceiling === null ? `${cycles} cycles recorded` : `${cycles} of ${ceiling} cycles`,
+  sehatCycleOverStamp:
+    'Past the cycle ceiling — nothing changes on its own; inspect it',
+  // The Serviced door: note + optional cost in one flow. A cost writes a
+  // repair on the kharcha book named to this unit, and the serviced event
+  // carries the link.
+  sehatServicedButton: 'Serviced',
+  sehatServicedTitle: 'Mark serviced',
+  sehatServicedHint: (code: string): string =>
+    `Resets ${code}’s service clock. A cost also writes a repair in the kharcha book, named to this unit.`,
+  sehatServicedNoteLabel: 'What was done? (optional)',
+  sehatServicedCostLabel: 'Cost (Rs, optional)',
+  sehatServicedConfirm: 'Confirm — serviced',
+
+  // ---------------------------------------------------------------- awaaz
+  // Voice notes (0021; Phase D5 — Bykea's lesson: typing is the barrier).
+  // Hold-to-record on the asset page and the return's discrepancy rows;
+  // stored like condition photos: never evicted un-uploaded, honest
+  // refusal when full, the phone's clock always labelled as the phone's.
+  awaazNote: 'Awaaz note',
+  awaazHold: 'Hold to record',
+  awaazRecording: 'Recording — let go to keep it',
+  awaazSaved: 'Kept on this phone',
+  awaazMicRefused: 'Microphone permission was refused — nothing recorded.',
+  awaazDeviceFull: (waiting: number): string =>
+    `Device full — ${waiting} note${s(waiting)} still waiting to send. ` +
+    'Nothing has been deleted.',
+  awaazCount: (n: number): string => `${n} awaaz note${s(n)}`,
+  awaazNothingYet: 'No awaaz notes yet — hold the button and say it.',
+  awaazRecordedAt: (when: string): string =>
+    `Recorded ${when} — this phone’s clock`,
+  awaazHoldAria: (target: string): string => `Record an awaaz note for ${target}`,
 }
 
 /**

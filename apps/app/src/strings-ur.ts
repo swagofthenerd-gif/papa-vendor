@@ -643,4 +643,48 @@ export const STR_UR: StrTable = {
   fleetGintiReportOkLine: (n: number): string => `${n} kitaab se mil gayin.`,
   fleetGintiReportDecide:
     'Gayab cheezein aap ke faisle par — kahin aur mili, ya gum.',
+
+  // ----------------------------------------------------------------- sehat
+  // 'Sehat' aur 'service due' waise hi rehte hain — trade yehi bolta hai.
+  sehatHeading: 'Sehat',
+  sehatSubtitle: 'Fleet mein kahan dekhna zaroori hai',
+  sehatServiceDue: 'Service due',
+  sehatServiceRow: (days: number, dueAfter: number): string =>
+    `${days} kiraya din · ${dueAfter} par due`,
+  sehatCyclesOver: 'Cycle hadd se aage',
+  sehatCycleRow: (cycles: number, ceiling: number): string =>
+    `${cycles} cycles · hadd ${ceiling}`,
+  sehatDeadStock: (days: number): string => `${days}+ din se pari hui`,
+  sehatDeadRow: (idleDays: number): string => `${idleDays} din se pari hui`,
+  sehatSinceLine: (days: number, dueAfter: number | null): string =>
+    dueAfter === null
+      ? `Service ke baad ${days} kiraya din`
+      : `Service ke baad ${days} kiraya din · ${dueAfter} par due`,
+  sehatNeedsALookStamp: 'Dekhna zaroori — service ka waqt guzar gaya',
+  sehatCycleLine: (cycles: number, ceiling: number | null): string =>
+    ceiling === null ? `${cycles} cycles darj` : `${ceiling} mein se ${cycles} cycles`,
+  sehatCycleOverStamp:
+    'Cycle hadd guzar gayi — khud kuch nahi badalta; aap dekhein',
+  sehatServicedButton: 'Service ho gayi',
+  sehatServicedTitle: 'Service darj karein',
+  sehatServicedHint: (code: string): string =>
+    `${code} ka service clock zero hoga. Cost dein to kharcha kitaab mein marammat bhi likhi jayegi, isi cheez ke naam.`,
+  sehatServicedNoteLabel: 'Kya kaam hua? (optional)',
+  sehatServicedCostLabel: 'Cost (Rs, optional)',
+  sehatServicedConfirm: 'Confirm — service darj karein',
+
+  // ----------------------------------------------------------------- awaaz
+  awaazNote: 'Awaaz note',
+  awaazHold: 'Daba ke rakhein, bolein',
+  awaazRecording: 'Recording — chhorein to mehfooz',
+  awaazSaved: 'Is phone par mehfooz',
+  awaazMicRefused: 'Mic ki ijazat nahi mili — kuch record nahi hua.',
+  awaazDeviceFull: (waiting: number): string =>
+    `Phone bhar gaya — ${waiting} note${waiting === 1 ? '' : 's'} abhi bhejne baaqi. ` +
+    'Kuch delete nahi hua.',
+  awaazCount: (n: number): string => `${n} awaaz note${n === 1 ? '' : 's'}`,
+  awaazNothingYet: 'Abhi koi awaaz note nahi — button daba ke bol dein.',
+  awaazRecordedAt: (when: string): string =>
+    `${when} par record hui — isi phone ki ghari se`,
+  awaazHoldAria: (target: string): string => `${target} ke liye awaaz note record karein`,
 }

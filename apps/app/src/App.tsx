@@ -20,6 +20,8 @@ import { OwedScreen } from './demo/OwedScreen.tsx'
 import { ClosedJobsScreen } from './demo/ClosedJobsScreen.tsx'
 import { GintiScreen } from './demo/GintiScreen.tsx'
 import { SwapSheet } from './demo/SwapSheet.tsx'
+import { ServicedSheet } from './demo/ServicedSheet.tsx'
+import { SehatSection } from './demo/SehatSection.tsx'
 
 /**
  * The app shell.
@@ -87,6 +89,7 @@ function AssetRoute({ store, assetId }: { store: DemoStore; assetId: string }) {
   const [tick, setTick] = useState(0)
   const [repairing, setRepairing] = useState(false)
   const [swapping, setSwapping] = useState(false)
+  const [servicing, setServicing] = useState(false)
   const bump = () => setTick((t) => t + 1)
 
   // tick is read so the lint stays honest that a re-render is the point — the
@@ -118,6 +121,8 @@ function AssetRoute({ store, assetId }: { store: DemoStore; assetId: string }) {
       <Asset
         asset={asset}
         money={money}
+        service={store.serviceFacts(assetId)}
+        voiceNotes={store.voiceNotesFor(assetId)}
         photoPairs={store.photoPairs(assetId)}
         onProveIt={() => {
           const text = store.proveItText(assetId)
@@ -128,6 +133,18 @@ function AssetRoute({ store, assetId }: { store: DemoStore; assetId: string }) {
           if (!win) void navigator.clipboard?.writeText(text).catch(() => {})
         }}
         onRepairCost={() => setRepairing(true)}
+        onServiced={() => setServicing(true)}
+        onVoiceSave={(rec) => {
+          const r = store.captureVoiceNote({
+            assetId,
+            durationMs: rec.durationMs,
+            dataUri: rec.dataUri,
+            bytes: rec.bytes,
+            mime: rec.mime,
+          })
+          bump()
+          return r.ok ? { ok: true as const } : { ok: false as const, waiting: r.waiting }
+        }}
         onMarkTerminal={(disposition, note, saleMinor) => {
           store.markTerminal(assetId, disposition, { note, saleAmountMinor: saleMinor })
           bump()
@@ -152,6 +169,17 @@ function AssetRoute({ store, assetId }: { store: DemoStore; assetId: string }) {
             bump()
           }}
           onClose={() => setRepairing(false)}
+        />
+      ) : null}
+      {servicing && asset ? (
+        <ServicedSheet
+          assetCode={asset.code}
+          onSave={(input) => {
+            store.recordServiced(assetId, input)
+            setServicing(false)
+            bump()
+          }}
+          onClose={() => setServicing(false)}
         />
       ) : null}
       {swapping && asset ? (
@@ -218,6 +246,10 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
             initialQuery={asFilter ? '' : (view.query ?? '')}
             initialFilter={(asFilter ?? 'all') as GearFilter}
           />
+          {/* Sehat (0021): the fleet's health — service due, cycle
+              ceilings, dead stock — on the search surface because fleet
+              health is a gear question, beside the ginti it feeds. */}
+          <SehatSection sehat={store.sehat()} />
           {/* The smallest honest door to finished jobs: off the boards is
               not gone. Lives on the search surface because "where did that
               job go" is a search question. */}

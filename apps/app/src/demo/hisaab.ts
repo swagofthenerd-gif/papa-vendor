@@ -1,8 +1,9 @@
-import { formatRupees, moneyLabel, type SqlDriver } from '@papa/core'
+import { formatRupees, moneyLabel, type MoneyTotal, type SqlDriver } from '@papa/core'
 import {
   assetFacts,
   decodeScanOps,
   dueBoard,
+  sehat,
   type DecodedScanOp,
   type OutDueRow,
 } from './read-model.ts'
@@ -60,6 +61,11 @@ export interface DayAccount {
   /** What the house SPENT today — the expense book's slice of the same
    *  day window (kharcha.ts). Live rows only; a voided pair never shows. */
   kharcha: KharchaSlice
+  /** Idle capital (0021 D4): units on the shelf past the dead-stock
+   *  window, with their replacement value — priced/unpriced split carried
+   *  so the line can never price silence at zero. Empty most days, and
+   *  the line then does not render: no dead stock is a fact, not a row. */
+  deadStock: { items: number; value: MoneyTotal; days: number }
 }
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -187,6 +193,8 @@ export function dayAccount(db: SqlDriver, nowMs: number): DayAccount {
   const trust = (g: DayJobGroup) =>
     g.out.filter((i) => i.assumed).length + g.back.filter((i) => i.assumed).length
 
+  const health = sehat(db, nowMs)
+
   return {
     dayLabel: dayLabel(nowMs),
     wentOut: groups.reduce((n, g) => n + g.out.length, 0),
@@ -197,6 +205,11 @@ export function dayAccount(db: SqlDriver, nowMs: number): DayAccount {
     stillOut: dueBoard(db, nowMs).outJobs,
     jobs: groups,
     kharcha: kharchaBetween(db, startMs, endMs),
+    deadStock: {
+      items: health.deadStock.length,
+      value: health.deadStockValue,
+      days: health.deadStockDays,
+    },
   }
 }
 
@@ -262,6 +275,19 @@ export function dayAccountText(account: DayAccount): string {
           (e.counterparty ? ` — ${e.counterparty}` : ''),
       )
     }
+  }
+
+  if (account.deadStock.items > 0) {
+    // The dead-stock digest line (0021 D4; the MAR wall): idle capital said
+    // in money, only when it exists. The label carries its own '+N
+    // unpriced'; entirely unpriced dead stock gets the count alone.
+    const value = moneyLabel(account.deadStock.value)
+    lines.push('')
+    lines.push(
+      `Idle ${account.deadStock.days}+ days: ${account.deadStock.items} item${
+        account.deadStock.items === 1 ? '' : 's'
+      }` + (value !== null ? ` · ${value}` : ''),
+    )
   }
 
   if (account.stillOut.length > 0) {
