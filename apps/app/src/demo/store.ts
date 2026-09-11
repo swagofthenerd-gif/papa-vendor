@@ -172,7 +172,6 @@ import {
   clearCalendarDay,
   quoteFor,
   quoteForLines,
-  quoteTextFor,
   quoteTextOf,
   rateCard,
   setCalendarDay,
@@ -645,11 +644,6 @@ export class DemoStore {
     customerId: string | null,
   ): QuoteView {
     return quoteForLines(this.db, lines, startMs, endMs, customerId)
-  }
-
-  /** The WhatsApp quote for a booking (null when it is not on this phone). */
-  quoteText(bookingId: string): string | null {
-    return quoteTextFor(this.db, STR, this.seed.houseName, bookingId)
   }
 
   /** The WhatsApp quote for any quote view — an enquiry's included. */

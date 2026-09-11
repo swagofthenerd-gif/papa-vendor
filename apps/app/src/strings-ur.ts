@@ -919,7 +919,6 @@ export const STR_UR: StrTable = {
   quoteOverrideSave: 'Yeh rate lagao',
   quoteOverrideClear: 'Wapas card rate pe',
   quoteOverrideNeedsReason: 'Override ki wajah likhna zaroori hai.',
-  quoteOverrideOriginal: (rate: string): string => `pehle ${rate}`,
   quoteCopied: 'Copy ho gaya — WhatsApp mein paste karo',
   quoteNoLines: 'Price lagane ko kuch nahi — pehle kam az kam aik line resolve karo.',
   quoteDepositHint: (hint: string): string =>
@@ -960,7 +959,6 @@ export const STR_UR: StrTable = {
   quoteRatesListSub: (priced: number, total: number): string => `${total} mein se ${priced} priced`,
   quoteRatesSearch: 'Cheez dhoondo',
   quoteRateUnpriced: 'bina rate',
-  quoteRateRemoveAria: (name: string): string => `${name} ka rate hatao`,
   quoteRateSetAria: (name: string): string => `${name} ka rate set karo`,
   quoteRatePerDay: (rate: string): string => `${rate}/din`,
   quoteCalendarHeading: 'Chhuttiyan aur season',

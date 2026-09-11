@@ -79,7 +79,7 @@ export type {
   Season, EscalationAction, EscalationStep,
 } from './bookings.ts'
 export {
-  priceQuote, quoteText, localDate, addDays, isoWeekday, trimNumber,
+  priceQuote, quoteText, quoteLineName, localDate, addDays, isoWeekday, trimNumber,
   DEFAULT_RATE_CARD_KNOBS, DEFAULT_TIMEZONE,
 } from './pricing.ts'
 export type {

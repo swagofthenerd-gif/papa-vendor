@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '@papa/icons'
-import { bookingDateLabel, formatRupees, whatsAppShareUrl } from '@papa/core'
+import { bookingDateLabel, formatRupees } from '@papa/core'
 import { Shell, SectionHead, SettingsButton } from '../components/Shell.tsx'
 import { HoldToFinish } from '../components/HoldToFinish.tsx'
 import { BookingStamp } from './BookingRows.tsx'
@@ -8,6 +8,7 @@ import { ConfirmSheet } from './ConfirmSheet.tsx'
 import { ExtensionSheet } from './ExtensionSheet.tsx'
 import { QuoteSheet } from './QuoteSheet.tsx'
 import { go, type View } from '../nav.ts'
+import { shareText } from '../share.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 
@@ -70,17 +71,14 @@ export function BookingScreen({ store, bookingId }: { store: DemoStore; bookingI
   const quote = store.quoteFor(bookingId)
 
   const onSendQuote = () => {
-    const text = store.quoteText(bookingId)
-    if (!text) return
-    const win = window.open(whatsAppShareUrl(text), '_blank', 'noopener')
-    if (!win) { void navigator.clipboard?.writeText(text).catch(() => {}); say(STR.quoteCopied) }
+    if (!quote) return
+    if (shareText(store.quoteTextOf(quote)) === 'clipboard') say(STR.quoteCopied)
   }
 
   const onSend = () => {
     const text = store.bookingConfirmText(bookingId, nowMs)
     if (!text) return
-    const win = window.open(whatsAppShareUrl(text), '_blank', 'noopener')
-    if (!win) void navigator.clipboard?.writeText(text).catch(() => {})
+    shareText(text)
   }
 
   const onConvert = () => {

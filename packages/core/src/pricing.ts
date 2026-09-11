@@ -431,7 +431,7 @@ export function quoteText(input: QuoteTextInput, str: QuoteStrings): string {
   out.push(str.days(quote.steps.weekRule.billableDays, quote.steps.billableDays.calendarDays))
   out.push('')
   for (const l of quote.lines) {
-    const name = l.assetCode ? `${l.productName} ${l.assetCode}` : l.productName
+    const name = quoteLineName(l)
     if (l.priced && l.effectiveRateMinor !== null && l.lineTotalMinor !== null) {
       out.push(str.line(name, l.qty, l.billableDays, rs(l.effectiveRateMinor), rs(l.lineTotalMinor)))
     } else {
@@ -449,6 +449,13 @@ export function quoteText(input: QuoteTextInput, str: QuoteStrings): string {
   if (input.paymentLine) out.push(str.payment(input.paymentLine))
   out.push('', str.footer)
   return out.join('\n')
+}
+
+/** How a line is named on the challan and in the message alike: the
+ *  product, then the unit's code when the line is a specific unit
+ *  ('Sony FX9 FX9-01'). One home, so the sheet and the text agree. */
+export function quoteLineName(l: Pick<QuoteLine, 'productName' | 'assetCode'>): string {
+  return l.assetCode ? `${l.productName} ${l.assetCode}` : l.productName
 }
 
 /** '1.25' → '1.25', '1.10' → '1.1', '1.0' → '1' — a multiplier as a person

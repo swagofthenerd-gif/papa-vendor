@@ -765,7 +765,7 @@ export function assetFacts(
     replacement_minor: number | null
   }>(
     `select a.asset_code, coalesce(p.display_name, a.display_name) as display_name,
-            (${DEFAULT_CARD_RATE_SQL}) as day_rate_minor, r.replacement_minor
+            (${defaultCardRateSql('a.product_id')}) as day_rate_minor, r.replacement_minor
        from assets a
        left join products p on p.id = a.product_id
        left join product_rates r on r.product_id = a.product_id
@@ -784,22 +784,23 @@ export function assetFacts(
 }
 
 /**
- * The default rate card's day rate for the product an asset row `a` names
- * — a correlated subquery, so every reader (the asset page, the late-fee
- * draft, the kit-list reply) prices off the ONE rate home (0024 D10:
- * one default card per org; D5: a missing entry is null, never zero).
+ * The default rate card's day rate for the product `productExpr` names —
+ * a bound parameter, or a correlated column such as `a.product_id` — so
+ * every reader (the asset page, the late-fee draft, the kit-list reply)
+ * prices off the ONE rate home (0024 D10: one default card per org; D5:
+ * a missing entry is null, never zero).
  */
-export const DEFAULT_CARD_RATE_SQL = `select e.day_rate_minor from rate_card_entries e
+export function defaultCardRateSql(productExpr: string): string {
+  return `select e.day_rate_minor from rate_card_entries e
         join rate_cards c on c.id = e.rate_card_id
-       where c.is_default = 1 and e.product_id = a.product_id`
+       where c.is_default = 1 and e.product_id = ${productExpr}`
+}
 
 /** A product's day rate on the default card, minor units, or null — 'no
  *  rate', not zero. */
 export function dayRateFor(db: SqlDriver, productId: string): number | null {
   const row = db.get<{ day_rate_minor: number | null }>(
-    `select e.day_rate_minor from rate_card_entries e
-       join rate_cards c on c.id = e.rate_card_id
-      where c.is_default = 1 and e.product_id = ?`,
+    defaultCardRateSql('?'),
     [productId],
   )
   return row?.day_rate_minor === null || row?.day_rate_minor === undefined

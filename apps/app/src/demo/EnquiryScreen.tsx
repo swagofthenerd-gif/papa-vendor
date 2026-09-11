@@ -41,11 +41,8 @@ export function EnquiryScreen({
     const pickup = defaultPickupMs(Date.now())
     return { start: toLocalInput(pickup), end: toLocalInput(defaultReturnMs(pickup)) }
   })
-  const startMs = fromLocalInput(win.start)
-  const endMs = fromLocalInput(win.end)
-  const windowValid = startMs !== null && endMs !== null && endMs > startMs
-  const availabilityWindow: AvailabilityWindow | null =
-    windowValid ? { startMs: startMs as number, endMs: endMs as number } : null
+  const availabilityWindow = windowOf(win.start, win.end)
+  const windowValid = availabilityWindow !== null
   // The turned-away demand log records ONCE per answered list, at the
   // moment the answer is USED (reply copied, or a job made) — a pasted
   // list the owner abandons was a draft, not a turned-away client, and
@@ -64,12 +61,9 @@ export function EnquiryScreen({
   const onWindowChange = useCallback(
     (start: string, end: string) => {
       setWin({ start, end })
-      const a = fromLocalInput(start)
-      const b = fromLocalInput(end)
-      const w = a !== null && b !== null && b > a ? { startMs: a, endMs: b } : null
       // The dates changed under an answered list: re-answer it, so the
       // commitment layer and the reply's quote follow the new window.
-      setSummary((prev) => (prev ? store.recheck(prev.lines, w) : prev))
+      setSummary((prev) => (prev ? store.recheck(prev.lines, windowOf(start, end)) : prev))
     },
     [store],
   )
@@ -184,4 +178,12 @@ export function EnquiryScreen({
       ) : null}
     </>
   )
+}
+
+/** The two datetime-local values as a window, or null while they are
+ *  blank or backwards — the one reading every consumer above shares. */
+function windowOf(start: string, end: string): AvailabilityWindow | null {
+  const a = fromLocalInput(start)
+  const b = fromLocalInput(end)
+  return a !== null && b !== null && b > a ? { startMs: a, endMs: b } : null
 }

@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Icon } from '@papa/icons'
-import { bookingDateLabel, formatRupees, trimNumber, whatsAppShareUrl, type QuoteLine } from '@papa/core'
+import { bookingDateLabel, formatRupees, quoteLineName, trimNumber, type QuoteLine } from '@papa/core'
 import { HoldToFinish } from '../components/HoldToFinish.tsx'
 import type { DemoStore } from './store.ts'
 import type { EnquiryLine, QuoteView } from './quotes.ts'
+import { shareText } from '../share.ts'
 import { STR } from '../strings.ts'
 
 /** What the sheet prices: a booking on this phone, or a kit list that
@@ -111,12 +112,7 @@ export function QuoteSheet({
   }
 
   const onSend = () => {
-    const text = store.quoteTextOf(quote)
-    const win = window.open(whatsAppShareUrl(text), '_blank', 'noopener')
-    if (!win) {
-      void navigator.clipboard?.writeText(text).catch(() => {})
-      setSaid(STR.quoteCopied)
-    }
+    if (shareText(store.quoteTextOf(quote)) === 'clipboard') setSaid(STR.quoteCopied)
   }
 
   return (
@@ -144,7 +140,10 @@ export function QuoteSheet({
         <ul className="line-list quote-lines">
           {quote.lines.map((l, i) => {
             const key = l.lineId ?? `${l.productId ?? 'x'}-${i}`
-            const name = l.assetCode ? `${l.productName} ${l.assetCode}` : l.productName
+            const name = quoteLineName(l)
+            // The card rate the override replaced — struck through beside
+            // the owner's number so the discount is always legible.
+            const struck = l.override?.originalRateMinor ?? null
             return (
               <li key={key} className={`line quote-line${l.priced ? '' : ' is-unpriced'}`}>
                 <span className="line-name">{name}</span>
@@ -152,10 +151,7 @@ export function QuoteSheet({
                   <>
                     <span className="line-code code quote-line-total">{rs(l.lineTotalMinor ?? 0)}</span>
                     <span className="line-note code">
-                      {l.override && l.override.originalRateMinor !== null ? (
-                        <s className="quote-strike">{rs(l.override.originalRateMinor)}</s>
-                      ) : null}
-                      {l.override && l.override.originalRateMinor !== null ? ' ' : ''}
+                      {struck !== null ? <><s className="quote-strike">{rs(struck)}</s>{' '}</> : null}
                       {STR.quoteLineDays(l.qty, l.billableDays, rs(l.effectiveRateMinor))}
                       {l.multiplierApplied && l.multiplier !== 1 ? ` × ${trimNumber(l.multiplier)}` : ''}
                     </span>

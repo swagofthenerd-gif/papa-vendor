@@ -1009,7 +1009,6 @@ const STR_EN = {
   quoteOverrideSave: 'Use this rate',
   quoteOverrideClear: 'Back to the card rate',
   quoteOverrideNeedsReason: 'An override needs a reason.',
-  quoteOverrideOriginal: (rate: string): string => `was ${rate}`,
   quoteCopied: 'Copied — paste it into WhatsApp',
   quoteNoLines: 'Nothing to price — resolve at least one line first.',
   quoteDepositHint: (hint: string): string =>
@@ -1053,7 +1052,6 @@ const STR_EN = {
   quoteRatesListSub: (priced: number, total: number): string => `${priced} of ${total} priced`,
   quoteRatesSearch: 'Search a product',
   quoteRateUnpriced: 'unpriced',
-  quoteRateRemoveAria: (name: string): string => `Remove the rate for ${name}`,
   quoteRateSetAria: (name: string): string => `Set the rate for ${name}`,
   quoteRatePerDay: (rate: string): string => `${rate}/day`,
   quoteCalendarHeading: 'Holidays and seasons',

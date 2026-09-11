@@ -177,6 +177,11 @@ const JOB_CUSTOMER: Record<string, string> = {
 function isoDaysFromNow(days: number): string {
   const d = new Date()
   d.setDate(d.getDate() + days)
+  return localDay(d)
+}
+
+/** Local 'YYYY-MM-DD' — the shape the server's `date` columns mirror. */
+function localDay(d: Date): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const dd = String(d.getDate()).padStart(2, '0')
   return `${d.getFullYear()}-${mm}-${dd}`
@@ -492,13 +497,11 @@ function seedRateCard(db: SqlDriver): void {
   }
   const now = new Date()
   const seasonYear = now.getMonth() <= 1 ? now.getFullYear() - 1 : now.getFullYear()
-  const p2 = (n: number) => String(n).padStart(2, '0')
-  const dayOf = (d: Date) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
   for (let d = new Date(seasonYear, 11, 1); d < new Date(seasonYear + 1, 2, 1); d.setDate(d.getDate() + 1)) {
     db.exec(
       `insert into org_calendar_days (id, org_id, day, kind, name, rate_multiplier)
        values (?, ?, ?, 'season', 'Wedding season', 1.0)`,
-      [`cal-season-${dayOf(d)}`, ORG, dayOf(d)],
+      [`cal-season-${localDay(d)}`, ORG, localDay(d)],
     )
   }
   let eidYear = now.getFullYear()

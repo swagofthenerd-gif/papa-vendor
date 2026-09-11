@@ -372,12 +372,6 @@ export interface QuoteView extends Quote {
   flags: QuoteFlags | null
 }
 
-/** ASSUMPTION: the org timezone until orgs.timezone is mirrored.
- *  See docs/assumptions.md#quote-timezone */
-export function quoteTimezone(): string {
-  return DEFAULT_TIMEZONE
-}
-
 function linesOfBooking(db: SqlDriver, bookingId: string): QuoteLineInput[] {
   return db
     .all<{
@@ -385,7 +379,7 @@ function linesOfBooking(db: SqlDriver, bookingId: string): QuoteLineInput[] {
       rate_minor: number | null; original_rate_minor: number | null; override_reason: string | null
       product_name: string | null; asset_code: string | null
     }>(
-      `select l.id, l.product_id, l.asset_id, l.qty,
+      `select l.id, coalesce(l.product_id, a.product_id) as product_id, l.asset_id, l.qty,
               l.rate_minor, l.original_rate_minor, l.override_reason,
               coalesce(p.display_name, pa.display_name, a.display_name) as product_name,
               a.asset_code
@@ -399,7 +393,7 @@ function linesOfBooking(db: SqlDriver, bookingId: string): QuoteLineInput[] {
     )
     .map((r) => ({
       lineId: r.id,
-      productId: r.product_id ?? productOfAsset(db, r.asset_id),
+      productId: r.product_id,
       productName: r.product_name ?? '',
       assetId: r.asset_id,
       assetCode: r.asset_code,
@@ -408,11 +402,6 @@ function linesOfBooking(db: SqlDriver, bookingId: string): QuoteLineInput[] {
       originalRateMinor: r.original_rate_minor === null ? null : Number(r.original_rate_minor),
       overrideReason: r.override_reason,
     }))
-}
-
-function productOfAsset(db: SqlDriver, assetId: string | null): string | null {
-  if (!assetId) return null
-  return db.get<{ product_id: string | null }>(`select product_id from assets where id = ?`, [assetId])?.product_id ?? null
 }
 
 function runPipeline(
@@ -443,7 +432,7 @@ function runPipeline(
 export function quoteFor(
   db: SqlDriver,
   bookingId: string,
-  timezone: string = quoteTimezone(),
+  timezone: string = DEFAULT_TIMEZONE,
 ): QuoteView | null {
   const b = loadBooking(db, bookingId)
   if (!b) return null
@@ -476,7 +465,7 @@ export function quoteForLines(
   startMs: number,
   endMs: number,
   customerId: string | null,
-  timezone: string = quoteTimezone(),
+  timezone: string = DEFAULT_TIMEZONE,
 ): QuoteView {
   const quote = runPipeline(
     db,
@@ -519,8 +508,12 @@ export function setLineOverride(
   if (rateMinor !== null && !(Number.isFinite(rateMinor) && rateMinor >= 0)) {
     return { ok: false, reason: 'negative' }
   }
-  const line = db.get<{ id: string; booking_id: string; product_id: string | null; asset_id: string | null }>(
-    `select id, booking_id, product_id, asset_id from booking_lines where id = ?`, [lineId],
+  // A unit line names its product through the asset, as linesOfBooking does.
+  const line = db.get<{ id: string; booking_id: string; product_id: string | null }>(
+    `select l.id, l.booking_id, coalesce(l.product_id, a.product_id) as product_id
+       from booking_lines l left join assets a on a.id = l.asset_id
+      where l.id = ?`,
+    [lineId],
   )
   if (!line) return { ok: false, reason: 'not_found' }
   const b = loadBooking(db, line.booking_id)
@@ -528,8 +521,7 @@ export function setLineOverride(
   if (b.status === 'cancelled') return { ok: false, reason: 'cancelled' }
 
   const card = defaultCard(db)
-  const productId = line.product_id ?? productOfAsset(db, line.asset_id)
-  const cardRate = card && productId ? (rateEntries(db, card.id).get(productId) ?? null) : null
+  const cardRate = card && line.product_id ? (rateEntries(db, card.id).get(line.product_id) ?? null) : null
   const rate = rateMinor === null ? null : Math.round(rateMinor)
   const original = rate === null ? null : cardRate
 

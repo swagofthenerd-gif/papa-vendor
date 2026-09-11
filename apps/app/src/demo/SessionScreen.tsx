@@ -8,6 +8,7 @@ import { manifestText } from '../session-summary.ts'
 import { Shell } from '../components/Shell.tsx'
 import { ReversalNotices } from '../components/ReversalNotice.tsx'
 import { go, type View } from '../nav.ts'
+import { shareText } from '../share.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 
@@ -47,12 +48,9 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
 
   const onShare = useCallback(() => {
     if (!summary) return
-    const text = manifestText(summary)
     // WhatsApp where it exists, clipboard where it does not. Both end with the
     // list in the client's chat, which is the only outcome that matters.
-    const url = `https://wa.me/?text=${encodeURIComponent(text)}`
-    const win = window.open(url, '_blank', 'noopener')
-    if (!win) void navigator.clipboard?.writeText(text).catch(() => {})
+    shareText(manifestText(summary))
   }, [summary])
 
   if (!summary) {

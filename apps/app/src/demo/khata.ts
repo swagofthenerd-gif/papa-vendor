@@ -5,13 +5,14 @@ import {
   monthBounds,
   projectLedger,
   paybackPercent,
+  type DepositHint,
   type KhataStrings,
   type LedgerEntryKind,
   type LedgerEntryView,
   type MoneyTotal,
   type SqlDriver,
 } from '@papa/core'
-import { DEFAULT_CARD_RATE_SQL, decodeScanOps, lastSessionRecord, openJob } from './read-model.ts'
+import { defaultCardRateSql, decodeScanOps, lastSessionRecord, openJob } from './read-model.ts'
 import { assetCosts } from './kharcha.ts'
 import type { StrTable } from '../strings.ts'
 
@@ -553,7 +554,7 @@ export function lateFeeDraftFor(
 
   const rates = [...new Set([...outIds, ...returned])].map((id) => {
     const r = db.get<{ day_rate_minor: number | null }>(
-      `select (${DEFAULT_CARD_RATE_SQL}) as day_rate_minor from assets a where a.id = ?`,
+      `select (${defaultCardRateSql('a.product_id')}) as day_rate_minor from assets a where a.id = ?`,
       [id],
     )
     return r?.day_rate_minor === null || r?.day_rate_minor === undefined
@@ -658,9 +659,6 @@ export function turnedAwayThisMonth(
 
 // ------------------------------------------------------ the fast-lane flags
 
-/** The deposit ladder (0025 D10). ASSUMPTION: see docs/assumptions.md#deposit-hint */
-export type DepositHintKind = 'refuse' | 'lighter' | 'standard' | 'full'
-
 /**
  * The phone's mirror of customer_quote_flags (0025 D10) — the same
  * shape, the same ladder: {verified, cleanHistory, blacklisted, fastLane,
@@ -675,7 +673,8 @@ export interface QuoteFlags {
   blacklisted: boolean
   fastLane: boolean
   cleanCompletedJobs: number
-  depositHint: DepositHintKind
+  /** The deposit ladder (0025 D10). ASSUMPTION: see docs/assumptions.md#deposit-hint */
+  depositHint: DepositHint
 }
 
 /**
@@ -710,7 +709,7 @@ export function quoteFlags(db: SqlDriver, customerId: string): QuoteFlags | null
   const blacklisted = Number(c.blacklisted) === 1
   const fastLane = verified && !blacklisted && cleanCompletedJobs >= 1 && noOpenShortfall
   // ASSUMPTION: the deposit ladder. See docs/assumptions.md#deposit-hint
-  const depositHint: DepositHintKind = blacklisted ? 'refuse'
+  const depositHint: DepositHint = blacklisted ? 'refuse'
     : fastLane ? 'lighter'
     : verified ? 'standard'
     : 'full'

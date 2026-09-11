@@ -5,11 +5,11 @@ import {
   formatRupees,
   ledgerDate,
   signedRupees,
-  whatsAppShareUrl,
 } from '@papa/core'
 import { Shell, SectionHead } from '../components/Shell.tsx'
 import { ReversalNotices } from '../components/ReversalNotice.tsx'
 import { go, type View } from '../nav.ts'
+import { shareText } from '../share.ts'
 import { DueBadge } from '../routes/Today.tsx'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
@@ -58,8 +58,7 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
   const onSendBalance = () => {
     const text = store.balanceText(customerId)
     if (!text) return
-    const win = window.open(whatsAppShareUrl(text), '_blank', 'noopener')
-    if (!win) void navigator.clipboard?.writeText(text).catch(() => {})
+    shareText(text)
   }
 
   const onCopyStatement = () => {
