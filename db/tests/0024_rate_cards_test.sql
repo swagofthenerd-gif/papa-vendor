@@ -178,12 +178,14 @@ select is(
     where c.id = (select id from _cards where k = 'A')),
   3::numeric, 'week_equals_days defaults to 3 (ASSUMPTION #week-rate)');
 
--- Card B: weekend-free (the default mask).
-insert into _cards select 'B', (upsert_rate_card('Weekend free') ->> 'id')::uuid;
+-- Card B: weekend-free, opted in explicitly (the default bills every day).
+insert into _cards select 'B', (upsert_rate_card('Weekend free', p_weekend_mask => '{6,7}') ->> 'id')::uuid;
 
 select is(
-  (select c.weekend_mask from rate_cards c where c.id = (select id from _cards where k = 'B')),
-  '{6,7}'::int[], 'weekend_mask defaults to Sat/Sun (ASSUMPTION #weekend)');
+  (select column_default from information_schema.columns
+    where table_schema = 'public' and table_name = 'rate_cards'
+      and column_name = 'weekend_mask'),
+  $$'{}'::integer[]$$, 'weekend_mask defaults to empty: every day bills (ASSUMPTION #weekend-free)');
 
 select is(
   (select c.is_default from rate_cards c where c.id = (select id from _cards where k = 'B')),

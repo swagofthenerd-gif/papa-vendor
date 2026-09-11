@@ -41,17 +41,20 @@
 --       runs; "every calendar date touched" would bill the return
 --       morning, which no desk would defend.
 --
---   D3  THE WEEKEND MASK IS ON THE CARD, AND IT DROPS DAYS. weekend_mask
---       lists the ISO weekdays (1 = Monday … 7 = Sunday) that do NOT
---       count as billable days; default {6,7} — Saturday and Sunday, with
---       Friday a full day (ASSUMPTION #weekend). Whether a Lahore house
---       actually gives the weekend away is the open half of that
---       assumption (#weekend-free); the trace names every dropped date so
---       the owner sees exactly what was given. A weekend-only job still
---       bills min_billable_days. It lives on the card, not in
---       orgs.settings, because a house may run one card that gives the
---       weekend and one that does not (the 0001 comment predates the
---       card; the card is the one home now).
+--   D3  THE WEEKEND MASK IS ON THE CARD, OPT-IN, AND IT DROPS DAYS.
+--       weekend_mask lists the ISO weekdays (1 = Monday … 7 = Sunday)
+--       that do NOT count as billable days. DEFAULT '{}' — every day
+--       bills. The sourced "weekend = one day" rule is a US convention;
+--       in Lahore the highest-value jobs are shaadi weekends, and a
+--       default that quietly gave Saturday and Sunday away would be an
+--       under-bill no client ever reports (ASSUMPTION #weekend-free: a
+--       house that does give the weekend away sets {6,7} on its card,
+--       with Friday a full day per #weekend). The trace names every
+--       dropped date so the owner sees exactly what was given. A
+--       weekend-only job still bills min_billable_days. It lives on the
+--       card, not in orgs.settings, because a house may run one card
+--       that gives the weekend and one that does not (the 0001 comment
+--       predates the card; the card is the one home now).
 --
 --   D4  THE 3-DAY WEEK (ASSUMPTION #week-rate). week_equals_days is
 --       numeric, default 3, per card. billable = weeks × W + least(
@@ -147,9 +150,10 @@ create table if not exists rate_cards (
   week_equals_days   numeric(4,2) not null default 3,
   min_billable_days  integer not null default 1,
 
-  -- ASSUMPTION: Sat/Sun are the weekend and are not billed; Friday is a
-  -- full day. See docs/assumptions.md#weekend and #weekend-free.
-  weekend_mask       integer[] not null default '{6,7}',
+  -- ASSUMPTION: every day bills unless the card opts a weekend out
+  -- ({6,7} = Sat/Sun, Friday a full day). See docs/assumptions.md#weekend
+  -- and #weekend-free.
+  weekend_mask       integer[] not null default '{}',
 
   created_by   uuid references users(id) on delete restrict,
   created_at   timestamptz not null default now(),
@@ -173,7 +177,7 @@ create unique index if not exists rate_cards_one_default_idx
 comment on table rate_cards is
   'A price list (0024): the 3-day week, the minimum bill, the weekend mask — per card, one default per org (D10). Entries in rate_card_entries. Writes only through upsert_rate_card.';
 comment on column rate_cards.weekend_mask is
-  'ISO weekdays (1=Mon..7=Sun) that do NOT count as billable days (D3). Default {6,7}. ASSUMPTION #weekend / #weekend-free.';
+  'ISO weekdays (1=Mon..7=Sun) that do NOT count as billable days (D3). Default {} — every day bills; {6,7} opts the weekend out. ASSUMPTION #weekend / #weekend-free.';
 comment on column rate_cards.week_equals_days is
   'How many day-rates a full 7-day block bills (D4). ASSUMPTION #week-rate: 3.';
 
@@ -636,7 +640,7 @@ begin
     values (v_org, trim(p_name), v_make_default,
             coalesce(p_week_equals_days, 3),
             coalesce(p_min_billable_days, 1),
-            coalesce(p_weekend_mask, '{6,7}'),
+            coalesce(p_weekend_mask, '{}'),
             v_user)
     returning * into v_row;
 
