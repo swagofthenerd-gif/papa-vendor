@@ -78,6 +78,15 @@ export type {
   WeightedInterval, BookingAvailability, ExtensionCollision, PromisedSoon,
   Season, EscalationAction, EscalationStep,
 } from './bookings.ts'
+export {
+  priceQuote, quoteText, localDate, addDays, isoWeekday, trimNumber,
+  DEFAULT_RATE_CARD_KNOBS, DEFAULT_TIMEZONE,
+} from './pricing.ts'
+export type {
+  CalendarKind, RateCardKnobs, RateCardInfo, CalendarDayInput, QuoteLineInput, QuoteStatus,
+  PriceQuoteInput, IndicativeReason, QuoteLine, QuoteTotals, QuoteSteps, Quote,
+  DepositHint, QuoteStrings, QuoteTextInput,
+} from './pricing.ts'
 export { dueStatus, parseDueDate, compareDueDates, compareJobsByDue } from './overdue.ts'
 export type { DueState, DueStatus } from './overdue.ts'
 export { FEEDBACK, ERROR_FEEDBACK, firstBuzzMs, hapticDurationMs } from './feedback.ts'
