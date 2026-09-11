@@ -12,7 +12,7 @@
 #
 set -euo pipefail
 
-CONTAINER=papa-pg-migrate-test
+CONTAINER="${PAPA_PG_CONTAINER:-papa-pg-migrate-test}"
 IMAGE=docker.io/library/postgres:16-bookworm
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
