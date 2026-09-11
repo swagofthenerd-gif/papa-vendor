@@ -191,23 +191,30 @@ the extension-collision preview will matter, but plain
 allocation-awareness in `createJob` is the bleeding edge and could ship
 device-side sooner.
 
-### 3. No expense side of the book — OCT, JAN, APR, JUN (and implicitly all year)
-`no-expense-book`, `no-subrent-intake`
+### 3. No expense side of the book — SHIPPED as the kharcha book (0019)
 
-The ledger is customer-only. Over the year the house paid out: a camera
-repair (Rs 45,000), a partner house for two sub-rented lights, replacement
-cables. **None of it is recordable anywhere**, so "what did the year
-actually make" — the vendor's-dream question — is structurally
-unanswerable, and the APR sub-rent had to be faked by importing the
-partner's lights as *owned* assets (they now pollute the fleet, the
-availability counts and any future stocktake; `ownership='subrented'` and
-containment kind `subrented` exist in the schema and nothing sets them).
+Was `no-expense-book`, `no-subrent-intake` — hit OCT, JAN, APR, JUN and
+implicitly all year: the ledger was customer-only, so the Rs 45,000
+camera repair, the partner house's sub-hire bill and the replacement
+cables landed on **no book at all** and "what did the year actually
+make" was structurally unanswerable. Shipped end to end: `org_expenses`
+(migration 0019 — append-only like the ledger, six kinds, every amount
+positive, reversals void a pair forward-only, desk-tier writes through
+the shared money budget, invisible to warehouse phones) with its client
+twin (`demo/kharcha.ts` + the entry sheet); a repair names the camera it
+fixed and the payback bar's denominator honestly carries it, a sub-hire
+names the job it rescued and the handover shows the margin, the hisaab
+gained a Kharcha section and a double-ruled month profit line
+(earned − spent), and the server answers the same questions through
+`job_margin`, `asset_cost_history` and `monthly_profit`. The simulation
+now records the JAN repair, the OCT cable purchase and the APR sub-hire
+on the real book and asserts every margin; both ids are retired.
 
-*Plan check:* the plan defers sub-rental costs to C4 (margin-before-quote)
-and E1 (cross-hire). Lived evidence: the *intake* half (mark gear as a
-partner's, with a cost line) is needed the first time Eid demand exceeds
-the shelf, independent of quoting. A minimal `expense` ledger kind +
-sub-rent intake flag belongs in late B / early C, not E.
+One deliberate remainder: the borrowed lights themselves still enter by
+import stamped `ownership='owned'` — the partner's BILL is on the book,
+but nothing yet sets `ownership='subrented'` on the units, so a
+stocktake still counts them as fleet. That intake flag rides with Phase
+E1 (cross-hire), where the partner list lives.
 
 ### 4. No terminal state for gear — OCT, FEB, JUL, AUG
 `no-terminal-asset-state`, `no-blacklist-or-theft-export`
