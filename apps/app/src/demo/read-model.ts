@@ -175,6 +175,21 @@ export interface OpenJobRow {
   customer: { id: string; name: string } | null
   /** Asset ids this job promises, from job_expected. */
   expected: string[]
+  // --- network --- (0025 D8): the crew line, display names in assignment
+  // order, [] when nobody is on it. Read off jobs.attendant_names — the
+  // one home, the projection the server syncs (network.ts rewrites it).
+  attendantNames: string[]
+}
+
+/** jobs.attendant_names as a string list; anything unparseable is nobody. */
+function parseAttendantNames(raw: string | null): string[] {
+  if (!raw) return []
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
 }
 
 /**
@@ -203,9 +218,10 @@ export function openJobs(db: SqlDriver): OpenJobRow[] {
     departs_at: string | null
     customer_id: string | null
     customer_name: string | null
+    attendant_names: string | null
   }>(
     `select j.id, j.label, j.contact, j.expected_back, m.departs_at,
-            c.id as customer_id, c.name as customer_name
+            c.id as customer_id, c.name as customer_name, j.attendant_names
        from jobs j
        left join job_meta m on m.job_id = j.id
        left join customers c on c.id = j.customer_id
@@ -233,6 +249,7 @@ export function openJobs(db: SqlDriver): OpenJobRow[] {
           ? { id: r.customer_id, name: r.customer_name }
           : null,
       expected: expected.get(r.id) ?? [],
+      attendantNames: parseAttendantNames(r.attendant_names), // --- network ---
     }))
     .sort(compareJobsByDeparture)
 }
