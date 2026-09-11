@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '@papa/icons'
-import { bookingDateLabel, whatsAppShareUrl } from '@papa/core'
+import { bookingDateLabel, formatRupees } from '@papa/core'
 import { Shell, SectionHead, SettingsButton } from '../components/Shell.tsx'
 import { HoldToFinish } from '../components/HoldToFinish.tsx'
 import { BookingStamp } from './BookingRows.tsx'
 import { ConfirmSheet } from './ConfirmSheet.tsx'
 import { ExtensionSheet } from './ExtensionSheet.tsx'
+import { QuoteSheet } from './QuoteSheet.tsx'
 import { go, type View } from '../nav.ts'
+import { shareText } from '../share.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 
@@ -30,7 +32,7 @@ export function BookingScreen({ store, bookingId }: { store: DemoStore; bookingI
   const view: View = { name: 'booking', bookingId }
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [, setTick] = useState(0)
-  const [sheet, setSheet] = useState<'confirm' | 'extend' | null>(null)
+  const [sheet, setSheet] = useState<'confirm' | 'extend' | 'quote' | null>(null)
   const [said, setSaid] = useState<string | null>(null)
   const [cancelReason, setCancelReason] = useState('')
   const [cancelOpen, setCancelOpen] = useState(false)
@@ -66,12 +68,17 @@ export function BookingScreen({ store, bookingId }: { store: DemoStore; bookingI
 
   const live = b.stamp === 'pencil' || b.stamp === 'confirmed' || b.stamp === 'draft'
   const confirmed = b.stamp === 'confirmed'
+  const quote = store.quoteFor(bookingId)
+
+  const onSendQuote = () => {
+    if (!quote) return
+    if (shareText(store.quoteTextOf(quote)) === 'clipboard') say(STR.quoteCopied)
+  }
 
   const onSend = () => {
     const text = store.bookingConfirmText(bookingId, nowMs)
     if (!text) return
-    const win = window.open(whatsAppShareUrl(text), '_blank', 'noopener')
-    if (!win) void navigator.clipboard?.writeText(text).catch(() => {})
+    shareText(text)
   }
 
   const onConvert = () => {
@@ -175,6 +182,37 @@ export function BookingScreen({ store, bookingId }: { store: DemoStore; bookingI
         </ul>
       </section>
 
+      {quote && live ? (
+        <section className="section quote-section">
+          <SectionHead
+            icon="receipt"
+            title={STR.quoteSectionHeading}
+            sub={STR.quoteSectionSub(quote.steps.weekRule.billableDays)}
+          />
+          <div className="quote-head">
+            <span className="code quote-figure">
+              {formatRupees(quote.totals.subtotalMinor)}
+              {quote.totals.unpricedCount > 0
+                ? <span className="tally-short"> {STR.quoteTotalUnpriced(quote.totals.unpricedCount)}</span> : null}
+            </span>
+            <span className="quote-stamps">
+              {quote.totals.indicative
+                ? <span className="stamp stamp-pencil stamp-small">{STR.quoteStampIndicative}</span> : null}
+              {quote.flags?.verified && !quote.flags.blacklisted
+                ? <span className="stamp stamp-small">{STR.quoteStampVerified}</span> : null}
+            </span>
+          </div>
+          <div className="enquiry-foot">
+            <button className="btn btn-outline" onClick={() => setSheet('quote')}>
+              <Icon name="receipt" size={18} /> {STR.quoteDoorPrice}
+            </button>
+            <button className="btn btn-ghost" onClick={onSendQuote}>
+              <Icon name="send" size={18} /> {STR.quoteDoorSendQuote}
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       {b.note ? (
         <section className="section">
           <SectionHead icon="scroll" title={STR.bookingNoteHeading} />
@@ -257,6 +295,14 @@ export function BookingScreen({ store, bookingId }: { store: DemoStore; bookingI
             say(codes ? `${STR.bookingConfirmed(b.bookingNo)} — ${STR.bookingConfirmedWith(codes)}` : STR.bookingConfirmed(b.bookingNo))
           }}
           onClose={() => setSheet(null)}
+        />
+      ) : null}
+      {sheet === 'quote' ? (
+        <QuoteSheet
+          store={store}
+          source={{ kind: 'booking', bookingId }}
+          onClose={() => { setSheet(null); refresh() }}
+          onChanged={refresh}
         />
       ) : null}
       {sheet === 'extend' ? (

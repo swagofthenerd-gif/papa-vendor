@@ -9,7 +9,7 @@ import { NewJobSheet } from './NewJobSheet.tsx'
 import { KhataChargeSheet } from './SessionScreen.tsx'
 // --- network --- (0025 D7): the crew picker.
 import { CrewPickerSheet } from './CrewChips.tsx'
-import { whatsAppShareUrl } from '@papa/core'
+import { shareText } from '../share.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 
@@ -106,8 +106,7 @@ export function TodayScreen({ store }: { store: DemoStore }) {
           const text = store.escalateToManager(jobId, now)
           refresh()
           if (!text) return
-          const win = window.open(whatsAppShareUrl(text), '_blank', 'noopener')
-          if (!win) void navigator.clipboard?.writeText(text).catch(() => {})
+          shareText(text)
         }}
         // --- network --- (0025 D7): crew on and off the card.
         onAddCrew={(jobId) => setCrewFor(jobId)}

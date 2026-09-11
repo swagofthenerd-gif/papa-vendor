@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { Icon } from '@papa/icons'
-import { parsePhoneNumber, whatsAppNudgeUrl, whatsAppShareUrl } from '@papa/core'
+import { parsePhoneNumber } from '@papa/core'
+import { shareText } from '../share.ts'
 import type { PartnerRow } from './network.ts'
 import { STR } from '../strings.ts'
 
@@ -49,10 +50,10 @@ export function PartnerSendSheet({
     })
 
   const send = (p: PartnerRow) => {
-    const phone = parsePhoneNumber(p.phone)
-    const url = phone ? whatsAppNudgeUrl(phone, text) : whatsAppShareUrl(text)
-    const win = window.open(url, '_blank', 'noopener')
-    if (!win) void navigator.clipboard?.writeText(text).catch(() => {})
+    // The app's one sharing rule (share.ts): that house's thread when the
+    // number parses, the share-to-anyone link when it does not, clipboard
+    // where WhatsApp is missing.
+    shareText(text, parsePhoneNumber(p.phone))
     setSent((prev) => new Set(prev).add(p.id))
   }
 

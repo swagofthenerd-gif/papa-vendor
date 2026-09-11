@@ -35,6 +35,13 @@ export function SettingsScreen({ store }: { store: DemoStore }) {
       <PartnersSection store={store} />
 
       <section className="section">
+        <SectionHead icon="receipt" title={STR.quoteRatesDoor} sub={STR.quoteRatesDoorSub} />
+        <button className="btn btn-outline btn-block" onClick={() => go({ name: 'rates' })}>
+          <Icon name="receipt" size={18} /> {STR.quoteRatesTitle}
+        </button>
+      </section>
+
+      <section className="section">
         <SectionHead icon="scroll" title={STR.labelsLoadYourGear} sub={STR.labelsImportSubtitle} />
         <button className="btn btn-outline btn-block" onClick={() => go({ name: 'import' })}>
           <Icon name="scroll" size={18} /> {STR.labelsImportDoor}

@@ -37,13 +37,15 @@ import {
  * session was reconciling against), so a finished session's handover summary
  * can be rebuilt after the in-memory session is gone.
  *
- * `product_rates` — day rate and replacement value per product, MINOR units
- * (paisa), following the server's `_minor` convention. A demo-side table for
- * the same reason as `job_meta`: the `products` mirror's shape is the
- * server's, and the server keeps money in rate cards (phase 2), not on the
- * product row. Both columns nullable ON PURPOSE — a product with no rate
- * reports 'no rate' and is counted as unpriced in every total, never priced
- * at zero.
+ * `product_rates` — replacement value per product, MINOR units (paisa),
+ * following the server's `_minor` convention. A demo-side table for the
+ * same reason as `job_meta`: the `products` mirror's shape is the server's
+ * and replacement_value_minor is not in the pull projection yet. The DAY
+ * RATE no longer lives here: since 0024/0026 the rate card is the one
+ * home (rate_card_entries on the default card, mirrored in LOCAL_SCHEMA),
+ * and dayRateFor below reads it. Nullable ON PURPOSE — a product with no
+ * value reports 'no value' and is counted as unpriced in every total,
+ * never priced at zero.
  */
 export const DEMO_SCHEMA = /* sql */ `
 create table if not exists job_expected (
@@ -73,7 +75,6 @@ create index if not exists scan_sessions_job_idx on scan_sessions (job_id, start
 
 create table if not exists product_rates (
   product_id        text primary key,
-  day_rate_minor    integer,
   replacement_minor integer
 );
 
@@ -138,9 +139,13 @@ create table if not exists org_expenses (
   counterparty text,
   note         text,
   reversal_of  text,
+  -- The booking this cost belongs to (0024 D9): the sub-hired lens, the
+  -- transport to set — summed into the quote's margin line.
+  booking_id   text,
   created_at   integer not null
 );
 create index if not exists expenses_created_idx on org_expenses (created_at);
+create index if not exists expenses_booking_idx on org_expenses (booking_id);
 create index if not exists expenses_asset_idx on org_expenses (asset_id);
 create index if not exists expenses_job_idx on org_expenses (job_id);
 
@@ -777,7 +782,7 @@ export function assetFacts(
     replacement_minor: number | null
   }>(
     `select a.asset_code, coalesce(p.display_name, a.display_name) as display_name,
-            r.day_rate_minor, r.replacement_minor
+            (${defaultCardRateSql('a.product_id')}) as day_rate_minor, r.replacement_minor
        from assets a
        left join products p on p.id = a.product_id
        left join product_rates r on r.product_id = a.product_id
@@ -795,10 +800,24 @@ export function assetFacts(
     : undefined
 }
 
-/** A product's day rate in minor units, or null — 'no rate', not zero. */
+/**
+ * The default rate card's day rate for the product `productExpr` names —
+ * a bound parameter, or a correlated column such as `a.product_id` — so
+ * every reader (the asset page, the late-fee draft, the kit-list reply)
+ * prices off the ONE rate home (0024 D10: one default card per org; D5:
+ * a missing entry is null, never zero).
+ */
+export function defaultCardRateSql(productExpr: string): string {
+  return `select e.day_rate_minor from rate_card_entries e
+        join rate_cards c on c.id = e.rate_card_id
+       where c.is_default = 1 and e.product_id = ${productExpr}`
+}
+
+/** A product's day rate on the default card, minor units, or null — 'no
+ *  rate', not zero. */
 export function dayRateFor(db: SqlDriver, productId: string): number | null {
   const row = db.get<{ day_rate_minor: number | null }>(
-    `select day_rate_minor from product_rates where product_id = ?`,
+    defaultCardRateSql('?'),
     [productId],
   )
   return row?.day_rate_minor === null || row?.day_rate_minor === undefined

@@ -196,13 +196,20 @@ create table if not exists bookings (
 create index if not exists bookings_status_idx on bookings (status);
 create index if not exists bookings_customer_idx on bookings (customer_id);
 
+-- rate_minor / original_rate_minor / override_reason arrive with 0026
+-- (the 0024 D8 override columns): the owner's last word on a line's day
+-- rate, the card rate it replaced, and why. Null rate_minor = price from
+-- the card. Same create-if-not-exists caveat as every column since 0018.
 create table if not exists booking_lines (
-  id          text primary key,
-  org_id      text not null,
-  booking_id  text not null,
-  product_id  text,
-  asset_id    text,
-  qty         integer not null default 1
+  id                  text primary key,
+  org_id              text not null,
+  booking_id          text not null,
+  product_id          text,
+  asset_id            text,
+  qty                 integer not null default 1,
+  rate_minor          integer,
+  original_rate_minor integer,
+  override_reason     text
 );
 create index if not exists booking_lines_booking_idx on booking_lines (booking_id);
 
@@ -241,6 +248,53 @@ create table if not exists stock_lots (
   qty_on_hand  integer not null default 0
 );
 create index if not exists stock_lots_product_idx on stock_lots (product_id);
+
+/*
+ * The rate card and the org calendar (0024, projected by 0026) — what the
+ * phone's quote pipeline (packages/core/src/pricing.ts) reads so a pasted
+ * kit list can be priced offline with the server's own numbers.
+ *
+ * weekend_mask is the server's integer[] carried as JSON text ('[6,7]');
+ * numerics (week_equals_days, rate_multiplier) are stored as REAL. The
+ * server role-gates rate_cards and rate_card_entries to owner/manager/
+ * desk in RLS, so a warehouse phone's pull simply carries none — the
+ * price list never reaches the floor; the calendar reaches everyone
+ * (season shading is useful on every screen).
+ *
+ * Optimistically authored like the reservation mirrors: setRate /
+ * setCalendarDay (apps/app/src/demo/quotes.ts) write here while they
+ * queue the 0024 RPC op, so the desk's next quote reads the number it
+ * just typed.
+ */
+create table if not exists rate_cards (
+  id                 text primary key,
+  org_id             text not null,
+  name               text not null,
+  is_default         integer not null default 0,
+  week_equals_days   real not null default 3,
+  min_billable_days  integer not null default 1,
+  weekend_mask       text not null default '[]',
+  updated_at         text
+);
+
+create table if not exists rate_card_entries (
+  id              text primary key,
+  org_id          text not null,
+  rate_card_id    text not null,
+  product_id      text not null,
+  day_rate_minor  integer not null
+);
+create index if not exists rate_card_entries_card_idx on rate_card_entries (rate_card_id, product_id);
+
+create table if not exists org_calendar_days (
+  id               text primary key,
+  org_id           text not null,
+  day              text not null,
+  kind             text not null,
+  name             text not null,
+  rate_multiplier  real not null default 1
+);
+create index if not exists org_calendar_days_day_idx on org_calendar_days (day);
 
 -- ---------------------------------------------------------------------------
 -- --- network --- (0025). Desk-side tables that NEVER sync: partner_houses
@@ -440,5 +494,5 @@ export const DEVICE_ONLY_TABLES = [
 export const MIRROR_TABLES = [
   'assets', 'asset_tags', 'asset_containment', 'locations', 'jobs', 'products',
   'bookings', 'booking_lines', 'asset_reservations', 'stock_reservations',
-  'stock_lots',
+  'stock_lots', 'rate_cards', 'rate_card_entries', 'org_calendar_days',
 ] as const

@@ -26,6 +26,7 @@ export type View =
   | { name: 'import' }                           // load the house's catalogue
   | { name: 'ginti' }                            // cycle count: shelf vs book
   | { name: 'settings' }
+  | { name: 'rates' }                            // Settings → the rate card and calendar
   | { name: 'partner'; partnerId: string }       // --- network --- one partner house
 
 /**
@@ -90,7 +91,9 @@ export function parseHash(hash: string): View {
     case 'ginti':
       return { name: 'ginti' }
     case 'settings':
-      return { name: 'settings' }
+      return parts[1] === 'rates' ? { name: 'rates' } : { name: 'settings' }
+    case 'rates':
+      return { name: 'rates' }
     // --- network ---
     case 'partner':
       return parts[1] ? { name: 'partner', partnerId: parts[1] } : { name: 'settings' }
@@ -131,6 +134,8 @@ export function viewToHash(view: View): string {
       return '#/ginti'
     case 'settings':
       return '#/settings'
+    case 'rates':
+      return '#/settings/rates'
     // --- network ---
     case 'partner':
       return `#/partner/${view.partnerId}`
