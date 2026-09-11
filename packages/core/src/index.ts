@@ -50,6 +50,8 @@ export type {
   LedgerEntryKind, LedgerEntryView, LedgerProjection, KhataStrings,
   BalanceCardInput, StatementInput,
 } from './ledger.ts'
+export { EXPENSE_KINDS, liveExpenses, totalExpenses } from './expenses.ts'
+export type { ExpenseKind, ExpenseView } from './expenses.ts'
 export { dueStatus, parseDueDate, compareDueDates, compareJobsByDue } from './overdue.ts'
 export type { DueState, DueStatus } from './overdue.ts'
 export { FEEDBACK, ERROR_FEEDBACK, firstBuzzMs, hapticDurationMs } from './feedback.ts'

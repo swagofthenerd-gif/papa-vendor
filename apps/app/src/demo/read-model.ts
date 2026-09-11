@@ -110,6 +110,28 @@ create table if not exists customer_ledger_entries (
 create index if not exists ledger_customer_idx on customer_ledger_entries (customer_id, created_at);
 create index if not exists ledger_asset_idx on customer_ledger_entries (asset_id);
 
+-- The expense side of the book (0019): what the HOUSE paid out — repairs,
+-- sub-hire, purchases. Mirrors the server's org_expenses shape. Same
+-- append-only discipline as the ledger: nothing updates or deletes a row;
+-- a mistake is voided by a further row naming it (reversal_of, void-PAIR
+-- semantics — both rows leave every sum; see @papa/core expenses.ts).
+-- Every amount is positive; profit is always a read.
+create table if not exists org_expenses (
+  id           text primary key,
+  org_id       text not null,
+  kind         text not null,
+  amount_minor integer not null,
+  asset_id     text,
+  job_id       text,
+  counterparty text,
+  note         text,
+  reversal_of  text,
+  created_at   integer not null
+);
+create index if not exists expenses_created_idx on org_expenses (created_at);
+create index if not exists expenses_asset_idx on org_expenses (asset_id);
+create index if not exists expenses_job_idx on org_expenses (job_id);
+
 -- The turned-away demand log: one row per shortage the enquiry answer was
 -- actually USED for (reply copied, or a job made) — the buy signal.
 create table if not exists demand_log (
