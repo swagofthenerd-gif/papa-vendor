@@ -425,6 +425,10 @@ body {
 .sheet {
   display: flex; flex-direction: column;
   width: 100%; max-height: 82dvh;
+  /* A sheet taller than the phone scrolls INSIDE its 82dvh: without this
+     the challan's foot (Book it, the override door) and a long booking
+     sheet's submit ran off the bottom of the screen, unreachable. */
+  overflow-y: auto; overscroll-behavior: contain;
   padding: var(--sp-4);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   background: var(--card); color: var(--ink);

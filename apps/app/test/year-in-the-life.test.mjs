@@ -62,6 +62,8 @@ import {
   overdueNudgeMessage,
   formatRupees,
   moneyLabel,
+  localDate,
+  DEFAULT_TIMEZONE,
 } from '@papa/core'
 import { seedDemo, demoCatalogue } from '../src/demo/seed.ts'
 import {
@@ -111,6 +113,13 @@ import {
   monthProfit,
   recordExpense,
 } from '../src/demo/kharcha.ts'
+import {
+  quoteFor,
+  quoteForLines,
+  quoteTextOf,
+  setCalendarDay,
+  setLineOverride,
+} from '../src/demo/quotes.ts'
 import { buildSummary } from '../src/session-summary.ts'
 import { buildTheftReport, theftLabels } from '../src/theft-report.ts'
 import { buildGintiReport, gintiLabels } from '../src/ginti-report.ts'
@@ -501,6 +510,34 @@ describe('a year in the life of the rental house', () => {
       !wedUnits.some((id) => ['asset-vmount-1', 'asset-vmount-2', 'asset-vmount-3', 'asset-vmount-4'].includes(id)),
       'the calendar gave the wedding the OTHER batteries',
     )
+    // --- The wedding is QUOTED before it leaves (0024 on the phone) ------
+    // 3d 6h → 4 calendar days → a 4-day remainder is capped at the 3-day
+    // week: 3 billable days (a remainder never costs more than the week it
+    // almost is) over the card: FX6 ×2 at 18,000, the 50-100 at 9,000, the
+    // Ronin at 8,000, four batteries at 1,500, the 300X at 7,000 — and the
+    // Sachdeva line UNPRICED, counted, never zero. Hamza haggles at the
+    // desk; the owner gives the FX6s at 15,000 with the reason kept, the
+    // card rate remembered beside it, and the total moves by exactly
+    // 2 × 3 × 3,000.
+    const wedQuote = quoteFor(db, wedBooking.bookingId)
+    assert.equal(wedQuote.steps.billableDays.calendarDays, 4)
+    assert.equal(wedQuote.steps.weekRule.billableDays, 3)
+    assert.equal(wedQuote.totals.subtotalMinor, rs(3 * (36_000 + 9_000 + 8_000 + 6_000 + 7_000)))
+    assert.equal(wedQuote.totals.unpricedCount, 1)
+    assert.equal(wedQuote.totals.indicative, true, 'an unpriced line keeps a confirmed booking indicative')
+    const fx6Line = wedQuote.lines.find((l) => l.productId === 'prod-fx6')
+    const walkIn = setLineOverride(db, fx6Line.lineId, rs(15_000), 'Hamza — regular, agreed at the desk', at(0, -2, 11))
+    assert.equal(walkIn.ok, true)
+    assert.equal(walkIn.originalRateMinor, rs(18_000))
+    const wedQuote2 = quoteFor(db, wedBooking.bookingId)
+    assert.equal(wedQuote2.totals.subtotalMinor, rs(3 * (30_000 + 9_000 + 8_000 + 6_000 + 7_000)))
+    assert.equal(wedQuote2.totals.overriddenCount, 1)
+    assert.equal(wedQuote2.lines.find((l) => l.productId === 'prod-fx6').override.reason, 'Hamza — regular, agreed at the desk')
+    assert.equal(
+      db.get(`select count(*) as n from outbox where op = 'set_line_rate_override'`).n, 1,
+      'the override is queued as the server\'s op',
+    )
+
     const wedJob = convertBookingToJob(db, seed.orgId, wedBooking.bookingId, at(0, -1, 12))
     assert.equal(wedJob.ok, true)
     assert.equal(wedJob.expected, 11, 'the job promises exactly the units confirm bound')
@@ -1524,6 +1561,38 @@ describe('a year in the life of the rental house', () => {
     assert.equal(recordTurnedAway(db, eidAsk.lines, at(7, 2)), 1)
     assert.deepEqual(turnedAwayThisMonth(db, 'prod-aputure600', at(7, 2)), { times: 2, units: 4 })
     assert.deepEqual(turnedAwayByReason(db, 'prod-aputure600', at(7, 2)), { short: 1, committed: 3 })
+
+    // --- The same enquiry, PRICED, before any booking exists (0024) ------
+    // The desk marks Eid on the first day of the ask at ×1.25 (the
+    // calendar is data — Eid moves), and the pasted list becomes a quote
+    // through the same six steps the server runs: 1d 9h → 2 calendar days
+    // → 2 billable; 6 × 2 × Rs 12,000 × 1.25 = Rs 180,000, indicative
+    // because nothing is confirmed, the note naming the driving day.
+    const eidDay = localDate(at(7, 5, 9), DEFAULT_TIMEZONE)
+    assert.equal(setCalendarDay(db, seed.orgId, eidDay, 'holiday', 'Eid ul-Adha', 1.25, at(7, 2)).ok, true)
+    const eidQuote = quoteForLines(
+      db,
+      [{ productId: 'prod-aputure600', productName: 'Aputure 600D Pro', qty: 6 }],
+      at(7, 5, 9), at(7, 6, 18), 'cust-hamza',
+    )
+    assert.equal(eidQuote.steps.billableDays.calendarDays, 2)
+    assert.equal(eidQuote.steps.weekRule.billableDays, 2)
+    assert.equal(eidQuote.steps.calendarMultiplier.multiplier, 1.25)
+    assert.equal(eidQuote.steps.calendarMultiplier.drivenBy.name, 'Eid ul-Adha')
+    assert.equal(eidQuote.lines[0].lineTotalMinor, rs(180_000))
+    assert.equal(eidQuote.totals.subtotalMinor, rs(180_000))
+    assert.equal(eidQuote.totals.indicative, true)
+    assert.deepEqual(eidQuote.totals.indicativeReasons, ['not_confirmed'])
+    assert.equal(eidQuote.flags.depositHint, 'lighter', 'Hamza is the fast lane by now')
+    const eidText = quoteTextOf(db, STR_EN, seed.houseName, eidQuote).split('\n')
+    assert.equal(eidText[0], 'Ravi Light & Grip — quote')
+    assert.equal(eidText[1], 'For: Hamza Saeed')
+    assert.equal(eidText[3], '2 billable days (2 on the calendar)')
+    assert.equal(eidText[5], 'Aputure 600D Pro × 6 · 2 days · Rs 12,000/day = Rs 180,000')
+    assert.equal(eidText[7], `Eid ul-Adha on ${eidDay}: ×1.25 on the whole booking`)
+    assert.equal(eidText[9], 'Total: Rs 180,000')
+    assert.equal(eidText[10], 'Indicative — not confirmed yet.')
+    assert.equal(eidText[11], 'Deposit: half deposit')
 
     assertBooks()
     assertPhysical()

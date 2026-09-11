@@ -6,8 +6,8 @@
 --   * BOTH sync guards stay at zero with the new blocks in place — the
 --     denormalised customer name is not a PII leak and the excluded jobs
 --     column is still projected out;
---   * the early-out key set and the full key set agree (0006's rule, now
---     with thirteen tables);
+--   * the early-out key set and the full key set agree (0006's rule —
+--     thirteen tables as of 0023, sixteen since 0026's ninth edition);
 --   * a pencil appears with its name, split periods and pencil claims; a
 --     confirm turns the claims into confirmed reservations in the next
 --     pull; convert-to-job puts booking_id on the job row; a cancel
@@ -108,12 +108,13 @@ set local papa.org_id  = '11111111-1111-7111-8111-111111111111';
 set local papa.user_id = 'ffffffff-ffff-7fff-8fff-ffffffffffff';   -- desk
 set local role papa_app;
 
+-- Thirteen as of 0023; 0026 (the ninth edition) adds the three rate tables.
 select is(
   (select count(*)::int from jsonb_object_keys(pull_changes(0) -> 'tables')),
-  13, 'the full pull carries thirteen tables');
+  16, 'the full pull carries sixteen tables (thirteen as of 0023, plus the 0026 rate tables)');
 select is(
   (select count(*)::int from jsonb_object_keys(pull_changes(999999999) -> 'tables')),
-  13, 'and the early-out names the same thirteen — the two lists are in step');
+  16, 'and the early-out names the same sixteen — the two lists are in step');
 select is(
   jsonb_array_length(pull_changes(0) -> 'tables' -> 'bookings'), 0,
   'no bookings yet: an empty array, not a missing key');
