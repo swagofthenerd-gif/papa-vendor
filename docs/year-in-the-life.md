@@ -277,26 +277,61 @@ Rs 100,000 → damage → refund arc to the paisa). But only the seed has ever
 written these kinds; no store method, no screen. Phase B item 7 is listed
 as shipped-in-schema; it is not usable by a vendor.
 
-### 7. Service, utilization and dead stock — MAR, JUN
-`no-service-tracking`, `no-utilization-read`, `no-lifetime-value-view`, `no-month-history-screen`
+### 7. Service, utilization and dead stock — MAR, JUN (largely SHIPPED as 0021)
+`no-utilization-read` (narrowed), `no-lifetime-value-view`, `no-month-history-screen`
 
-The data exists; the readers don't:
+Was also `no-service-tracking` — the JUN wall ("the inputs are already all
+on the device; nothing reads them for service"). Wave 3 (migration
+`0021_living_fleet`) shipped Phase D items 1–2/5–6 end to end:
 
-- The outbox holds every checkout of the year (the FX9's real usage), yet
-  `assetEarnings.jobs` says 3 because only lines that happen to carry an
-  asset id count. No `rental_days_since_service`, no threshold, no nudge
-  (Phase D1) — and JUN showed the inputs are already all on the device.
-- No fleet ranking of earners, no idle-days / dead-stock view (D6): the
-  owner opens asset pages one at a time.
+- **Service by usage** (Hilti's pattern, the 2026-09-02 strategy lens):
+  per-product `service_due_after_rental_days` (null = no nudge), per-asset
+  `rental_days_since_service` — a projection the reducer moves on check_in
+  by the rental's calendar days, `(in::date − out::date) + 1`, partial day
+  = full day, derived from the job's own out/in scan pair (echoes and
+  loose check_ins add nothing; a rebuild re-derives from the log). Reset
+  by a new desk-gated `serviced` scan event; `asset_service_log` is a
+  VIEW over those events, and the optional cost link names the
+  org_expenses repair that paid for the work — validated at the RPC. The
+  JUN block now RUNS the scenario instead of pinning the wall: the meter
+  grows past its synced 120 with the year's own scans, the Sehat surface
+  names the unit, and the desk services it with the Rs 15,000 bill
+  landing on the kharcha book and the link on the event.
+- **Battery cycles**: `count_cycles` products count a cycle per check_out
+  (`cycle_count`); crossing `retire_after_cycles` raises ONE open
+  `cycle_threshold` alert and never changes state — auto-quarantine was
+  considered and refused: a state the system changed by itself is a state
+  nobody trusts, and "run it one more season" is a real answer only the
+  owner can give.
+- **Dead stock** (the `dead_stock` view; the client's Sehat group on the
+  Gear screen and the hisaab's 'Idle 90+ days: N items · Rs X' line):
+  rentable, non-terminal, on-the-shelf units whose last check_out — or,
+  never rented, their created_at — is older than the org's
+  `dead_stock_days` (settings, default 90), replacement value carried
+  with the unpriced count honest. MAR now asserts the Rs 4.5M Xeen set
+  and the idle Sachdeva surface while the light that just worked Ramzan
+  does not.
+- **Voice notes** (Phase D5, no finding id — Bykea's lesson) rode along:
+  hold-to-record awaaz notes on the asset page and the return's
+  discrepancy rows, stored on the condition-photos never-evict model
+  (honest 'device full' refusal), played back inline, silently absent
+  where MediaRecorder is.
+
+What remains, still ranked by the year:
+
+- `no-utilization-read`, NARROWED: no fleet ranking of earners — "which
+  camera earned best" (AUG Q4) still means opening asset pages one at a
+  time. The idle-days half of the finding is retired.
 - `moneyStrip(nowMs)` answers *any* month — verified for October and
   December from March — but every caller hardcodes `Date.now()`, so the
   owner cannot see last month from this one. A month picker is nearly
-  free; the API is already honest.
+  free; the API is already honest (`no-month-history-screen`).
 - Lifetime value per customer is sitting in the entries every khata page
-  already loads; the owed list just doesn't show it.
+  already loads; the owed list just doesn't show it
+  (`no-lifetime-value-view`).
 
-*Plan check:* D1/D6 confirmed as the right shape; the month picker and
-lifetime-value column are cheap Phase B polish, not Phase D work.
+*Plan check:* D1/D6 shipped as the predicted shapes; the month picker and
+lifetime-value column stay cheap Phase B polish, not Phase D work.
 
 ### 8. The crisis-day swap — SHIPPED as the swap flow (0020)
 
