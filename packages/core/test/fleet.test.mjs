@@ -185,3 +185,49 @@ describe('the cycle-count diff', () => {
     assert.deepEqual(d.ok, [])
   })
 })
+
+// --- network (0025 D5) ------------------------------------------------------
+describe('retiring a borrowed unit', () => {
+  test('retire on ownership=sub_rented_in stamps returned_to_owner, never retired', () => {
+    db.exec(
+      `insert into assets (id, org_id, product_id, asset_code, presence, health, ownership)
+       values ('loaner','o','p1','FX9-L1','here','ok','sub_rented_in')`,
+    )
+    markTerminal(db, { assetId: 'loaner', disposition: 'retired', newId: ids })
+    const a = db.get(`select presence, disposition from assets where id='loaner'`)
+    assert.equal(a.presence, 'gone')
+    assert.equal(a.disposition, 'returned_to_owner')
+    // The op on the wire is the plain retire verb — the server derives the
+    // same word from ownership; the phone invents no vocabulary.
+    const op = JSON.parse(db.get(`select payload from outbox order by seq desc limit 1`).payload)
+    assert.equal(op.event_type, 'retire')
+  })
+
+  test('retire on an owned unit still reads retired', () => {
+    markTerminal(db, { assetId: 'sub', disposition: 'retired', newId: ids })
+    assert.equal(db.get(`select disposition from assets where id='sub'`).disposition, 'retired')
+  })
+
+  test("asking for 'returned_to_owner' by name mints the same retire verb", () => {
+    db.exec(
+      `insert into assets (id, org_id, product_id, asset_code, presence, health, ownership)
+       values ('loaner2','o','p1','FX9-L2','here','ok','sub_rented_in')`,
+    )
+    markTerminal(db, { assetId: 'loaner2', disposition: 'returned_to_owner', newId: ids })
+    assert.equal(db.get(`select disposition from assets where id='loaner2'`).disposition, 'returned_to_owner')
+    const op = JSON.parse(db.get(`select payload from outbox order by seq desc limit 1`).payload)
+    assert.equal(op.event_type, 'retire')
+  })
+
+  test('found clears returned_to_owner like any disposition', () => {
+    db.exec(
+      `insert into assets (id, org_id, product_id, asset_code, presence, health, ownership)
+       values ('loaner3','o','p1','FX9-L3','here','ok','sub_rented_in')`,
+    )
+    markTerminal(db, { assetId: 'loaner3', disposition: 'retired', newId: ids })
+    markFound(db, { assetId: 'loaner3', newId: ids })
+    const a = db.get(`select presence, disposition from assets where id='loaner3'`)
+    assert.equal(a.presence, 'here')
+    assert.equal(a.disposition, null)
+  })
+})

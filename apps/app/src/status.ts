@@ -18,8 +18,9 @@
 export type Presence = 'here' | 'out' | 'in_transit' | 'gone'
 export type Health = 'ok' | 'servicing' | 'quarantined'
 export type Ownership = 'owned' | 'sub_rented_in'
-/** Why the item left the fleet (0020). null while it is fleet. */
-export type Disposition = 'lost' | 'stolen' | 'sold' | 'retired' | null
+/** Why the item left the fleet (0020; +returned_to_owner in 0025 D5 — a
+ *  borrowed unit that went home). null while it is fleet. */
+export type Disposition = 'lost' | 'stolen' | 'sold' | 'retired' | 'returned_to_owner' | null
 
 export type Bucket = 'here' | 'out' | 'attention' | 'gone'
 
@@ -88,6 +89,7 @@ export function statusSentence(
         case 'stolen':  parts.push('Reported stolen'); break
         case 'sold':    parts.push('Sold'); break
         case 'retired': parts.push('Retired'); break
+        case 'returned_to_owner': parts.push('Returned to owner'); break
         default:        parts.push('No longer in the fleet')
       }
       break
