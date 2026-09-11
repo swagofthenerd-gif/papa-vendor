@@ -9,6 +9,7 @@ import { PhotoCapture, type CapturedPhoto } from '../camera/PhotoCapture.tsx'
 import { CaseManifestSheet } from './CaseManifest.tsx'
 import { go, type ScanMode } from '../nav.ts'
 import { scanRowClass, type ScanRow } from '../scan-row.ts'
+import { promisedStampParts } from '../booking-view.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 
@@ -68,12 +69,19 @@ function SessionScanScreen({
 
   const record = useCallback(
     (result: ScanResult, tagCode?: string) => {
+      // The calendar's local check (CONTRIBUTING principle 4): a unit going
+      // OUT that is confirmed to a booking whose hold begins within 48h is
+      // annotated and the warning rhythm plays — the scan is never refused
+      // (principle 3). Coming back it is only good news, so no annotation.
+      const soon = mode === 'out' && result.assetId ? store.promisedSoon(result.assetId) : null
+      const promised = soon ? promisedStampParts(soon.bookingNo, soon.blockedStartMs) : undefined
       setRows((prev) => [
         {
           ...result,
           key: result.outboxId ?? `${result.outcome}-${Date.now()}`,
           at: Date.now(),
           tagCode,
+          promised,
         },
         ...prev,
       ])
@@ -85,8 +93,9 @@ function SessionScanScreen({
       // the web; a machine with neither simply stays silent.
       const spec = FEEDBACK[result.outcome]
       if (spec) playFeedback(spec)
+      if (promised && result.outcome === 'accepted') playFeedback(FEEDBACK.unexpected)
     },
-    [],
+    [store, mode],
   )
 
   const onDecode = useCallback(

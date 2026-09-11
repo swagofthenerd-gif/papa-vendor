@@ -1,11 +1,13 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '@papa/icons'
 import { dueStatus } from '@papa/core'
-import { Shell } from '../components/Shell.tsx'
+import { Shell, SettingsButton } from '../components/Shell.tsx'
 import { SyncStrip } from '../components/SyncStrip.tsx'
 import { Today } from '../routes/Today.tsx'
 import { go } from '../nav.ts'
 import { NewJobSheet } from './NewJobSheet.tsx'
+import { KhataChargeSheet } from './SessionScreen.tsx'
+import { whatsAppShareUrl } from '@papa/core'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 
@@ -22,6 +24,7 @@ export function TodayScreen({ store }: { store: DemoStore }) {
   const refresh = useCallback(() => setTick((t) => t + 1), [])
   const [newJobOpen, setNewJobOpen] = useState(false)
   const [dateFor, setDateFor] = useState<string | null>(null)
+  const [lateFeeFor, setLateFeeFor] = useState<string | null>(null)
 
   const counts = store.outboxCounts()
   const now = Date.now()
@@ -36,13 +39,16 @@ export function TodayScreen({ store }: { store: DemoStore }) {
         </>
       }
       action={
-        <button
-          className="icon-btn"
-          onClick={() => go({ name: 'gear' })}
-          aria-label={STR.todaySearchGearAria}
-        >
-          <Icon name="search" size={22} />
-        </button>
+        <>
+          <button
+            className="icon-btn"
+            onClick={() => go({ name: 'gear' })}
+            aria-label={STR.todaySearchGearAria}
+          >
+            <Icon name="search" size={22} />
+          </button>
+          <SettingsButton />
+        </>
       }
     >
       <SyncStrip
@@ -71,6 +77,7 @@ export function TodayScreen({ store }: { store: DemoStore }) {
         outJobs={store.outJobsDue(now)}
         stats={store.stats()}
         money={store.moneyStrip(now)}
+        promised={store.promisedStrip(now)}
         onOpenGear={(f) => go({ name: 'gear', query: f === 'all' ? undefined : f })}
         onNewJob={() => setNewJobOpen(true)}
         onEditDate={(jobId) => setDateFor(jobId)}
@@ -80,7 +87,31 @@ export function TodayScreen({ store }: { store: DemoStore }) {
           store.closeJob(jobId)
           refresh()
         }}
+        onConvertBooking={(bookingId) => {
+          // The bridge (0022 D8): the promise becomes the job on this board.
+          store.convertBookingToJob(bookingId, now)
+          refresh()
+        }}
+        onLateFee={(jobId) => setLateFeeFor(jobId)}
+        onEscalate={(jobId) => {
+          // The ladder's last rung: the flag is written once, and the text
+          // goes to the owner the way every share in the app does —
+          // WhatsApp where it exists, clipboard where it does not.
+          const text = store.escalateToManager(jobId, now)
+          refresh()
+          if (!text) return
+          const win = window.open(whatsAppShareUrl(text), '_blank', 'noopener')
+          if (!win) void navigator.clipboard?.writeText(text).catch(() => {})
+        }}
       />
+
+      {lateFeeFor ? (
+        <LateFeeFromBoard
+          store={store}
+          jobId={lateFeeFor}
+          onDone={() => { setLateFeeFor(null); refresh() }}
+        />
+      ) : null}
 
       {newJobOpen ? (
         <NewJobSheet
@@ -174,5 +205,44 @@ function DueDateSheet({
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * The ladder's day-7 rung, from the board: the same late-fee sheet the
+ * handover uses, prefilled from the same draft. A job with no customer
+ * has no khata to charge, so the door lands on the handover instead,
+ * where the reason is written out.
+ */
+function LateFeeFromBoard({
+  store,
+  jobId,
+  onDone,
+}: {
+  store: DemoStore
+  jobId: string
+  onDone: () => void
+}) {
+  const customer = store.customerForJob(jobId)
+  const lateFee = store.lateFeeDraftFor(jobId)
+  const canDraft = customer !== null && lateFee !== null
+  useEffect(() => {
+    if (!canDraft) go({ name: 'session', sessionId: jobId })
+  }, [canDraft, jobId])
+  if (!customer || !lateFee) return null
+  return (
+    <KhataChargeSheet
+      title={STR.sessionLateFee}
+      hint={STR.sessionChargeGoesTo(customer.name)}
+      sub={STR.sessionLateFeeNeverAuto}
+      initialAmount={
+        lateFee.draft.priced > 0 ? String(Math.round(lateFee.draft.totalMinor / 100)) : ''
+      }
+      initialNote={lateFee.dueLabel}
+      onSave={(amountMinor, note) => {
+        if (store.recordLateFee(jobId, amountMinor, note)) onDone()
+      }}
+      onClose={onDone}
+    />
   )
 }

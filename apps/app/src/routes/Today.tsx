@@ -1,11 +1,16 @@
 import { Icon } from '@papa/icons'
 import {
+  bookingDateLabel,
   formatRupees,
   parsePhoneNumber,
   telUrl,
   whatsAppChatUrl,
+  whatsAppShareUrl,
   type DueStatus,
+  type EscalationStep,
 } from '@papa/core'
+import type { BookingRow } from '../demo/bookings.ts'
+import { BookingStamp } from '../demo/BookingRows.tsx'
 import { go } from '../nav.ts'
 import { SectionHead } from '../components/Shell.tsx'
 import { STR } from '../strings.ts'
@@ -81,6 +86,16 @@ export interface OutRow {
   /** Prebuilt wa.me nudge link — present only when the job is overdue AND a
    *  confident number was parsed. Null renders nothing, never a dead button. */
   nudgeUrl: string | null
+  /** The nudge's text on its own, for the share-to-anyone fallback when no
+   *  number parsed — the app's one sharing rule. */
+  nudgeText: string
+  /** The confident phone number, for the ladder's call rung. */
+  phone: string | null
+  /** The overdue ladder's rung (ASSUMPTION #escalation-ladder), null when
+   *  not overdue — ONE primary action per rung. */
+  escalation: EscalationStep | null
+  /** When the desk handed this job to the manager, or null. */
+  managerFlaggedAt: string | null
   /** A scan session was recorded on this job, so a handover is reviewable. */
   hasSummary: boolean
   /** The khata the return's money will land in, when one is wired. */
@@ -95,19 +110,31 @@ export function Today({
   outJobs,
   stats,
   money,
+  promised,
   onOpenGear,
   onNewJob,
   onEditDate,
   onCloseJob,
+  onConvertBooking,
+  onLateFee,
+  onEscalate,
 }: {
   jobs: JobRow[]
   outJobs: OutRow[]
   stats: TodayStats
   money: MoneyFigures
+  /** The Promised section: confirmed bookings starting inside the horizon
+   *  and pencils dying today. Empty lists render no section. */
+  promised: { startingSoon: BookingRow[]; pencilsToday: BookingRow[] }
   onOpenGear: (filter: 'here' | 'out' | 'attention' | 'all') => void
   onNewJob: () => void
   onEditDate: (jobId: string) => void
   onCloseJob: (jobId: string) => void
+  onConvertBooking: (bookingId: string) => void
+  /** The ladder's day-7 rung: open the late-fee draft for this job. */
+  onLateFee: (jobId: string) => void
+  /** The ladder's day-14 rung: flag the job and share the manager text. */
+  onEscalate: (jobId: string) => void
 }) {
   const totalExpected = jobs.reduce((n, j) => n + j.expected, 0)
   const totalScanned = jobs.reduce((n, j) => n + j.scanned, 0)
@@ -275,6 +302,53 @@ export function Today({
         )}
       </section>
 
+      {promised.startingSoon.length + promised.pencilsToday.length > 0 ? (
+        <section className="section">
+          <SectionHead icon="calendar" title={STR.todayPromisedHeading} sub={STR.todayPromisedSub} />
+          <ul className="line-list">
+            {promised.startingSoon.map((b) => (
+              <li key={b.id} className="line promised-line">
+                <button
+                  className="line-tap pressable promised-main"
+                  onClick={() => go({ name: 'booking', bookingId: b.id })}
+                >
+                  <span className="line-name">
+                    <span className="code booking-no">{STR.bookingRowNo(b.bookingNo)}</span> {b.customerName}
+                  </span>
+                  <span className="line-note">
+                    {STR.todayStartsAt(bookingDateLabel(b.customerStartMs))} · {STR.bookingItems(b.itemCount)}
+                  </span>
+                </button>
+                <span className="promised-side">
+                  <BookingStamp row={b} />
+                  <button className="btn btn-sm btn-outline" onClick={() => onConvertBooking(b.id)}>
+                    <Icon name="truck" size={16} /> {STR.bookingDoorConvert}
+                  </button>
+                </span>
+              </li>
+            ))}
+            {promised.pencilsToday.map((b) => (
+              <li key={b.id} className="line promised-line">
+                <button
+                  className="line-tap pressable promised-main"
+                  onClick={() => go({ name: 'booking', bookingId: b.id })}
+                >
+                  <span className="line-name">
+                    <span className="code booking-no">{STR.bookingRowNo(b.bookingNo)}</span> {b.customerName}
+                  </span>
+                  <span className="line-note">
+                    {STR.todayPencilDies(b.pencil.hours, b.pencil.minutes)} · {STR.bookingItems(b.itemCount)}
+                  </span>
+                </button>
+                <span className="promised-side">
+                  <BookingStamp row={b} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {outJobs.length > 0 ? (
         <section className="section" id={COMING_BACK_ID}>
           <SectionHead
@@ -304,14 +378,18 @@ export function Today({
                     </span>
                   </button>
 
+                  {j.escalation ? (
+                    <EscalationRow row={j} onLateFee={onLateFee} onEscalate={onEscalate} />
+                  ) : null}
                   <div className="job-actions">
                     <CustomerChip customer={j.customer} />
                     <ContactLinks contact={j.contact} />
                     <EditDateButton job={j} onEditDate={onEditDate} />
-                    {j.nudgeUrl ? (
+                    {j.nudgeUrl && !j.escalation ? (
                       /* Opens the client's thread with the polite Roman-Urdu
                          nudge pre-filled — pre-filled, not pre-sent: the send
-                         stays the vendor's. */
+                         stays the vendor's. On an overdue job the ladder row
+                         above carries the nudge as its day-1 action instead. */
                       <a
                         className="btn btn-sm btn-outline"
                         href={j.nudgeUrl}
@@ -350,12 +428,12 @@ export function Today({
             <span className="quick-t">{STR.todayDinKaHisaab}</span>
             <span className="quick-s">{STR.todayWhatMovedToday}</span>
           </button>
-          <button className="quick pressable" onClick={() => go({ name: 'import' })}>
-            <Icon name="scroll" size={20} />
-            <span className="quick-t">{STR.todayLoadYourGear}</span>
-            <span className="quick-s">{STR.todayPasteAListFromExcel}</span>
+          <button className="quick pressable" onClick={() => go({ name: 'calendar' })}>
+            <Icon name="calendar" size={20} />
+            <span className="quick-t">{STR.bookingCalendarTitle}</span>
+            <span className="quick-s">{STR.bookingCalendarSubtitle}</span>
           </button>
-          <button className="quick pressable" onClick={() => go({ name: 'enquiry' })}>
+          <button className="quick pressable" onClick={() => go({ name: 'desk' })}>
             <Icon name="chat" size={20} />
             <span className="quick-t">{STR.todayAnswerAKitList}</span>
             <span className="quick-s">{STR.todayPasteFromWhatsApp}</span>
@@ -483,5 +561,86 @@ function EditDateButton({
       <Icon name="calendar" size={16} />{' '}
       {job.expectedBack ? STR.todayChangeDate : STR.todaySetADate}
     </button>
+  )
+}
+
+/**
+ * The overdue ladder on the card (ASSUMPTION #escalation-ladder): the
+ * rung's label and ONE primary action for it — nudge, call, late fee,
+ * escalate. Kept to a single line plus a button so the card stays compact;
+ * the day-14 rung also says out loud that a blacklist is a decision for the
+ * manager's review, never something this button does.
+ */
+function EscalationRow({
+  row,
+  onLateFee,
+  onEscalate,
+}: {
+  row: OutRow
+  onLateFee: (jobId: string) => void
+  onEscalate: (jobId: string) => void
+}) {
+  const step = row.escalation
+  if (!step) return null
+  const days = row.due.daysLate ?? 0
+  let action: React.ReactNode
+  switch (step.action) {
+    case 'whatsapp_nudge':
+      action = (
+        <a
+          className="btn btn-sm btn-outline"
+          href={row.nudgeUrl ?? whatsAppShareUrl(row.nudgeText)}
+          target="_blank"
+          rel="noopener"
+        >
+          <Icon name="send" size={16} /> {STR.bookingActionNudge}
+        </a>
+      )
+      break
+    case 'call':
+      action = row.phone ? (
+        <a className="btn btn-sm btn-outline" href={telUrl(row.phone)}>
+          <Icon name="phone" size={16} /> {STR.bookingActionCall}
+        </a>
+      ) : (
+        <a
+          className="btn btn-sm btn-outline"
+          href={whatsAppShareUrl(row.nudgeText)}
+          target="_blank"
+          rel="noopener"
+        >
+          <Icon name="send" size={16} /> {STR.bookingActionNudge}
+        </a>
+      )
+      break
+    case 'late_fee_draft':
+      action = (
+        <button className="btn btn-sm btn-outline" onClick={() => onLateFee(row.id)}>
+          <Icon name="receipt" size={16} /> {STR.bookingActionLateFee}
+        </button>
+      )
+      break
+    case 'manager_escalation':
+      action = row.managerFlaggedAt ? (
+        <span className="badge badge-orange">
+          <Icon name="flag" size={12} /> {STR.todayEscalated(bookingDateLabel(Date.parse(row.managerFlaggedAt)))}
+        </span>
+      ) : (
+        <button className="btn btn-sm btn-outline" onClick={() => onEscalate(row.id)}>
+          <Icon name="flag" size={16} /> {STR.bookingActionManager}
+        </button>
+      )
+      break
+  }
+  return (
+    <div className="escalation-row">
+      <span className="escalation-step">
+        {STR.todayEscalationStep(step.step, days)}
+        {step.considerBlacklist ? (
+          <span className="line-note"> · {STR.todayEscalateConsiderBlacklist}</span>
+        ) : null}
+      </span>
+      {action}
+    </div>
   )
 }

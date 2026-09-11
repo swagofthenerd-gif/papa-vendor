@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Icon } from '@papa/icons'
-import { formatRupees, type Disposition as MarkDisposition } from '@papa/core'
+import { bookingDateLabel, formatRupees, type Disposition as MarkDisposition, type PromisedSoon } from '@papa/core'
 import { go } from '../nav.ts'
 import { SectionHead } from '../components/Shell.tsx'
 import { StatusBadge } from '../components/StatusBadge.tsx'
@@ -425,6 +425,7 @@ const EVENT_LABEL: Record<string, string> = {
 export function Asset({
   asset,
   money,
+  promised,
   service,
   voiceNotes,
   photoPairs,
@@ -439,6 +440,9 @@ export function Asset({
 }: {
   asset: AssetView | null
   money: AssetMoney | null
+  /** The calendar's claim on this unit inside the scanner's horizon —
+   *  the 'Right now' section's PROMISED stamp (0022 promisedSoon). */
+  promised: PromisedSoon | null
   /** The unit's wear facts (0021) — the service and cycle lines. */
   service: ServiceFacts | null
   /** Spoken evidence over this unit, newest first — played inline. */
@@ -488,6 +492,16 @@ export function Asset({
         </div>
         <h2 className="asset-name">{asset.name}</h2>
         <p className="asset-status">{sentence}</p>
+        {promised ? (
+          <p className="asset-promised">
+            <span className="stamp stamp-small">
+              {STR.bookingPromisedStamp(promised.bookingNo, bookingDateLabel(promised.blockedStartMs).split(',')[0])}
+            </span>{' '}
+            <span className="section-sub">
+              {STR.bookingPromisedRightNow(promised.bookingNo, promised.customerName, bookingDateLabel(promised.blockedStartMs))}
+            </span>
+          </p>
+        ) : null}
       </div>
 
       <dl className="fact-grid">

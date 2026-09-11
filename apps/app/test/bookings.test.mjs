@@ -35,9 +35,16 @@ import {
   convertBookingToJob,
   createBooking,
   extendBooking,
+  extensionPreview,
   listBookings,
+  noteSubRent,
+  planConfirm,
+  promisedStrip,
   pruneExpiredPencils,
+  reallocateReservation,
+  substitutesForReservation,
 } from '../src/demo/bookings.ts'
+import { flagForManager, managerFlaggedAt } from '../src/demo/read-model.ts'
 import { STR_EN } from '../src/strings.ts'
 import { STR_UR } from '../src/strings-ur.ts'
 
@@ -473,5 +480,149 @@ describe('the confirmation text', () => {
   test('a pencil has no confirmation to send', () => {
     assert.equal(bookingConfirmText(db, STR_EN, seed.houseName, 'bk-3', NOW), null)
     assert.equal(bookingConfirmText(db, STR_EN, seed.houseName, 'nope', NOW), null)
+  })
+})
+
+// ---------------------------------------------------------------- W5b doors
+
+describe('the confirm preview (the Confirm sheet)', () => {
+  test('the plan names the units confirm will bind, and the commit binds exactly them', () => {
+    const c = createBooking(db, ORG, {
+      customerId: 'cust-hamza', startMs: atDays(14, 10), endMs: atDays(15, 10),
+      lines: [{ productId: 'prod-fx9', qty: 1 }, { productId: 'prod-ronin', qty: 1 }], status: 'pencil',
+    }, NOW, ids)
+    const plan = planConfirm(db, c.bookingId, {}, NOW)
+    assert.equal(plan.ok, true)
+    assert.deepEqual(plan.plan.map((p) => p.assetCode).sort(), ['FX9-02', 'RS3-01'].sort())
+    assert.equal(plan.needsCredentials, false)
+    // Same-day turnaround: the hold is exactly the customer window.
+    const tight = planConfirm(db, c.bookingId, { blockedPeriod: { startMs: atDays(14, 10), endMs: atDays(15, 10) } }, NOW)
+    assert.equal(tight.blockedStartMs, atDays(14, 10))
+    assert.equal(tight.blockedEndMs, atDays(15, 10))
+    const r = confirmBooking(db, ORG, c.bookingId, {}, NOW, ids)
+    assert.equal(r.ok, true)
+    assert.deepEqual(r.allocations.map((a) => a.assetCode).sort(), plan.plan.map((p) => p.assetCode).sort())
+    assert.equal(db.get(`select count(*) as n from outbox where op = 'confirm_booking'`).n, 1, 'a preview writes nothing; the commit writes once')
+  })
+
+  test('the preview says needs_credentials for a stranger; the note turns it into a plan', () => {
+    const c = createBooking(db, ORG, {
+      customerId: 'cust-ayesha', startMs: atDays(14, 10), endMs: atDays(15, 10),
+      lines: [{ productId: 'prod-fx9', qty: 1 }], status: 'pencil',
+    }, NOW, ids)
+    const gate = planConfirm(db, c.bookingId, {}, NOW)
+    assert.equal(gate.ok, false)
+    assert.equal(gate.reason, 'needs_credentials')
+    const over = planConfirm(db, c.bookingId, { credentialOverrideNote: 'known through Bilal' }, NOW)
+    assert.equal(over.ok, true)
+    assert.equal(over.needsCredentials, true)
+  })
+})
+
+describe('the substitute door (reallocate_reservation)', () => {
+  const b5Reservation = () =>
+    db.get(`select id from asset_reservations where booking_id = 'bk-5' and asset_id = 'asset-fx9-2'`).id
+
+  test('moves the rival claim onto a free unit of the same product, and the extension goes clean', () => {
+    const reservationId = b5Reservation()
+    const subs = substitutesForReservation(db, reservationId)
+    assert.deepEqual(subs.map((s) => s.code), ['FX9-01'], 'FX9-01 is free next month; FX9-02 is the unit itself')
+    const r = reallocateReservation(db, reservationId, 'asset-fx9-1', NOW, ids, 'bk-1')
+    assert.equal(r.ok, true)
+    assert.equal(r.assetCode, 'FX9-01')
+    assert.deepEqual(bookingView(db, 'bk-5', NOW).lines[0].allocated.map((a) => a.assetCode), ['FX9-01'])
+    // B#1's extension past B#5 no longer breaks anything.
+    const b5 = byNo(5)
+    assert.deepEqual(extensionPreview(db, 'bk-1', b5.customerStartMs + HOUR_MS, NOW).collisions, [])
+    const ext = extendBooking(db, 'bk-1', b5.customerStartMs + HOUR_MS, NOW, ids)
+    assert.equal(ext.extended, true)
+    // The ops: the move is chained under B#5 AND names B#1, so B#1's
+    // extend replays after it.
+    const ops = db.all(`select id, op, payload, depends_on from outbox order by seq`)
+    assert.deepEqual(ops.map((o) => o.op), ['reallocate_reservation', 'extend_booking'])
+    const move = JSON.parse(ops[0].payload)
+    assert.equal(move.p_reservation_id, reservationId)
+    assert.equal(move.p_new_asset_id, 'asset-fx9-1')
+    assert.equal(move.client_booking_id, 'bk-5')
+    assert.equal(move.for_booking_id, 'bk-1')
+    assert.equal(ops[1].depends_on, ops[0].id, 'the extension waits for the move')
+  })
+
+  test('a unit already promised over the window is refused by name; wrong product refused', () => {
+    // Hold FX9-01 next month first, then try to move B#5 onto it.
+    const c = createBooking(db, ORG, {
+      customerId: 'cust-hamza', startMs: atDays(30, 9), endMs: atDays(31, 9),
+      lines: [{ assetId: 'asset-fx9-1' }], status: 'confirmed',
+    }, NOW, ids)
+    assert.equal(c.ok, true)
+    const r = reallocateReservation(db, b5Reservation(), 'asset-fx9-1', NOW, ids)
+    assert.equal(r.ok, false)
+    assert.equal(r.collision.bookingNo, c.bookingNo)
+    assert.equal(r.collision.assetCode, 'FX9-01')
+    assert.deepEqual(substitutesForReservation(db, b5Reservation()), [], 'nothing free to offer')
+    assert.equal(reallocateReservation(db, b5Reservation(), 'asset-fx6-1', NOW, ids).reason, 'different_product')
+    assert.equal(reallocateReservation(db, 'nope', 'asset-fx9-1', NOW, ids).reason, 'not_found')
+    assert.deepEqual(bookingView(db, 'bk-5', NOW).lines[0].allocated.map((a) => a.assetCode), ['FX9-02'], 'nothing moved')
+  })
+})
+
+describe('the sub-rent door (intent, then the extension behind it)', () => {
+  test('the note lands on the booking, the op queues, and the acknowledged extension writes behind it', () => {
+    const b5 = byNo(5)
+    const preview = extensionPreview(db, 'bk-1', b5.customerStartMs + HOUR_MS, NOW)
+    assert.equal(preview.collisions.length, 1)
+    const c = preview.collisions[0]
+    const noted = noteSubRent(db, 'bk-1', {
+      productId: c.productId, productName: c.productName, qty: 1,
+      forBookingId: c.bookingId, forBookingNo: c.bookingNo,
+    }, STR_EN, NOW, ids)
+    assert.equal(noted.ok, true)
+    assert.equal(bookingView(db, 'bk-1', NOW).note, 'Mehndi + baraat, DHA\nSub-rent Sony FX9 ×1 for #5')
+    // Not acknowledged: still refused, still named.
+    const refused = extendBooking(db, 'bk-1', b5.customerStartMs + HOUR_MS, NOW, ids)
+    assert.equal(refused.extended, false)
+    assert.equal(refused.collisions[0].bookingNo, 5)
+    // Acknowledged: written, chained behind the intent.
+    const ext = extendBooking(db, 'bk-1', b5.customerStartMs + HOUR_MS, NOW, ids, { acknowledged: [c] })
+    assert.equal(ext.extended, true)
+    const ops = db.all(`select id, op, payload, depends_on from outbox order by seq`)
+    assert.deepEqual(ops.map((o) => o.op), ['sub_rent_intent', 'extend_booking'])
+    const intent = JSON.parse(ops[0].payload)
+    assert.equal(intent.p_booking_id, 'bk-1')
+    assert.equal(intent.p_for_booking_id, 'bk-5')
+    assert.equal(intent.p_product_id, 'prod-fx9')
+    assert.equal(intent.p_qty, 1)
+    assert.equal(ops[1].depends_on, ops[0].id)
+    // B#5's own claim on FX9-02 stands untouched — the intent moved nothing.
+    assert.deepEqual(bookingView(db, 'bk-5', NOW).lines[0].allocated.map((a) => a.assetCode), ['FX9-02'])
+  })
+})
+
+describe('the Today board reads', () => {
+  test('the Promised strip: pencils dying today, confirmed starts inside 48h with no job yet', () => {
+    const strip0 = promisedStrip(db, NOW)
+    assert.deepEqual(strip0.pencilsToday.map((b) => b.bookingNo), [3], 'B#3 dies in ~5h; B#4 is dead already')
+    assert.deepEqual(strip0.startingSoon, [], 'B#1 is a week out')
+    const c = createBooking(db, ORG, {
+      customerId: 'cust-hamza', startMs: NOW + 20 * HOUR_MS, endMs: NOW + 40 * HOUR_MS,
+      lines: [{ productId: 'prod-ronin', qty: 1 }], status: 'confirmed',
+    }, NOW, ids)
+    assert.equal(c.ok, true)
+    assert.deepEqual(promisedStrip(db, NOW).startingSoon.map((b) => b.bookingNo), [c.bookingNo])
+    convertBookingToJob(db, ORG, c.bookingId, NOW, ids)
+    assert.deepEqual(promisedStrip(db, NOW).startingSoon, [], 'once it is a job, the board already shows it')
+    // The pencil strip is a predicate over the stored expiry: at midnight it is empty.
+    const midnight = new Date(new Date(NOW).getFullYear(), new Date(NOW).getMonth(), new Date(NOW).getDate() + 1).getTime()
+    assert.deepEqual(promisedStrip(db, midnight).pencilsToday, [])
+  })
+
+  test('the manager flag is written once and read back', () => {
+    assert.equal(managerFlaggedAt(db, 'job-doc'), null)
+    assert.equal(flagForManager(db, 'job-doc', NOW), true)
+    const first = managerFlaggedAt(db, 'job-doc')
+    assert.equal(first, new Date(NOW).toISOString())
+    assert.equal(flagForManager(db, 'job-doc', NOW + HOUR_MS), true)
+    assert.equal(managerFlaggedAt(db, 'job-doc'), first, 'a second tap does not move the time')
+    assert.equal(flagForManager(db, 'no-such-job', NOW), false)
   })
 })

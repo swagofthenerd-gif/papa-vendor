@@ -270,6 +270,28 @@ export function calendar(db: SqlDriver, monthStartMs: number, nowMs: number): Ca
   return days
 }
 
+export interface PromisedStrip {
+  /** Confirmed bookings whose customer window begins inside the horizon
+   *  and that have not become a job yet — the convert-to-job candidates. */
+  startingSoon: BookingRow[]
+  /** Live pencils that die before local midnight — the countdown rows. */
+  pencilsToday: BookingRow[]
+}
+
+/** The board's "Promised" section. Horizon 48h, the scanner's own. */
+export function promisedStrip(db: SqlDriver, nowMs: number, horizonMs: number = 48 * 60 * 60 * 1000): PromisedStrip {
+  const live = listBookings(db, { status: 'live' }, nowMs)
+  const d = new Date(nowMs)
+  const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime()
+  return {
+    startingSoon: live.filter((b) =>
+      b.stamp === 'confirmed' && b.job === null
+      && b.customerStartMs >= nowMs && b.customerStartMs < nowMs + horizonMs),
+    pencilsToday: live.filter((b) =>
+      b.stamp === 'pencil' && b.pencilExpiresAtMs !== null && b.pencilExpiresAtMs < midnight),
+  }
+}
+
 export function availabilityFor(
   db: SqlDriver,
   productId: string,
@@ -318,9 +340,13 @@ function lastBookingOp(db: SqlDriver, bookingId: string): string | null {
   const row = db.get<{ id: string }>(
     `select id from outbox
       where state in ('pending', 'inflight')
-        and (payload like ? or payload like ?)
+        and (payload like ? or payload like ? or payload like ?)
       order by seq desc limit 1`,
-    [`%"client_booking_id":"${bookingId}"%`, `%"p_booking_id":"${bookingId}"%`],
+    [
+      `%"client_booking_id":"${bookingId}"%`,
+      `%"p_booking_id":"${bookingId}"%`,
+      `%"for_booking_id":"${bookingId}"%`,
+    ],
   )
   return row?.id ?? null
 }
@@ -613,16 +639,28 @@ function winnerOnAsset(db: SqlDriver, assetId: string, startMs: number, endMs: n
   return null
 }
 
-export function confirmBooking(
+/** What confirm WOULD do — the refusal it would return, or the units and
+ *  bulk claims it would bind. Pure over the mirror: the Confirm sheet shows
+ *  this before the desk commits, and confirmBooking commits exactly it. */
+export type ConfirmPlan =
+  | ConfirmRefusal
+  | {
+      ok: true
+      blockedStartMs: number
+      blockedEndMs: number
+      exposureMinor: number
+      needsCredentials: boolean
+      overrideNote: string | null
+      plan: { lineId: string; assetId: string; assetCode: string; upgrade: boolean }[]
+      bulkPlan: { lineId: string; productId: string; qty: number }[]
+    }
+
+export function planConfirm(
   db: SqlDriver,
-  orgId: string,
   bookingId: string,
   opts: ConfirmOptions,
   nowMs: number,
-  ids: BookingIds = defaultIds(nowMs),
-): ConfirmBookingResult {
-  pruneExpiredPencils(db, nowMs)
-
+): ConfirmPlan {
   const b = loadBooking(db, bookingId)
   if (!b) return { ok: false, reason: 'not_found' }
   if (b.status === 'cancelled') return { ok: false, reason: 'cancelled' }
@@ -730,6 +768,26 @@ export function confirmBooking(
     }
   }
 
+  return {
+    ok: true, blockedStartMs, blockedEndMs, exposureMinor, needsCredentials, overrideNote, plan, bulkPlan,
+  }
+}
+
+export function confirmBooking(
+  db: SqlDriver,
+  orgId: string,
+  bookingId: string,
+  opts: ConfirmOptions,
+  nowMs: number,
+  ids: BookingIds = defaultIds(nowMs),
+): ConfirmBookingResult {
+  pruneExpiredPencils(db, nowMs)
+
+  const planned = planConfirm(db, bookingId, opts, nowMs)
+  if (!planned.ok) return planned
+  const b = loadBooking(db, bookingId) as Booking
+  const { blockedStartMs, blockedEndMs, exposureMinor, needsCredentials, overrideNote, plan, bulkPlan } = planned
+
   db.transaction(() => {
     for (const p of plan) {
       if (p.upgrade) {
@@ -791,6 +849,112 @@ export function confirmBooking(
   }
 }
 
+// ------------------------------------------------------------ reallocate
+
+export type ReallocateResult =
+  | { ok: true; reservationId: string; assetId: string; assetCode: string }
+  | { ok: false; reason: 'not_found' | 'unknown_asset' | 'not_rentable' | 'different_product' | 'not_confirmed' }
+  | { ok: false; collision: Collision }
+
+/**
+ * Override 3, the substitute door (0022 reallocate_reservation): move one
+ * confirmed claim onto another unit of the SAME product, re-checked against
+ * every other confirmed claim over the reservation's own window. A
+ * collision names the winner, exactly as confirm does. Queued as the
+ * server's op, chained after the reservation's booking so the replay sees
+ * the confirm before the move.
+ */
+export function reallocateReservation(
+  db: SqlDriver,
+  reservationId: string,
+  newAssetId: string,
+  nowMs: number,
+  ids: BookingIds = defaultIds(nowMs),
+  /** The booking whose extension this move serves, if any — the op is
+   *  chained under it too, so that booking's extend replays after it. */
+  forBookingId: string | null = null,
+): ReallocateResult {
+  const r = db.get<{
+    id: string; booking_id: string; asset_id: string; blocked_from: string; blocked_until: string; state: string
+  }>(
+    `select id, booking_id, asset_id, blocked_from, blocked_until, state
+       from asset_reservations where id = ?`,
+    [reservationId],
+  )
+  if (!r) return { ok: false, reason: 'not_found' }
+  if (r.state !== 'confirmed') return { ok: false, reason: 'not_confirmed' }
+  const oldProduct = db.get<{ product_id: string | null }>(
+    `select product_id from assets where id = ?`, [r.asset_id],
+  )?.product_id ?? null
+  const a = db.get<{ id: string; asset_code: string | null; product_id: string | null; disposition: string | null; rentable: number | null; presence: string }>(
+    `select id, asset_code, product_id, disposition, rentable, presence from assets where id = ?`,
+    [newAssetId],
+  )
+  if (!a) return { ok: false, reason: 'unknown_asset' }
+  if (a.product_id !== oldProduct) return { ok: false, reason: 'different_product' }
+  if (a.disposition !== null || (a.rentable ?? 1) === 0 || a.presence === 'gone') {
+    return { ok: false, reason: 'not_rentable' }
+  }
+  const from = msOf(r.blocked_from)
+  const until = msOf(r.blocked_until)
+  const collision = winnerOnAsset(db, a.id, from, until, r.booking_id)
+  if (collision) return { ok: false, collision }
+
+  db.transaction(() => {
+    db.exec(`update asset_reservations set asset_id = ? where id = ?`, [a.id, r.id])
+    db.exec(`update bookings set updated_at = ? where id = ?`, [iso(nowMs), r.booking_id])
+    const payload: Record<string, unknown> = {
+      client_booking_id: r.booking_id,
+      p_reservation_id: r.id,
+      p_new_asset_id: a.id,
+    }
+    if (forBookingId) payload.for_booking_id = forBookingId
+    enqueueBookingOp(db, ids, 'reallocate_reservation', r.booking_id, payload)
+  })
+  return { ok: true, reservationId: r.id, assetId: a.id, assetCode: a.asset_code ?? a.id }
+}
+
+export interface ReservationSubstitute {
+  id: string
+  code: string
+  name: string
+  /** Always true here — the RPC only takes the same product — kept so the
+   *  swap sheet's row shape is reused unchanged. */
+  sameProduct: boolean
+}
+
+/** Same-product units free over a reservation's window — what the
+ *  substitute door can offer. Least-utilised first, the confirm order. */
+export function substitutesForReservation(
+  db: SqlDriver,
+  reservationId: string,
+): ReservationSubstitute[] {
+  const r = db.get<{ booking_id: string; asset_id: string; blocked_from: string; blocked_until: string }>(
+    `select booking_id, asset_id, blocked_from, blocked_until from asset_reservations where id = ?`,
+    [reservationId],
+  )
+  if (!r) return []
+  const product = db.get<{ product_id: string | null; name: string | null }>(
+    `select a.product_id, coalesce(p.display_name, a.display_name) as name
+       from assets a left join products p on p.id = a.product_id where a.id = ?`,
+    [r.asset_id],
+  )
+  if (!product?.product_id) return []
+  const from = msOf(r.blocked_from)
+  const until = msOf(r.blocked_until)
+  return db
+    .all<{ id: string; asset_code: string | null }>(
+      `select a.id, a.asset_code from assets a
+        where a.product_id = ? and a.id <> ? and a.disposition is null
+          and coalesce(a.rentable, 1) = 1 and a.presence <> 'gone'
+        order by coalesce(a.rental_days_since_service, 0), coalesce(a.cycle_count, 0),
+                 a.asset_code, a.id`,
+      [product.product_id, r.asset_id],
+    )
+    .filter((a) => !winnerOnAsset(db, a.id, from, until, r.booking_id))
+    .map((a) => ({ id: a.id, code: a.asset_code ?? a.id, name: product.name ?? '', sameProduct: true }))
+}
+
 // ------------------------------------------------------------- cancel
 
 export type CancelBookingResult =
@@ -847,6 +1011,39 @@ export type ExtendBookingResult =
   | { extended: false; bookingId: string; bookingNo: number; collisions: ExtensionCollision[] }
   | { extended: false; reason: 'not_found' | 'cancelled' | 'ends_before_start'; collisions: [] }
 
+/** The preview the extension screen renders: what a new end would break,
+ *  and the window it would hold. Pure — nothing changes. */
+export function extensionPreview(
+  db: SqlDriver,
+  bookingId: string,
+  newCustomerEndMs: number,
+  nowMs: number,
+): { collisions: ExtensionCollision[]; customerEndMs: number; blockedEndMs: number } | null {
+  const b = loadBooking(db, bookingId)
+  if (!b) return null
+  const win = extendedWindow(b, newCustomerEndMs)
+  return { collisions: extensionCollisions(db, bookingId, newCustomerEndMs, nowMs), ...win }
+}
+
+/** The identity of one collision card — a booking and the unit or product
+ *  it holds — so an acknowledged card can be matched to a live collision. */
+export function collisionKey(c: ExtensionCollision): string {
+  return c.kind === 'asset'
+    ? `asset:${c.bookingId}:${c.assetId}`
+    : `bulk:${c.bookingId}:${c.productId}`
+}
+
+export interface ExtendOptions {
+  /**
+   * Collisions the desk has covered by a sub-rent intent (noteSubRent):
+   * the extension writes over them locally, and its op is chained after
+   * the intent op so the server sees the sub-rent land first.
+   * ASSUMPTION: a sub-rent intent is enough to hold the other client's
+   * promise open. See docs/assumptions.md#sub-rent-intent
+   */
+  acknowledged?: ExtensionCollision[]
+}
+
 /** D10: the collision list as data, or the extension. The buffer tail the
  *  booking actually has is preserved (a confirm-time shortening survives). */
 export function extendBooking(
@@ -855,6 +1052,7 @@ export function extendBooking(
   newCustomerEndMs: number,
   nowMs: number,
   ids: BookingIds = defaultIds(nowMs),
+  opts: ExtendOptions = {},
 ): ExtendBookingResult {
   pruneExpiredPencils(db, nowMs)
   const b = loadBooking(db, bookingId)
@@ -865,8 +1063,10 @@ export function extendBooking(
   }
 
   const collisions = extensionCollisions(db, bookingId, newCustomerEndMs, nowMs)
-  if (collisions.length > 0) {
-    return { extended: false, bookingId, bookingNo: b.bookingNo, collisions }
+  const covered = new Set((opts.acknowledged ?? []).map(collisionKey))
+  const standing = collisions.filter((c) => !covered.has(collisionKey(c)))
+  if (standing.length > 0) {
+    return { extended: false, bookingId, bookingNo: b.bookingNo, collisions: standing }
   }
 
   const win = extendedWindow(b, newCustomerEndMs)
@@ -888,6 +1088,49 @@ export function extendBooking(
     extended: true, bookingId, bookingNo: b.bookingNo,
     customerEndMs: win.customerEndMs, blockedEndMs: win.blockedEndMs, collisions: [],
   }
+}
+
+export interface SubRentIntent {
+  /** The product to sub-rent, by name for the note and by id for the pipe. */
+  productId: string | null
+  productName: string
+  qty: number
+  /** The booking the sub-rented unit will serve. */
+  forBookingId: string
+  forBookingNo: number
+}
+
+/**
+ * The sub-rent door records INTENT: a line on the extending booking's note
+ * ('Sub-rent FX9 ×1 for #5') and a `sub_rent_intent` op chained under it,
+ * so the extension queued next replays only after the pipe has honoured
+ * the intent (W7 wires the partner network). Nothing on the calendar
+ * moves — the other client's claim stands until a real unit covers it.
+ */
+export function noteSubRent(
+  db: SqlDriver,
+  bookingId: string,
+  intent: SubRentIntent,
+  str: StrTable,
+  nowMs: number,
+  ids: BookingIds = defaultIds(nowMs),
+): { ok: true; note: string } | { ok: false; reason: 'not_found' } {
+  const b = loadBooking(db, bookingId)
+  if (!b) return { ok: false, reason: 'not_found' }
+  const line = str.bookingSubRentNote(intent.productName, intent.qty, intent.forBookingNo)
+  const note = b.note ? `${b.note}\n${line}` : line
+  db.transaction(() => {
+    db.exec(`update bookings set note = ?, updated_at = ? where id = ?`, [note, iso(nowMs), bookingId])
+    enqueueBookingOp(db, ids, 'sub_rent_intent', bookingId, {
+      client_booking_id: bookingId,
+      p_booking_id: bookingId,
+      p_product_id: intent.productId,
+      p_qty: intent.qty,
+      p_for_booking_id: intent.forBookingId,
+      p_note: line,
+    })
+  })
+  return { ok: true, note }
 }
 
 // ------------------------------------------------------ convert to job

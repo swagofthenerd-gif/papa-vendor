@@ -3,15 +3,17 @@ import { whatsAppShareUrl } from '@papa/core'
 import { Icon, IconSketchFilter } from '@papa/icons'
 import { parseHash, go, type View } from './nav.ts'
 import { STR } from './strings.ts'
-import { Shell } from './components/Shell.tsx'
+import { Shell, SettingsButton } from './components/Shell.tsx'
 import { TodayScreen } from './demo/TodayScreen.tsx'
 import { Gear, type GearFilter } from './routes/Gear.tsx'
 import { Asset } from './routes/Asset.tsx'
 import { DemoStore } from './demo/store.ts'
 import { ScanScreen } from './demo/ScanScreen.tsx'
 import { SessionScreen } from './demo/SessionScreen.tsx'
-import { EnquiryScreen } from './demo/EnquiryScreen.tsx'
-import { Tags } from './demo/Tags.tsx'
+import { DeskScreen } from './demo/DeskScreen.tsx'
+import { CalendarScreen } from './demo/CalendarScreen.tsx'
+import { BookingScreen } from './demo/BookingScreen.tsx'
+import { SettingsScreen } from './demo/SettingsScreen.tsx'
 import { ImportScreen } from './demo/ImportScreen.tsx'
 import { HisaabScreen } from './demo/HisaabScreen.tsx'
 import { KharchaSheet } from './demo/KharchaSheet.tsx'
@@ -113,14 +115,18 @@ function AssetRoute({ store, assetId }: { store: DemoStore; assetId: string }) {
       title={asset?.name ?? STR.gearItemFallback}
       subtitle={asset?.code}
       action={
-        <button className="icon-btn" onClick={() => go({ name: 'gear' })} aria-label={STR.gearBackToTheGearAria}>
-          <Icon name="chevron-left" size={22} />
-        </button>
+        <>
+          <button className="icon-btn" onClick={() => go({ name: 'gear' })} aria-label={STR.gearBackToTheGearAria}>
+            <Icon name="chevron-left" size={22} />
+          </button>
+          <SettingsButton />
+        </>
       }
     >
       <Asset
         asset={asset}
         money={money}
+        promised={store.promisedSoon(assetId)}
         service={store.serviceFacts(assetId)}
         voiceNotes={store.voiceNotesFor(assetId)}
         photoPairs={store.photoPairs(assetId)}
@@ -240,7 +246,7 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
       // "4 need a look" lands on those four instead of searching for the word.
       const asFilter = (['here', 'out', 'attention'] as const).find((f) => f === view.query)
       return (
-        <Shell view={view} title={STR.gearTitle} subtitle={STR.gearSubtitle}>
+        <Shell view={view} title={STR.gearTitle} subtitle={STR.gearSubtitle} action={<SettingsButton />}>
           <Gear
             rows={store.gearRows()}
             initialQuery={asFilter ? '' : (view.query ?? '')}
@@ -293,12 +299,16 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
     case 'closed':
       return <ClosedJobsScreen store={store} />
 
-    case 'enquiry':
-      return (
-        <Shell view={view} title={STR.enquiryTitle} subtitle={STR.enquirySubtitle}>
-          <EnquiryScreen store={store} />
-        </Shell>
-      )
+    case 'desk':
+      return <DeskScreen store={store} />
+
+    case 'calendar':
+      return <CalendarScreen store={store} />
+
+    case 'booking':
+      // KEYED like the customer page: the open sheets and the tick live in
+      // instance state, and two bookings must never share one.
+      return <BookingScreen key={view.bookingId} store={store} bookingId={view.bookingId} />
 
     case 'import':
       return (
@@ -315,14 +325,6 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
       )
 
     case 'settings':
-      return (
-        <Shell
-          view={view}
-          title={STR.labelsTitle}
-          subtitle={STR.labelsSubtitle(store.seed.tags.length)}
-        >
-          <Tags store={store} />
-        </Shell>
-      )
+      return <SettingsScreen store={store} />
   }
 }

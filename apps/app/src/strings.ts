@@ -87,8 +87,11 @@ const STR_EN = {
   // more than one screen uses for the same fact.
   commonTabToday: 'Today',
   commonTabGear: 'Gear',
-  commonTabKitList: 'Kit list',
-  commonTabLabels: 'Labels',
+  commonTabDesk: 'Desk',
+  commonTabKhata: 'Khata',
+  commonSettings: 'Settings',
+  commonSettingsSubtitle: 'Language, labels, backup, getting paid',
+  commonOpenSettingsAria: 'Open settings',
   commonNavMainAria: 'Main',
   commonDbWouldNotStart: 'The local database would not start.',
   commonOpeningWarehouse: 'Opening the warehouse…',
@@ -443,6 +446,8 @@ const STR_EN = {
   // --------------------------------------------------------------- labels
   // The label sheet, plus the catalogue import that lives under this tab.
   labelsTitle: 'Labels',
+  labelsSectionSub: 'One sticker per unit — print, cut, stick',
+  labelsImportDoor: 'Load your gear from a list',
   labelsSubtitle: (tags: number): string =>
     `${tags} tags · print, or open on another screen`,
   labelsPrintTheseHint:
@@ -802,6 +807,170 @@ const STR_EN = {
   bookingConfirmLine: (qty: number, name: string): string => `${qty}x ${name}`,
   bookingConfirmNote: (note: string): string => `Note: ${note}`,
   bookingConfirmFooter: 'Reply here to change anything. Thank you.',
+
+  // The desk: the kit-list reader at the top, then the calendar and the
+  // bookings list under it.
+  bookingDeskTitle: 'Desk',
+  bookingDeskSubtitle: 'Kit lists, the calendar, the bookings',
+  bookingKitListHeading: 'Kit list',
+  bookingKitListSub: 'Paste what the client sent',
+  bookingCalendarHeading: 'Calendar',
+  bookingOpenCalendar: 'Open the calendar',
+  bookingListHeading: 'Bookings',
+  bookingListSub: (n: number): string => `${n} live booking${s(n)}`,
+  bookingNoneYet: 'No bookings yet — pencil one in from a kit list or the calendar.',
+  bookingNew: 'New booking',
+  bookingItems: (n: number): string => `${n} item${s(n)}`,
+  bookingRowNo: (no: number): string => `#${no}`,
+
+  // The calendar page.
+  bookingCalendarTitle: 'Calendar',
+  bookingCalendarSubtitle: 'Confirmed holds, live pencils',
+  bookingPrevMonthAria: 'Previous month',
+  bookingNextMonthAria: 'Next month',
+  bookingLegendConfirmed: 'confirmed',
+  bookingLegendPencilled: 'pencilled',
+  bookingDayHeading: (day: string): string => `On ${day}`,
+  bookingNothingThatDay: 'Nothing promised that day.',
+  bookingTapADay: 'Tap a day to see what is promised on it.',
+  bookingMonthCounts: (confirmed: number, pencilled: number): string =>
+    `${confirmed} confirmed · ${pencilled} pencilled`,
+
+  // One booking's page.
+  bookingTitle: (no: number): string => `Booking #${no}`,
+  bookingNoSuchBooking: 'No such booking on this phone.',
+  bookingBackToCalendar: 'Back to the calendar',
+  bookingPeriodHeading: 'When',
+  bookingFromLabel: 'From',
+  bookingUntilLabel: 'Until',
+  bookingHeldUntil: (until: string): string => `Held for the fleet until ${until}`,
+  bookingLinesHeading: 'What is promised',
+  bookingLineQty: (qty: number, name: string): string => `${qty} × ${name}`,
+  bookingLineAllocated: (codes: string): string => `Units: ${codes}`,
+  bookingLineDemanded: (code: string): string => `This unit: ${code}`,
+  bookingLineUnallocated: 'Units bound at confirm',
+  bookingNoteHeading: 'Note',
+  bookingCancelReason: (reason: string): string => `Reason: ${reason}`,
+  bookingExpiredHint: 'This pencil expired — pencil it again if the client is still asking.',
+  bookingOnJob: (label: string): string => `Out as job “${label}”`,
+  bookingOpenJob: 'Open the job',
+  bookingWaitingToSend: 'Waiting to send — the server will re-check this promise when the pipe drains.',
+  bookingDoorConfirm: 'Confirm',
+  bookingDoorExtend: 'Extend',
+  bookingDoorConvert: 'Convert to job',
+  bookingDoorSend: 'Send confirmation on WhatsApp',
+  bookingDoorCancel: 'Cancel this booking',
+  bookingCancelHint: 'Releases every unit. Hold to cancel — it cannot be un-cancelled.',
+  bookingCancelReasonLabel: 'Why? (optional)',
+  bookingCancelReasonPlaceholder: 'e.g. client postponed',
+  bookingConvertedToJob: (label: string): string => `Now on the board as “${label}”`,
+  bookingConvertNotConfirmed: 'Only a confirmed booking becomes a job',
+  bookingConvertAlreadyJob: 'This booking is already a job',
+
+  // The Confirm sheet: the three-layer answer per line, the allocation
+  // preview, the buffer toggle, the credential gate.
+  bookingConfirmSheetTitle: (no: number): string => `Confirm booking #${no}`,
+  bookingConfirmSheetHint: 'Confirming binds units to this client. The server re-checks it when the pipe drains.',
+  bookingLayerLine: (hereNow: number, pencilled: number, confirmed: number): string =>
+    `${hereNow} here now · ${pencilled} pencilled · ${confirmed} confirmed for these dates`,
+  bookingWillTake: (codes: string): string => `Will take ${codes}`,
+  bookingWillHold: (qty: number): string => `Will hold ${qty} from stock`,
+  bookingSameDayTurnaround: 'Same-day turnaround — no prep or turnaround buffer',
+  bookingSameDayHint: 'The fleet is held for exactly the client’s dates. Use it when the next job leaves the same evening.',
+  bookingHoldWindow: (from: string, until: string): string => `Held from ${from} until ${until}`,
+  bookingOverrideNoteLabel: 'Manager’s note to override',
+  bookingOverrideNotePlaceholder: 'e.g. known through Bilal, cheque held',
+  bookingConfirmNow: 'Confirm — bind the units',
+  bookingConfirmed: (no: number): string => `Booking #${no} confirmed`,
+  bookingConfirmedWith: (codes: string): string => `Units bound: ${codes}`,
+  bookingBlockedPeriodUncovers: 'The hold must cover the client’s whole window',
+  bookingNotFound: 'That booking is not on this phone',
+
+  // The New booking sheet.
+  bookingNewTitle: 'New booking',
+  bookingNewFromKitList: (n: number): string => `${n} line${s(n)} from the kit list`,
+  bookingNewCustomerLabel: 'Whose booking?',
+  bookingNewPickCustomer: 'Pick a customer',
+  bookingNewCustomerNeeded: 'A booking needs a customer — a promise has to be to someone.',
+  bookingNewCustomerNameLabel: 'Customer name',
+  bookingNewCustomerPhoneOptional: 'Phone (optional)',
+  bookingNewStartLabel: 'Pickup',
+  bookingNewEndLabel: 'Return',
+  bookingNewLinesLabel: 'What they want',
+  bookingNewAddLine: 'Add gear',
+  bookingNewSearchGear: 'Search the catalogue',
+  bookingNewNothingMatches: (q: string): string => `Nothing matches “${q}”`,
+  bookingNewNoLines: 'Add at least one item.',
+  bookingNewRemoveLineAria: (name: string): string => `Remove ${name}`,
+  bookingNewMoreAria: (name: string): string => `One more ${name}`,
+  bookingNewFewerAria: (name: string): string => `One fewer ${name}`,
+  bookingNewKindLabel: 'Pencil or confirm?',
+  bookingNewPencil: 'Pencil',
+  bookingNewPencilHint: (hours: number): string =>
+    `A pencil is a conversation — it holds nothing and dies after ${hours}h.`,
+  bookingNewConfirm: 'Confirm now',
+  bookingNewConfirmHint: 'Confirming binds units to this client today.',
+  bookingNewNoteLabel: 'Note (optional)',
+  bookingNewNotePlaceholder: 'e.g. mehndi + baraat, DHA',
+  bookingNewCreate: 'Pencil it in',
+  bookingNewCreateConfirmed: 'Book and confirm',
+  bookingNewBadPeriod: 'The return must come after the pickup.',
+  bookingNewPencilStands: (no: number): string =>
+    `Pencil #${no} stands — fix the clash and confirm from its page.`,
+  bookingNewCreated: (no: number): string => `Booking #${no} pencilled`,
+  bookingNewConsumable: (name: string): string => `${name} is a consumable — it is sold, not booked`,
+  bookingNewUnknownProduct: 'That product is not in the catalogue',
+  bookingNewNoCustomer: 'That customer is not on this phone',
+
+  // The extension screen — the one the research ranks highest.
+  bookingExtendTitle: (no: number): string => `Extend booking #${no}`,
+  bookingExtendHint: 'Pick the new return. The preview shows who is waiting on this gear before anything changes.',
+  bookingExtendNewEndLabel: 'New return',
+  bookingExtendClean: 'No one is waiting on this gear',
+  bookingExtendNow: 'Extend',
+  bookingExtendBlocked: (n: number): string =>
+    `${n} client${s(n)} waiting on this gear — settle each card first`,
+  bookingExtendEndsBeforeStart: 'The new return must come after the pickup.',
+  bookingExtended: (no: number, until: string): string => `Booking #${no} now runs until ${until}`,
+  bookingCollisionCard: (no: number, name: string, starts: string): string =>
+    `promised to #${no} · ${name} · starts ${starts}`,
+  bookingCollisionBulk: (shortBy: number, name: string): string => `${shortBy} × ${name} short`,
+  bookingDoorSubRent: 'Sub-rent',
+  bookingDoorSubstitute: 'Substitute',
+  bookingDoorCall: 'Call',
+  bookingCopyName: 'Copy the name',
+  bookingSubRentNote: (product: string, qty: number, no: number): string =>
+    `Sub-rent ${product} ×${qty} for #${no}`,
+  bookingSubRentNoted: 'Sub-rent noted on the booking',
+  bookingSubRentHint: 'Their claim on this unit stays until the partner’s unit is on the shelf; this extension will queue behind it.',
+  bookingSubstituteTitle: (code: string, no: number): string => `Give #${no} another unit for ${code}`,
+  bookingSubstituteHint: (name: string): string =>
+    `Another ${name} only. Tapping a unit moves their claim onto it — their booking stays confirmed.`,
+  bookingSubstituteNone: 'No free unit of this product for their dates — sub-rent, or call them.',
+  bookingSubstituted: (code: string): string => `Moved onto ${code}`,
+  bookingCardSettled: 'Settled',
+  bookingCopied: 'Copied',
+
+  // The Today board's Promised section and the overdue ladder.
+  todayPromisedHeading: 'Promised',
+  todayPromisedSub: 'Starting in the next two days, and pencils dying today',
+  todayStartsAt: (when: string): string => `Starts ${when}`,
+  todayPencilDies: (hours: number, minutes: number): string => `Pencil dies in ${hours}h ${minutes}m`,
+  todayEscalationStep: (step: number, days: number): string => `Step ${step} · ${days} days late`,
+  todayEscalated: (when: string): string => `With the manager since ${when}`,
+  todayEscalateConsiderBlacklist: 'Day 14 — consider blacklisting when the manager reviews it',
+  bookingManagerEscalationText: (job: string, days: number, items: string, customer: string | null): string =>
+    [
+      `OVERDUE — needs the manager`,
+      `Job: ${job}${customer ? ` (${customer})` : ''}`,
+      `${days} days late · ${items}`,
+      `Nudged, called, late fee drafted. Please take it from here.`,
+    ].join('\n'),
+
+  // The scanner's promised-soon stamp, and the asset page's.
+  bookingPromisedStamp: (no: number, day: string): string => `Promised · #${no} ${day}`,
+  bookingPromisedRightNow: (no: number, name: string, when: string): string =>
+    `Promised to booking #${no} (${name}) — hold begins ${when}`,
 }
 
 /**

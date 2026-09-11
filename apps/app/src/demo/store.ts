@@ -72,6 +72,8 @@ import {
   stillOutCount,
   substitutesFor,
   expectedOnShelf,
+  flagForManager,
+  managerFlaggedAt,
   sehat,
   serviceFacts,
   type Sehat,
@@ -128,8 +130,14 @@ import {
   convertBookingToJob,
   createBooking,
   extendBooking,
+  extensionPreview,
   listBookings,
+  noteSubRent,
+  planConfirm,
+  promisedStrip,
   pruneExpiredPencils,
+  reallocateReservation,
+  substitutesForReservation,
   type BookingFilter,
   type BookingRow,
   type BookingView,
@@ -140,11 +148,19 @@ import {
   type ConvertBookingResult,
   type CreateBookingInput,
   type CreateBookingResult,
+  type ConfirmPlan,
   type ExtendBookingResult,
+  type ExtendOptions,
+  type PromisedStrip,
+  type ReallocateResult,
+  type ReservationSubstitute,
+  type SubRentIntent,
 } from './bookings.ts'
 import {
+  escalationStep,
   promisedSoon,
   type BookingAvailability,
+  type ExtensionCollision,
   type BookingSettings,
   type PromisedSoon,
 } from '@papa/core'
@@ -312,18 +328,44 @@ export class DemoStore {
               }),
             )
           : null
+      // The overdue ladder (ASSUMPTION #escalation-ladder): the rung this
+      // job sits on, and ONE action for it. The manager rung remembers
+      // that it was pulled, so the card can say so instead of asking twice.
+      const escalation = j.due.state === 'overdue' ? escalationStep(j.due.daysLate ?? 0) : null
       return {
         id: j.id,
         label: j.label,
         out: j.out,
         contact: j.contact,
+        phone,
         expectedBack: j.expectedBack,
         due: j.due,
         nudgeUrl,
+        nudgeText: overdueNudgeMessage({
+          jobLabel: j.label,
+          itemsSummary: itemsSummary(outItemNames(this.db, j.id)),
+          dueLabel: j.due.label,
+        }),
+        escalation,
+        managerFlaggedAt: managerFlaggedAt(this.db, j.id),
         hasSummary: this.hasSummary(j.id),
         customer: j.customer,
       }
     })
+  }
+
+  /** The ladder's last rung: hand this job to the manager, once. Returns
+   *  the WhatsApp text the owner forwards — the escalation is a message,
+   *  not a silent flag. */
+  escalateToManager(jobId: string, nowMs: number = Date.now()): string | null {
+    const row = this.outJobsDue(nowMs).find((j) => j.id === jobId)
+    if (!row || !flagForManager(this.db, jobId, nowMs)) return null
+    return STR.bookingManagerEscalationText(
+      row.label,
+      row.due.daysLate ?? 0,
+      itemsSummary(outItemNames(this.db, jobId)),
+      row.customer?.name ?? null,
+    )
   }
 
   pullList(jobId: string, mode: SessionMode = 'out'): PullListView | null {
@@ -1462,6 +1504,11 @@ export class DemoStore {
     return createBooking(this.db, this.seed.orgId, input, nowMs)
   }
 
+  /** What confirm would do, before it does it — the Confirm sheet's preview. */
+  planConfirm(id: string, opts: ConfirmOptions = {}, nowMs: number = Date.now()): ConfirmPlan {
+    return planConfirm(this.db, id, opts, nowMs)
+  }
+
   /** Confirm = allocate (override 3), behind the credential gate (D9). */
   confirmBooking(
     id: string,
@@ -1475,9 +1522,61 @@ export class DemoStore {
     return cancelBooking(this.db, id, reason, nowMs)
   }
 
-  /** The extension-collision preview (D10): extends, or names who breaks. */
-  extendBooking(id: string, newEndMs: number, nowMs: number = Date.now()): ExtendBookingResult {
-    return extendBooking(this.db, id, newEndMs, nowMs)
+  /** The extension-collision preview (D10), read-only: who a new end breaks. */
+  extensionPreview(id: string, newEndMs: number, nowMs: number = Date.now()) {
+    return extensionPreview(this.db, id, newEndMs, nowMs)
+  }
+
+  /** Extends, or names who breaks. Collisions covered by a sub-rent intent
+   *  are written over — see ExtendOptions. */
+  extendBooking(
+    id: string,
+    newEndMs: number,
+    nowMs: number = Date.now(),
+    opts: ExtendOptions = {},
+  ): ExtendBookingResult {
+    return extendBooking(this.db, id, newEndMs, nowMs, undefined, opts)
+  }
+
+  /** The substitute door: move another booking's claim to a free unit of
+   *  the same product, so the extension no longer breaks it. */
+  reallocateReservation(
+    reservationId: string,
+    newAssetId: string,
+    forBookingId: string | null = null,
+    nowMs: number = Date.now(),
+  ): ReallocateResult {
+    return reallocateReservation(this.db, reservationId, newAssetId, nowMs, undefined, forBookingId)
+  }
+
+  substitutesForReservation(reservationId: string): ReservationSubstitute[] {
+    return substitutesForReservation(this.db, reservationId)
+  }
+
+  /** The reservation a collision card points at — the rival's claim on
+   *  that unit — so the substitute door knows what to move. */
+  reservationFor(collision: ExtensionCollision): string | null {
+    if (collision.kind !== 'asset') return null
+    return this.db.get<{ id: string }>(
+      `select id from asset_reservations where booking_id = ? and asset_id = ? and state = 'confirmed' limit 1`,
+      [collision.bookingId, collision.assetId],
+    )?.id ?? null
+  }
+
+  /** The sub-rent door: intent on the note, an op for the pipe. */
+  noteSubRent(id: string, intent: SubRentIntent, nowMs: number = Date.now()) {
+    return noteSubRent(this.db, id, intent, STR, nowMs)
+  }
+
+  /** The Today board's Promised section. */
+  promisedStrip(nowMs: number = Date.now()): PromisedStrip {
+    return promisedStrip(this.db, nowMs)
+  }
+
+  /** A customer's phone as a dial-able number, or null. */
+  customerPhone(customerId: string): string | null {
+    const c = this.db.get<{ phone: string | null }>(`select phone from customers where id = ?`, [customerId])
+    return parsePhoneNumber(c?.phone ?? null)
   }
 
   /** The bridge (D8): the confirmed booking becomes the job on the board. */

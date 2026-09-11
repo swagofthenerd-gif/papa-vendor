@@ -56,7 +56,9 @@ describe('routing', () => {
       // a different screen than the one they linked to.
       { name: 'gear', query: 'FX9 / 01' },
       { name: 'hisaab' },
-      { name: 'enquiry' },
+      { name: 'desk' },
+      { name: 'calendar' },
+      { name: 'booking', bookingId: 'bk-1' },
       { name: 'import' },
       { name: 'settings' },
     ]
@@ -70,7 +72,7 @@ describe('routing', () => {
     // rename broke routing: the switch simply fell through and the caller
     // navigated to "undefined". Any new route added to the View union without
     // a case here fails this rather than at runtime in a warehouse.
-    const names = ['jobs', 'scan', 'session', 'asset', 'gear', 'hisaab', 'enquiry', 'import', 'settings']
+    const names = ['jobs', 'scan', 'session', 'asset', 'gear', 'hisaab', 'desk', 'calendar', 'booking', 'owed', 'customer', 'import', 'settings']
     const sample = {
       jobs: { name: 'jobs' },
       scan: { name: 'scan', jobId: 'j', mode: 'out' },
@@ -78,7 +80,11 @@ describe('routing', () => {
       asset: { name: 'asset', assetId: 'a' },
       gear: { name: 'gear' },
       hisaab: { name: 'hisaab' },
-      enquiry: { name: 'enquiry' },
+      desk: { name: 'desk' },
+      calendar: { name: 'calendar' },
+      booking: { name: 'booking', bookingId: 'b' },
+      owed: { name: 'owed' },
+      customer: { name: 'customer', customerId: 'c' },
       import: { name: 'import' },
       settings: { name: 'settings' },
     }
@@ -87,6 +93,16 @@ describe('routing', () => {
       assert.equal(typeof hash, 'string', `${n} has no hash`)
       assert.equal(parseHash(hash).name, n, `${n} does not parse back`)
     }
+  })
+
+  test('the kit-list reader\'s old address lands on the desk', () => {
+    // #/enquiry was the reader's route for a year of links and habits; the
+    // desk is where the reader lives now, and an old link must not fall
+    // back to the job board.
+    assert.deepEqual(parseHash('#/enquiry'), { name: 'desk' })
+    assert.equal(viewToHash({ name: 'desk' }), '#/desk')
+    // A booking link with no id lands on the calendar, not on nothing.
+    assert.deepEqual(parseHash('#/booking'), { name: 'calendar' })
   })
 
   test('a malformed route falls back rather than crashing', () => {

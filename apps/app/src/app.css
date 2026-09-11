@@ -1314,3 +1314,159 @@ h2.stamp .h-ico { display: none; }
   margin: var(--sp-1) 0 0;
   font-size: var(--fs-xs); font-weight: 600; color: var(--muted);
 }
+
+/* ---- the promise calendar (0022, phase 2) ------------------- */
+/* Two stamps, one instrument. A confirmed booking is the rubber stamp
+   proper (.stamp above). A pencil is a pencilled note — grey, dashed,
+   the same crooked set — because a pencil is a conversation and must
+   never read as a promise. Struck = expired or cancelled: the pencil
+   crossed out. Small = the scan row's annotation, which must fit beside
+   a code without pushing the row taller. */
+.stamp.stamp-pencil {
+  color: var(--muted);
+  border-style: dashed;
+  box-shadow: none;
+}
+.stamp.stamp-struck {
+  color: var(--muted);
+  border-style: solid;
+  text-decoration: line-through;
+  box-shadow: none;
+  animation: none;
+}
+.stamp.stamp-small {
+  font-size: var(--fs-xs);
+  padding: 1px 6px;
+  border-width: 1.5px;
+  animation: none;
+}
+
+/* The month. Wedding season shades the page a step darker with the
+   ink — the busy months read as busy before a cell is read. */
+.cal-month { margin-top: var(--sp-4); }
+.cal-month.is-wedding {
+  margin-left: calc(-1 * var(--sp-4)); margin-right: calc(-1 * var(--sp-4));
+  padding: 0 var(--sp-4) var(--sp-3);
+  background: color-mix(in srgb, var(--ink) 6%, var(--bg));
+}
+.cal-season { color: var(--accent-strong); font-weight: 700; }
+.cal-strip {
+  display: grid; grid-template-columns: var(--tap) 1fr var(--tap);
+  align-items: center; gap: var(--sp-2);
+}
+.cal-nav { justify-self: center; }
+.cal-title { text-align: center; min-width: 0; }
+.cal-title h2 { margin: 0; font-size: var(--fs-lg); font-weight: 800; }
+.cal-title .section-sub { margin-top: 2px; }
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+  margin-top: var(--sp-3);
+}
+.cal-weekday {
+  text-align: center; padding: 4px 0;
+  font-size: var(--fs-xs); font-weight: 700; color: var(--muted);
+  border-bottom: var(--line-w) solid var(--rule-feint);
+}
+.cal-pad { min-height: 52px; }
+/* A day is a cell on ruled paper: a feint rule under each, the number
+   in the typewritten voice, marks tucked in the corner. Glove-sized. */
+.cal-day {
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between;
+  min-height: 52px; padding: 4px 5px;
+  border: none; border-bottom: var(--line-w) solid var(--rule-feint);
+  border-radius: var(--r-row);
+  background: transparent; color: var(--ink);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.cal-day.is-today .cal-daynum {
+  color: var(--accent-strong);
+  text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px;
+}
+.cal-day.is-selected { background: var(--card-2); box-shadow: inset 0 0 0 2px var(--ink); }
+.cal-daynum { font-size: var(--fs-sm); font-weight: 700; }
+.cal-marks { display: flex; gap: 3px; align-self: flex-end; }
+.cal-mark {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 4px;
+  border-radius: 3px; font-size: var(--fs-xs); font-weight: 800; line-height: 1;
+}
+.cal-mark-confirmed {
+  color: var(--stamp-ink); border: 1.5px solid var(--stamp-ink);
+  background: var(--stamp-bg); transform: rotate(-3deg);
+}
+.cal-mark-pencil {
+  color: var(--muted); border: 1.5px dashed var(--muted); transform: rotate(-3deg);
+}
+.cal-legend {
+  display: flex; align-items: center; gap: var(--sp-2);
+  margin: var(--sp-3) 0 0; color: var(--muted);
+  font-size: var(--fs-xs); font-weight: 600;
+}
+.cal-legend .cal-mark { min-width: 14px; height: 14px; margin-left: var(--sp-2); }
+.cal-legend .cal-mark:first-child { margin-left: 0; }
+
+/* Booking rows: the ledger line, the number in the code voice, the
+   stamp in the column the money would occupy on a khata row. */
+.booking-no { color: var(--muted); font-size: var(--fs-xs); margin-right: 2px; }
+.booking-line { min-height: var(--row-h-glove); }
+.booking-line-stamp { grid-row: 1 / span 2; align-self: center; }
+.booking-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.booking-head .asset-id { margin-right: auto; }
+.booking-note { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); font-weight: 600; white-space: pre-line; }
+.asset-promised { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: var(--sp-2) 0 0; }
+
+/* The Today board's Promised rows: the tap band on the left, the stamp
+   and the one door on the right, the glove gap between them. */
+.promised-line { grid-template-columns: 1fr auto; align-items: center; }
+.promised-main { display: grid; gap: var(--gap-hair); padding: 0; min-height: var(--tap); }
+.promised-side {
+  grid-row: 1 / span 2; display: flex; flex-direction: column; align-items: flex-end;
+  gap: var(--sp-2); margin-left: var(--tap-gap-glove);
+}
+
+/* The overdue ladder on a card: one line, one button. */
+.escalation-row {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-2) var(--sp-2) 0;
+}
+.escalation-step { font-size: var(--fs-xs); font-weight: 700; color: var(--muted); }
+.escalation-row a.btn { text-decoration: none; }
+
+/* The collision cards — the extension screen's whole point. Each is a
+   page of its own: the unit in the code voice, the stamp of the claim
+   that stands, then the three doors with the glove gap between them. */
+.collision-list { list-style: none; margin: var(--sp-3) 0 0; padding: 0; display: grid; gap: var(--sp-3); }
+.collision-card {
+  padding: var(--sp-3);
+  border: var(--line-w) solid var(--line-strong); border-radius: var(--r-md);
+  background: var(--card);
+  box-shadow: var(--shadow-xs);
+}
+.collision-card.is-settled { border-style: dashed; opacity: 0.8; }
+.collision-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.collision-subject { font-size: var(--fs-lg); font-weight: 700; }
+.collision-line { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); font-weight: 600; }
+.collision-doors { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--tap-gap-glove); margin-top: var(--sp-3); }
+.collision-doors a.btn { text-decoration: none; }
+
+/* The good-news notice: the one green sentence a sheet is allowed. */
+.notice-ok { background: var(--green-soft); color: var(--green-ink); }
+
+/* Sheet furniture the booking sheets add: a two-up field pair, the
+   quantity stepper on a draft line, and a labelled toggle row. */
+.field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
+.field-pair .sheet-search { min-width: 0; font-size: var(--fs-sm); }
+.booking-draft-line { grid-template-columns: 1fr auto; }
+.qty-stepper { display: inline-flex; align-items: center; gap: 2px; }
+.qty-n { min-width: 28px; text-align: center; font-size: var(--fs-md); font-weight: 700; }
+.toggle-row {
+  display: grid; grid-template-columns: auto 1fr; gap: var(--sp-3); align-items: start;
+  margin-top: var(--sp-4); padding: var(--sp-3);
+  border: var(--line-w) solid var(--line); border-radius: var(--r-sm);
+  background: var(--card);
+  cursor: pointer;
+}
+.toggle-row input { width: 24px; height: 24px; margin: 2px 0 0; accent-color: var(--accent); }
+.toggle-row strong { display: block; font-size: var(--fs-sm); }
+.toggle-row .sheet-hint { display: block; margin-top: 2px; }
