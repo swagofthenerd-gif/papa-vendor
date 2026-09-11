@@ -1531,6 +1531,9 @@ h2.stamp .h-ico { display: none; }
 .rate-row .line-name, .rate-row .line-note { grid-column: 1; }
 .rate-row.is-unpriced .line-note { color: var(--accent-strong); }
 .rate-input { grid-column: 2; grid-row: 1 / span 2; width: 7.5em; margin-top: 0; text-align: right; }
-.weekday-row .filter-chip { padding-left: 10px; padding-right: 10px; }
+/* Seven weekdays on one settings page: wrap rather than scroll, so the
+   whole week is visible at a glance and nothing hides off the edge. */
+.weekday-row { flex-wrap: wrap; overflow: visible; }
+.weekday-row .filter-chip { padding: 8px 10px; font-size: var(--fs-xs); }
 .calendar-row-tap { min-height: var(--tap); display: flex; align-items: center; }
 .calendar-row-doors { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--tap-gap-glove); align-items: center; margin-top: var(--sp-1); }
