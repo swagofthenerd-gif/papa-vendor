@@ -325,6 +325,7 @@ const STR_EN = {
   gearFilterOnTheShelf: 'On the shelf',
   gearFilterOut: 'Out',
   gearFilterNeedsALook: 'Needs a look',
+  gearFilterGone: 'Gone',
   gearSearchPlaceholder: 'Search by name or code — FX9, AP600, battery',
   gearClearSearchAria: 'Clear search',
   gearItemCount: (n: number): string => `${n} item${s(n)}`,
@@ -615,6 +616,93 @@ const STR_EN = {
   closedJobsClosedOn: (date: string): string => `Closed ${date}`,
   closedJobsNeverCameBack: (n: number): string =>
     `${n} item${s(n)} never came back`,
+
+  // ----------------------------------------------------------------- fleet
+  // The lifecycle surface (0020): declaring gear terminal, the theft report,
+  // the crisis-day swap, and the ginti (cycle count). Everything destructive
+  // here is behind a hold, a note and a confirm — the adjacency rules that
+  // keep a wet glove from ending a camera's life by mis-tap.
+  fleetGoneHeading: 'This item left the fleet',
+  fleetDispositionWord: (d: string): string =>
+    ({ lost: 'lost', stolen: 'stolen', sold: 'sold', retired: 'retired' }[d] ?? d),
+  // The disclosure the destructive doors hide behind — held open, not tapped.
+  fleetMarkGone: 'Mark lost, stolen or sold',
+  fleetMarkGoneHint:
+    'These take the item off the fleet. Hold to open, then confirm.',
+  fleetHoldToReveal: 'Hold to open',
+  fleetLost: 'Lost',
+  fleetStolen: 'Stolen',
+  fleetSold: 'Sold',
+  fleetMarkNoteLabel: 'What happened? (optional)',
+  fleetSaleAmountLabel: 'Sale amount (Rs, optional)',
+  // Deliberately not a ledger line — see 0020 D3. The note is the record
+  // until a sale-income book exists.
+  fleetSaleAmountHint:
+    'Kept as a note on the item — not on the money book yet.',
+  fleetConfirmLost: 'Confirm — mark lost',
+  fleetConfirmStolen: 'Confirm — mark stolen',
+  fleetConfirmSold: 'Confirm — mark sold',
+  fleetMarkedNote: (word: string): string => `Marked ${word}`,
+  fleetFound: 'Mark found — back in the fleet',
+  fleetFoundNote: 'Turned up — back in the fleet',
+  // The stamp word on a terminal asset page — LOST / STOLEN / SOLD / RETIRED
+  // (the CSS uppercases; these are the translatable lowercase words).
+  fleetStampLost: 'lost',
+  fleetStampStolen: 'stolen',
+  fleetStampSold: 'sold',
+  fleetStampRetired: 'retired',
+  // The theft report (the police / insurance / partner-house card).
+  fleetTheftReport: 'Theft report',
+  fleetTheftHeading: 'THEFT REPORT',
+  fleetTheftBanner: 'This equipment is reported STOLEN.',
+  fleetTheftCodeLabel: 'Code',
+  fleetTheftSerialLabel: 'Serial',
+  fleetTheftNoSerial: 'not recorded',
+  fleetTheftPhotos: (n: number): string =>
+    n === 0
+      ? 'No condition photos on record.'
+      : `${n} condition photo${s(n)} on record.`,
+  fleetTheftLastSeen: 'Last seen',
+  fleetTheftLastSeenLine: (when: string, jobLabel: string | null): string =>
+    jobLabel ? `${when} — on ${jobLabel}` : when,
+  fleetTheftLastSeenUnknown: 'No scan on record.',
+  fleetTheftContact: 'Contact',
+  fleetTheftFooter: (houseName: string): string =>
+    `Reported by ${houseName}. Please contact us with any information.`,
+  // The swap (crisis-day: a substitute onto a live job in one flow).
+  fleetSwapOntoJob: 'Swap onto job',
+  fleetSwapTitle: 'Swap a substitute in',
+  fleetSwapBrokenLine: (code: string, jobLabel: string): string =>
+    `${code} comes off ${jobLabel} and gets flagged.`,
+  fleetSwapPickSubstitute: 'Pick a substitute',
+  fleetSwapSamePreferred: 'Same product, on the shelf',
+  fleetSwapOther: 'Anything else on the shelf',
+  fleetSwapNoSubstitutes: 'Nothing on the shelf fit to send.',
+  fleetSwapConfirm: 'Swap — record both movements',
+  fleetSwapDone: (broken: string, sub: string): string =>
+    `${sub} out; ${broken} home and flagged.`,
+  fleetSwapNoLiveJob: 'This item is not out on a live job to swap off.',
+  // The ginti (cycle count / stocktake).
+  fleetGinti: 'Ginti',
+  fleetGintiSubtitle: 'Count a shelf against the book',
+  fleetGintiScanShelf: 'Scan a shelf tag, or pick a shelf, to start',
+  fleetGintiPickShelf: 'Pick a shelf',
+  fleetGintiCounting: (shelf: string): string => `Counting ${shelf}`,
+  fleetGintiSeen: (n: number): string => `${n} seen`,
+  fleetGintiOk: (n: number): string => `${n} matched`,
+  fleetGintiMissing: (n: number): string => `${n} missing`,
+  fleetGintiUnexpected: (n: number): string => `${n} not on this shelf`,
+  fleetGintiScanItems: 'Scan items on the shelf',
+  fleetGintiFinish: 'Finish the count',
+  fleetGintiReportButton: 'Copy the discrepancy report',
+  fleetGintiClean: 'Every item on this shelf was found.',
+  fleetGintiReportHeading: 'GINTI',
+  fleetGintiReportShelf: (shelf: string): string => `Shelf: ${shelf}`,
+  fleetGintiReportMissing: 'MISSING (expected, not found):',
+  fleetGintiReportUnexpected: 'NOT ON THIS SHELF (found here anyway):',
+  fleetGintiReportOkLine: (n: number): string => `${n} matched the book.`,
+  fleetGintiReportDecide:
+    'Missing items are for you to decide — found elsewhere, or lost.',
 }
 
 /**
