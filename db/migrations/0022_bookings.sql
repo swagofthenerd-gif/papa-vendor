@@ -597,30 +597,61 @@ returns void
 language plpgsql
 set search_path = public
 as $$
+declare
+  v_expired uuid[];
 begin
+  select coalesce(array_agg(b.id), '{}') into v_expired
+    from bookings b
+   where b.org_id = p_org and b.status = 'pencil'
+     and b.pencil_expires_at <= now() and b.deleted_at is null;
+
   update asset_reservations r
      set deleted_at = now()
    where r.org_id = p_org and r.deleted_at is null
-     and r.booking_id in (
-       select b.id from bookings b
-        where b.org_id = p_org and b.status = 'pencil'
-          and b.pencil_expires_at <= now() and b.deleted_at is null);
+     and r.booking_id = any (v_expired);
 
   update stock_reservations r
      set deleted_at = now()
    where r.org_id = p_org and r.deleted_at is null
-     and r.booking_id in (
-       select b.id from bookings b
-        where b.org_id = p_org and b.status = 'pencil'
-          and b.pencil_expires_at <= now() and b.deleted_at is null);
+     and r.booking_id = any (v_expired);
 
   update bookings b
      set status = 'cancelled',
          cancelled_at = now(),
          cancel_reason = 'pencil_expired'
-   where b.org_id = p_org and b.status = 'pencil'
-     and b.pencil_expires_at <= now() and b.deleted_at is null;
+   where b.org_id = p_org and b.id = any (v_expired);
 end
+$$;
+
+/**
+ * The per-product advisory lock every capacity decision runs under (D4,
+ * D6): concurrent confirms and extensions of the same product serialize
+ * here, so the peak each one reads is still true when it writes.
+ * Transaction-scoped; released with the caller's commit or rollback.
+ */
+create or replace function booking_product_lock(p_org uuid, p_product uuid)
+returns void
+language sql
+set search_path = public
+as $$
+  select pg_advisory_xact_lock(
+    hashtextextended(p_org::text || ':' || p_product::text, 42))
+$$;
+
+/**
+ * Shelf count of a bulk product: the movements ledger already subtracted
+ * what is out. INVOKER on purpose — booking_availability runs as the caller
+ * and RLS on stock_lots scopes it.
+ */
+create or replace function stock_on_hand(p_org uuid, p_product uuid)
+returns integer
+language sql
+stable
+set search_path = public
+as $$
+  select coalesce(sum(s.qty_on_hand), 0)::integer
+    from stock_lots s
+   where s.org_id = p_org and s.product_id = p_product
 $$;
 
 /**
@@ -717,11 +748,7 @@ begin
   end if;
 
   if v_mode = 'bulk' then
-    -- Shelf count: the movements ledger already subtracted what is out.
-    select coalesce(sum(s.qty_on_hand), 0)::integer into v_here
-      from stock_lots s
-     where s.org_id = v_org and s.product_id = p_product_id;
-
+    v_here   := stock_on_hand(v_org, p_product_id);
     v_pencil := stock_reserved_peak(v_org, p_product_id, p_period, 'pencil');
     v_conf   := stock_reserved_peak(v_org, p_product_id, p_period, 'confirmed');
   else
@@ -889,7 +916,7 @@ begin
     v_line_id := uuid_generate_v7();
     v_line_count := v_line_count + 1;
 
-    if v_line ? 'asset_id' and nullif(v_line ->> 'asset_id', '') is not null then
+    if nullif(v_line ->> 'asset_id', '') is not null then
       select a.* into v_asset
         from assets a
        where a.id = (v_line ->> 'asset_id')::uuid
@@ -915,7 +942,7 @@ begin
         values (v_org, v_booking_id, v_line_id, v_asset.id, v_blocked, 'pencil');
       end if;
 
-    elsif v_line ? 'product_id' and nullif(v_line ->> 'product_id', '') is not null then
+    elsif nullif(v_line ->> 'product_id', '') is not null then
       v_qty := coalesce(nullif(v_line ->> 'qty', '')::int, 1);
       if v_qty < 1 then
         raise exception 'line qty must be at least 1'
@@ -1107,15 +1134,10 @@ begin
           'booking_line_id', v_line.id, 'asset_id', v_line.asset_id);
 
       elsif v_line.tracking_mode = 'bulk' then
-        -- D6: capacity under the per-product advisory lock. Concurrent
-        -- confirms of the same product serialize here, so the peak they
-        -- each read stays true when they write.
-        perform pg_advisory_xact_lock(
-          hashtextextended(v_org::text || ':' || v_line.product_id::text, 42));
+        -- D6: capacity under the per-product advisory lock.
+        perform booking_product_lock(v_org, v_line.product_id);
 
-        select coalesce(sum(s.qty_on_hand), 0)::integer into v_on_hand
-          from stock_lots s
-         where s.org_id = v_org and s.product_id = v_line.product_id;
+        v_on_hand := stock_on_hand(v_org, v_line.product_id);
         v_peak := stock_reserved_peak(
           v_org, v_line.product_id, v_blocked, 'confirmed', v_b.id);
 
@@ -1150,8 +1172,7 @@ begin
       else
         -- D4: serialized allocation, least-utilised first, under the same
         -- advisory lock so concurrent confirms pick different units.
-        perform pg_advisory_xact_lock(
-          hashtextextended(v_org::text || ':' || v_line.product_id::text, 42));
+        perform booking_product_lock(v_org, v_line.product_id);
 
         v_needed := v_line.qty;
         for v_asset_id in
@@ -1191,6 +1212,8 @@ begin
   exception when exclusion_violation then
     -- D5: name the winner instead of leaking 23P01 noise. The blocked
     -- asset is whichever of ours now overlaps a foreign confirmed claim.
+    -- v_picked was seeded with every demanded unit before the loop and
+    -- plpgsql variables survive the rollback, so it is the full list.
     select a.asset_code, b2.booking_no
       into v_blk_code, v_blk_no
       from asset_reservations r2
@@ -1199,11 +1222,7 @@ begin
      where r2.org_id = v_org and r2.deleted_at is null
        and r2.state = 'confirmed' and r2.booking_id <> v_b.id
        and r2.blocked_period && v_blocked
-       and (r2.asset_id = any (v_picked)
-            or r2.asset_id in (
-              select l2.asset_id from booking_lines l2
-               where l2.booking_id = v_b.id and l2.org_id = v_org
-                 and l2.asset_id is not null and l2.deleted_at is null))
+       and r2.asset_id = any (v_picked)
      order by b2.booking_no limit 1;
     raise exception 'asset % is already promised to booking #%',
       coalesce(v_blk_code, 'unit'), coalesce(v_blk_no, 0)
@@ -1245,14 +1264,13 @@ security definer
 set search_path = public
 as $$
 declare
-  v_org  uuid;
-  v_user uuid;
+  v_org uuid;
   v_r asset_reservations%rowtype;
   v_old_product uuid;
   v_new assets%rowtype;
   v_blk_no bigint;
 begin
-  select o_org, o_user into v_org, v_user
+  select o_org into v_org
     from booking_write_context(array['owner', 'manager', 'desk']);
 
   select r.* into v_r
@@ -1389,8 +1407,7 @@ security definer
 set search_path = public
 as $$
 declare
-  v_org  uuid;
-  v_user uuid;
+  v_org uuid;
   v_b bookings%rowtype;
   v_new_customer tstzrange;
   v_new_blocked tstzrange;
@@ -1401,7 +1418,7 @@ declare
   v_on_hand integer;
   v_peak integer;
 begin
-  select o_org, o_user into v_org, v_user
+  select o_org into v_org
     from booking_write_context(array['owner', 'manager', 'desk']);
 
   perform prune_expired_pencils(v_org);
@@ -1475,12 +1492,9 @@ begin
        where r.org_id = v_org and r.booking_id = v_b.id
          and r.deleted_at is null and r.state = 'confirmed'
     loop
-      perform pg_advisory_xact_lock(
-        hashtextextended(v_org::text || ':' || v_line.product_id::text, 42));
+      perform booking_product_lock(v_org, v_line.product_id);
 
-      select coalesce(sum(s.qty_on_hand), 0)::integer into v_on_hand
-        from stock_lots s
-       where s.org_id = v_org and s.product_id = v_line.product_id;
+      v_on_hand := stock_on_hand(v_org, v_line.product_id);
       v_peak := stock_reserved_peak(
         v_org, v_line.product_id, v_new_blocked, 'confirmed', v_b.id);
 
@@ -1637,14 +1651,18 @@ grant execute on function convert_booking_to_job(uuid) to papa_app;
 -- ---------------------------------------------------------------------------
 revoke all on function booking_write_context(text[])          from public;
 revoke all on function prune_expired_pencils(uuid)            from public;
+revoke all on function booking_product_lock(uuid, uuid)       from public;
 revoke all on function bookings_check_customer_org()          from public;
 revoke all on function booking_lines_check_org()              from public;
 revoke all on function asset_reservations_check_org()         from public;
 revoke all on function stock_reservations_check_org()         from public;
 
--- stock_reserved_peak is called by booking_availability, which runs as the
--- caller (INVOKER): papa_app needs execute, and RLS on stock_reservations
--- keeps a foreign p_org argument returning zero rather than truth.
+-- stock_on_hand and stock_reserved_peak are called by booking_availability,
+-- which runs as the caller (INVOKER): papa_app needs execute, and RLS on
+-- stock_lots / stock_reservations keeps a foreign p_org argument returning
+-- zero rather than truth.
+revoke all on function stock_on_hand(uuid, uuid) from public;
+grant execute on function stock_on_hand(uuid, uuid) to papa_app;
 revoke all on function stock_reserved_peak(uuid, uuid, tstzrange, text, uuid)
   from public;
 grant execute on function stock_reserved_peak(uuid, uuid, tstzrange, text, uuid)
