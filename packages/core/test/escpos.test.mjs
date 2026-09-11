@@ -173,9 +173,10 @@ describe('the ASCII fold', () => {
     assert.match(stream, /1P0PARCHI - Ravi Light & Grip\nShan Foods TVC - Ghazi Studios\nOUT 2026/)
     assert.match(stream, /AP600-01  Aputure 600D Pro\.\.\.\n/)
     // The only bytes above 0x7E are command arguments (here: the QR block's
-    // length byte, pL = 158 + 3), never text.
+    // length byte, pL = folded length + 3 — the ellipsis grew to three
+    // bytes), never text.
     const above = [...bytes].filter((b) => b > 0x7e)
-    assert.deepEqual(above, [text.length + 3])
+    assert.deepEqual(above, [toAscii(text).length + 3])
   })
 })
 
