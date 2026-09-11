@@ -55,7 +55,12 @@ const MIRROR_COLUMNS: Record<string, string[]> = {
     'customer_from', 'customer_until', 'blocked_from', 'blocked_until',
     'pencil_expires_at', 'note', 'cancel_reason', 'updated_at',
   ],
-  booking_lines: ['id', 'org_id', 'booking_id', 'product_id', 'asset_id', 'qty'],
+  // The 0024 D8 override columns ride along as of 0026: the phone's quote
+  // must show the owner's number, not the card's, once it is logged.
+  booking_lines: [
+    'id', 'org_id', 'booking_id', 'product_id', 'asset_id', 'qty',
+    'rate_minor', 'original_rate_minor', 'override_reason',
+  ],
   asset_reservations: [
     'id', 'org_id', 'booking_id', 'booking_line_id', 'asset_id',
     'blocked_from', 'blocked_until', 'state',
@@ -65,6 +70,15 @@ const MIRROR_COLUMNS: Record<string, string[]> = {
     'blocked_from', 'blocked_until', 'state',
   ],
   stock_lots: ['id', 'org_id', 'product_id', 'location_id', 'qty_on_hand'],
+  // The rate card and the calendar (0024, projected by 0026): the quote
+  // pipeline's inputs. Role-gated server-side, so a warehouse phone's
+  // page carries none of the first two.
+  rate_cards: [
+    'id', 'org_id', 'name', 'is_default', 'week_equals_days', 'min_billable_days',
+    'weekend_mask', 'updated_at',
+  ],
+  rate_card_entries: ['id', 'org_id', 'rate_card_id', 'product_id', 'day_rate_minor'],
+  org_calendar_days: ['id', 'org_id', 'day', 'kind', 'name', 'rate_multiplier'],
 }
 
 /** The primary key each mirror is keyed on locally. */
@@ -79,6 +93,9 @@ const MIRROR_KEY: Record<string, string> = {
   asset_reservations: 'id',
   stock_reservations: 'id',
   stock_lots: 'id',
+  rate_cards: 'id',
+  rate_card_entries: 'id',
+  org_calendar_days: 'id',
 }
 
 export interface ApplyReport {
@@ -218,10 +235,13 @@ export class PullApplier {
   }
 }
 
-/** SQLite has no boolean and no undefined. */
+/** SQLite has no boolean, no undefined and no array: a jsonb array or
+ *  object (rate_cards.weekend_mask, jobs.attendant_names) is kept as its
+ *  JSON text, never as String()'s comma-joined lie. */
 function normalise(v: unknown): SqlValue {
   if (v === undefined || v === null) return null
   if (typeof v === 'boolean') return v ? 1 : 0
   if (typeof v === 'number') return v
+  if (typeof v === 'object') return JSON.stringify(v)
   return String(v)
 }

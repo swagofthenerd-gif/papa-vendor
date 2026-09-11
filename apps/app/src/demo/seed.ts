@@ -281,18 +281,15 @@ export function seedDemo(db: SqlDriver): DemoSeed {
         ],
       )
 
-      // Rates in minor units (paisa), the server's `_minor` convention. A
-      // product without one gets NO row: 'no rate' must stay distinguishable
-      // from 'Rs 0', and a null-stuffed row invites someone to sum it.
-      if (p.dayRateRs !== undefined || p.replacementRs !== undefined) {
+      // Replacement value in minor units (paisa), the server's `_minor`
+      // convention. A product without one gets NO row: 'no value' must stay
+      // distinguishable from 'Rs 0', and a null-stuffed row invites someone
+      // to sum it. The DAY RATE goes on the rate card below (seedRateCard)
+      // — the one rate home since 0024.
+      if (p.replacementRs !== undefined) {
         db.exec(
-          `insert into product_rates (product_id, day_rate_minor, replacement_minor)
-           values (?, ?, ?)`,
-          [
-            productId,
-            p.dayRateRs === undefined ? null : p.dayRateRs * 100,
-            p.replacementRs === undefined ? null : p.replacementRs * 100,
-          ],
+          `insert into product_rates (product_id, replacement_minor) values (?, ?)`,
+          [productId, p.replacementRs * 100],
         )
       }
 
@@ -441,6 +438,7 @@ export function seedDemo(db: SqlDriver): DemoSeed {
       )
     }
 
+    seedRateCard(db)
     seedMoneyBook(db)
     seedBookings(db)
   })
@@ -459,6 +457,57 @@ export function seedDemo(db: SqlDriver): DemoSeed {
       expected: expectedFor(j),
     })),
   }
+}
+
+/**
+ * The rate card (0024, mirrored by 0026): ONE default card, 'Standard',
+ * on the documented knobs — a 3-day week (ASSUMPTION #week-rate), one
+ * billable day minimum, every day billing (ASSUMPTION #weekend-free) —
+ * with an entry for every product that carries a day rate above. Sachdeva
+ * Tripod, the C-Stands and the case have NO entry, so the quote sheet's
+ * UNPRICED path is visible the moment the demo opens.
+ *
+ * The calendar (ASSUMPTION #seasonal-pricing): the coming Dec–Feb wedding
+ * season at 1.0 — shading only — and ONE Eid holiday at 1.25 next spring,
+ * so a quote crossing it shows the multiplier line with a real number.
+ * ASSUMPTION: the seeded Eid falls on the coming 10 April; Eid moves on
+ * the lunar calendar and the desk edits the row. See
+ * docs/assumptions.md#demo-eid
+ */
+function seedRateCard(db: SqlDriver): void {
+  const iso = new Date().toISOString()
+  db.exec(
+    `insert into rate_cards (id, org_id, name, is_default, week_equals_days,
+       min_billable_days, weekend_mask, updated_at)
+     values ('card-standard', ?, 'Standard', 1, 3, 1, '[]', ?)`,
+    [ORG, iso],
+  )
+  for (const p of PRODUCTS) {
+    if (p.dayRateRs === undefined) continue
+    db.exec(
+      `insert into rate_card_entries (id, org_id, rate_card_id, product_id, day_rate_minor)
+       values (?, ?, 'card-standard', ?, ?)`,
+      [`rce-${p.key}`, ORG, `prod-${p.key}`, p.dayRateRs * 100],
+    )
+  }
+  const now = new Date()
+  const seasonYear = now.getMonth() <= 1 ? now.getFullYear() - 1 : now.getFullYear()
+  const p2 = (n: number) => String(n).padStart(2, '0')
+  const dayOf = (d: Date) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
+  for (let d = new Date(seasonYear, 11, 1); d < new Date(seasonYear + 1, 2, 1); d.setDate(d.getDate() + 1)) {
+    db.exec(
+      `insert into org_calendar_days (id, org_id, day, kind, name, rate_multiplier)
+       values (?, ?, ?, 'season', 'Wedding season', 1.0)`,
+      [`cal-season-${dayOf(d)}`, ORG, dayOf(d)],
+    )
+  }
+  let eidYear = now.getFullYear()
+  if (new Date(eidYear, 3, 10).getTime() <= now.getTime()) eidYear++
+  db.exec(
+    `insert into org_calendar_days (id, org_id, day, kind, name, rate_multiplier)
+     values ('cal-eid', ?, ?, 'holiday', 'Eid ul-Fitr', 1.25)`,
+    [ORG, `${eidYear}-04-10`],
+  )
 }
 
 /** Epoch ms `days` before now — the ledger's created_at voice. Relative for

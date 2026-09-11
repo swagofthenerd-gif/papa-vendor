@@ -11,7 +11,7 @@ import {
   type MoneyTotal,
   type SqlDriver,
 } from '@papa/core'
-import { decodeScanOps, lastSessionRecord, openJob } from './read-model.ts'
+import { DEFAULT_CARD_RATE_SQL, decodeScanOps, lastSessionRecord, openJob } from './read-model.ts'
 import { assetCosts } from './kharcha.ts'
 import type { StrTable } from '../strings.ts'
 
@@ -553,9 +553,7 @@ export function lateFeeDraftFor(
 
   const rates = [...new Set([...outIds, ...returned])].map((id) => {
     const r = db.get<{ day_rate_minor: number | null }>(
-      `select r.day_rate_minor from assets a
-         left join product_rates r on r.product_id = a.product_id
-        where a.id = ?`,
+      `select (${DEFAULT_CARD_RATE_SQL}) as day_rate_minor from assets a where a.id = ?`,
       [id],
     )
     return r?.day_rate_minor === null || r?.day_rate_minor === undefined
@@ -656,6 +654,76 @@ export function turnedAwayThisMonth(
     [productId, isoDate(month.startMs), isoDate(month.endMs)],
   )
   return { times: Number(row?.times ?? 0), units: Number(row?.units ?? 0) }
+}
+
+// ------------------------------------------------------ the fast-lane flags
+
+/** The deposit ladder (0025 D10). ASSUMPTION: see docs/assumptions.md#deposit-hint */
+export type DepositHintKind = 'refuse' | 'lighter' | 'standard' | 'full'
+
+/**
+ * The phone's mirror of customer_quote_flags (0025 D10) — the same
+ * shape, the same ladder: {verified, cleanHistory, blacklisted, fastLane,
+ * cleanCompletedJobs, depositHint}. ONE home; the quote sheet and the
+ * network wave both read it.
+ */
+export interface QuoteFlags {
+  customerId: string
+  name: string
+  verified: boolean
+  cleanHistory: boolean
+  blacklisted: boolean
+  fastLane: boolean
+  cleanCompletedJobs: number
+  depositHint: DepositHintKind
+}
+
+/**
+ * The verified-client stamp, derived locally. The server reads
+ * verified_customers (0017: a live verified credential, at least one
+ * completed rental with no money shortfall, nothing currently short); the
+ * phone carries no credential rows and no dispatch rows, so
+ * ASSUMPTION #local-quote-flags: `verified` is the one local flag the
+ * confirm gate already reads (#local-credential-flag), and a job is
+ * "clean" when it is closed and its ledger lines (charges and payments
+ * carrying its id, deposits aside) net to nothing owed. The server re-runs
+ * its own view when the quote is replayed. See
+ * docs/assumptions.md#local-quote-flags
+ */
+export function quoteFlags(db: SqlDriver, customerId: string): QuoteFlags | null {
+  const c = db.get<{ id: string; name: string; blacklisted: number; credentials_verified: number }>(
+    `select id, name, blacklisted, credentials_verified from customers where id = ?`,
+    [customerId],
+  )
+  if (!c) return null
+  const jobs = db.all<{ id: string; status: string | null; owed: number | null }>(
+    `select j.id, j.status,
+            (select sum(e.amount_minor) from customer_ledger_entries e
+              where e.job_id = j.id and e.customer_id = j.customer_id
+                and e.kind not in ('deposit_hold', 'deposit_apply', 'deposit_refund')) as owed
+       from jobs j where j.customer_id = ?`,
+    [customerId],
+  )
+  const cleanCompletedJobs = jobs.filter((j) => j.status === 'closed' && Number(j.owed ?? 0) <= 0).length
+  const noOpenShortfall = !jobs.some((j) => Number(j.owed ?? 0) > 0)
+  const verified = Number(c.credentials_verified) === 1
+  const blacklisted = Number(c.blacklisted) === 1
+  const fastLane = verified && !blacklisted && cleanCompletedJobs >= 1 && noOpenShortfall
+  // ASSUMPTION: the deposit ladder. See docs/assumptions.md#deposit-hint
+  const depositHint: DepositHintKind = blacklisted ? 'refuse'
+    : fastLane ? 'lighter'
+    : verified ? 'standard'
+    : 'full'
+  return {
+    customerId: c.id,
+    name: c.name,
+    verified,
+    cleanHistory: cleanCompletedJobs >= 1 && noOpenShortfall,
+    blacklisted,
+    fastLane,
+    cleanCompletedJobs,
+    depositHint,
+  }
 }
 
 // --------------------------------------------------------------- settings

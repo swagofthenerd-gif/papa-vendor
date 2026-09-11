@@ -91,6 +91,8 @@ export interface RecordExpenseInput {
   amountMinor: number
   assetId?: string | null
   jobId?: string | null
+  /** The booking this cost belongs to (0024 D9) — nets out of its quote. */
+  bookingId?: string | null
   counterparty?: string | null
   note?: string | null
   /** Backdatable — "paid the workshop last Tuesday, recording it now". */
@@ -105,12 +107,12 @@ export function recordExpense(db: SqlDriver, input: RecordExpenseInput): string 
   const id = input.id ?? `exp-${crypto.randomUUID()}`
   db.exec(
     `insert into org_expenses
-       (id, org_id, kind, amount_minor, asset_id, job_id, counterparty, note,
+       (id, org_id, kind, amount_minor, asset_id, job_id, booking_id, counterparty, note,
         reversal_of, created_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, null, ?)`,
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, null, ?)`,
     [
       id, input.orgId, input.kind, Math.round(input.amountMinor),
-      input.assetId ?? null, input.jobId ?? null,
+      input.assetId ?? null, input.jobId ?? null, input.bookingId ?? null,
       input.counterparty?.trim() || null, input.note?.trim() || null,
       input.createdAt,
     ],
@@ -136,10 +138,11 @@ export function reverseExpense(
     amount_minor: number
     asset_id: string | null
     job_id: string | null
+    booking_id: string | null
     counterparty: string | null
     reversal_of: string | null
   }>(
-    `select kind, amount_minor, asset_id, job_id, counterparty, reversal_of
+    `select kind, amount_minor, asset_id, job_id, booking_id, counterparty, reversal_of
        from org_expenses where id = ?`,
     [expenseId],
   )
@@ -151,12 +154,12 @@ export function reverseExpense(
   if (already) return false
   db.exec(
     `insert into org_expenses
-       (id, org_id, kind, amount_minor, asset_id, job_id, counterparty, note,
+       (id, org_id, kind, amount_minor, asset_id, job_id, booking_id, counterparty, note,
         reversal_of, created_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       `exp-${crypto.randomUUID()}`, orgId, t.kind, Number(t.amount_minor),
-      t.asset_id, t.job_id, t.counterparty, note?.trim() || null,
+      t.asset_id, t.job_id, t.booking_id, t.counterparty, note?.trim() || null,
       expenseId, whenMs,
     ],
   )

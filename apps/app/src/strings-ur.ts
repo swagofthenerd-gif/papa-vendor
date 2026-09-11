@@ -873,4 +873,128 @@ export const STR_UR: StrTable = {
   bookingPromisedStamp: (no: number, day: string): string => `Wada · #${no} ${day}`,
   bookingPromisedRightNow: (no: number, name: string, when: string): string =>
     `Booking #${no} (${name}) ko wada hai — hold ${when} se shuru`,
+
+  // ----------------------------------------------------------------- quote
+  quoteSheetTitle: 'Quote',
+  quoteSheetTitleFor: (no: number): string => `Quote — booking #${no}`,
+  quoteStampIndicative: 'Andaazan',
+  quoteStampVerified: 'Verified — halka deposit',
+  quoteStampUnpriced: 'Rate nahi — rate batao',
+  quoteLineDays: (qty: number, days: number, rate: string): string =>
+    `${qty} × ${days} din × ${rate}`,
+  quoteLineOverridden: (reason: string): string => `Override: ${reason}`,
+  quoteRateFieldLabel: (name: string): string => `${name} ka din ka rate, rupay`,
+  quoteRateFieldPlaceholder: 'maslan 8000',
+  quoteRateSave: 'Rate set karo',
+  quoteTotalLabel: 'Total',
+  quoteTotalUnpriced: (n: number): string => `+${n} bina rate`,
+  quoteSubHireLine: (cost: string, margin: string): string => `sub-hire ${cost} → margin ${margin}`,
+  quoteHowHeading: 'Yeh hisaab kaise bana',
+  quoteStepDays: (calendarDays: number, first: string): string =>
+    `${first} se ${calendarDays} din — pickup se 24 ghante, aik minute late wapsi agla din hai`,
+  quoteStepWeekendDropped: (n: number, dates: string): string =>
+    `${n} weekend din bill nahi hue: ${dates}`,
+  quoteStepMinApplied: (min: number): string => `${min} din ke minimum se kam — ${min} bill hua`,
+  quoteStepWeekRule: (billable: number, counted: number, weeks: number, weekDays: number, remainder: number): string =>
+    `${billable} bill wale din: ${counted} din = ${weeks} hafta (${weeks * weekDays}) + ${remainder}`,
+  quoteStepCardRates: (priced: number, unpriced: number, card: string): string =>
+    `${priced} line “${card}” card se priced, ${unpriced} bina rate`,
+  quoteStepNoCard: 'Abhi koi rate card nahi — Settings → Rates mein banao, tab tak har line bina rate hai',
+  quoteStepMultiplier: (name: string, day: string, multiplier: string): string =>
+    `${day} ko ${name}: poori booking pe ${multiplier}`,
+  quoteStepMultiplierNone: 'In dates mein koi chhutti ya season nahi',
+  quoteStepOverrides: (n: number): string => `${n} line malik ke rate pe — un pe multiplier nahi lagta`,
+  quoteIndicativeUnpriced: (n: number): string => `${n} ${cheezein(n)} bina rate — total poori kahani nahi`,
+  quoteIndicativeNotConfirmed: 'Abhi pakki nahi — quote hai, bill nahi',
+  quoteDoorSend: 'WhatsApp pe bhejo',
+  quoteDoorBook: 'Book karo',
+  quoteDoorPrice: 'Price lagao',
+  quoteDoorSendQuote: 'Quote bhejo',
+  quoteOverrideDoor: 'Rate override karo',
+  quoteOverrideHint: 'Override ke liye dabaye rakho — malik ka number is line pe card rate ki jagah lagega, wajah saath rahegi.',
+  quoteOverrideTitle: (name: string): string => `${name} ke liye malik ka rate`,
+  quoteOverrideRateLabel: 'Din ka rate, rupay',
+  quoteOverrideReasonLabel: 'Kyun?',
+  quoteOverrideReasonPlaceholder: 'maslan purana client, phone pe tay hua',
+  quoteOverrideSave: 'Yeh rate lagao',
+  quoteOverrideClear: 'Wapas card rate pe',
+  quoteOverrideNeedsReason: 'Override ki wajah likhna zaroori hai.',
+  quoteOverrideOriginal: (rate: string): string => `pehle ${rate}`,
+  quoteCopied: 'Copy ho gaya — WhatsApp mein paste karo',
+  quoteNoLines: 'Price lagane ko kuch nahi — pehle kam az kam aik line resolve karo.',
+  quoteDepositHint: (hint: string): string =>
+    hint === 'refuse' ? 'booking nahi — blacklist'
+    : hint === 'lighter' ? 'aadha deposit'
+    : hint === 'standard' ? 'aam deposit'
+    : 'poora deposit — pehli booking',
+  quoteDepositLabel: 'Deposit',
+
+  quoteWindowLabel: 'In dates ke liye',
+  quoteWindowStart: 'Pickup',
+  quoteWindowEnd: 'Wapsi',
+  quoteWindowBad: 'Wapsi pickup ke baad honi chahiye.',
+  quoteReplyLine: (total: string, days: number): string =>
+    `Quote: ${days} bill wale din ke ${total}`,
+  quoteReplyIndicative: (n: number): string =>
+    `(andaazan — ${n} ${cheezein(n)} bina rate, final quote desk se)`,
+
+  quoteSectionHeading: 'Quote',
+  quoteSectionSub: (days: number): string => `${days} bill wale din`,
+  quoteConfirmUnpriced: (n: number): string =>
+    `${n} line bina rate — pakki kar sakte ho, rate lagne tak quote andaazan rahega`,
+
+  quoteRatesDoor: 'Rates aur calendar',
+  quoteRatesDoorSub: 'Rate card, har cheez ka din ka rate, chhuttiyan aur season',
+  quoteRatesTitle: 'Rates',
+  quoteRatesSubtitle: 'Card, din ke rates, calendar',
+  quoteCardHeading: 'Rate card',
+  quoteCardSub: (name: string): string => `“${name}” — default card`,
+  quoteCardNone: 'Abhi koi rate card nahi. Neeche settings bhar ke banao.',
+  quoteCardWeekLabel: 'Aik hafta kitne din ka bill hai',
+  quoteCardMinDaysLabel: 'Kam az kam bill wale din',
+  quoteCardWeekendLabel: 'Jo din bill nahi hote',
+  quoteCardWeekendHint: 'Har din bill hota hai jab tak yahan koi din tick na ho. Sirf weekend wali job bhi minimum bill hoti hai.',
+  quoteCardSaved: 'Card save ho gaya — bhejne ka intezaar',
+  quoteRatesListHeading: 'Din ke rates',
+  quoteRatesListSub: (priced: number, total: number): string => `${total} mein se ${priced} priced`,
+  quoteRatesSearch: 'Cheez dhoondo',
+  quoteRateUnpriced: 'bina rate',
+  quoteRateRemoveAria: (name: string): string => `${name} ka rate hatao`,
+  quoteRateSetAria: (name: string): string => `${name} ka rate set karo`,
+  quoteRatePerDay: (rate: string): string => `${rate}/din`,
+  quoteCalendarHeading: 'Chhuttiyan aur season',
+  quoteCalendarSub: (holidays: number, seasonDays: number): string =>
+    `${holidays} chhutti · ${seasonDays} season din`,
+  quoteCalendarAdd: 'Din add karo',
+  quoteCalendarDayLabel: 'Tareekh',
+  quoteCalendarKindLabel: 'Qisam',
+  quoteCalendarKindHoliday: 'Chhutti',
+  quoteCalendarKindSeason: 'Season',
+  quoteCalendarNameLabel: 'Naam',
+  quoteCalendarNamePlaceholder: 'maslan Eid ul-Fitr',
+  quoteCalendarMultiplierLabel: 'Multiplier',
+  quoteCalendarMultiplierHint: '1 = wahi rate, 1.25 = chauthai zyada. Booking ke andar sab se ooncha din price tay karta hai.',
+  quoteCalendarSave: 'Din save karo',
+  quoteCalendarRemoveAria: (name: string, day: string): string => `${day} ka ${name} hatao`,
+  quoteCalendarSeasonRange: (name: string, from: string, until: string, n: number, multiplier: string): string =>
+    `${name} · ${from} → ${until} · ${n} din · ${multiplier}`,
+  quoteCalendarRow: (name: string, day: string, multiplier: string): string => `${name} · ${day} · ${multiplier}`,
+
+  quoteTextTitle: (house: string): string => `${house} — quote`,
+  quoteTextFor: (name: string): string => `Naam: ${name}`,
+  quoteTextWindow: (from: string, until: string): string => `${from} se ${until} tak`,
+  quoteTextDays: (billable: number, calendarDays: number): string =>
+    `${billable} bill wale din (calendar pe ${calendarDays})`,
+  quoteTextLine: (name: string, qty: number, days: number, rate: string, total: string): string =>
+    `${name} × ${qty} · ${days} din · ${rate}/din = ${total}`,
+  quoteTextLineUnpriced: (name: string, qty: number): string => `${name} × ${qty} · bina rate`,
+  quoteTextMultiplier: (name: string, day: string, multiplier: string): string =>
+    `${day} ko ${name}: poori booking pe ${multiplier}`,
+  quoteTextTotal: (rupees: string): string => `Total: ${rupees}`,
+  quoteTextIndicativeUnpriced: (n: number): string =>
+    `Andaazan — ${n} ${cheezein(n)} bina rate, final quote desk se.`,
+  quoteTextIndicativeNotConfirmed: 'Andaazan — abhi pakki nahi.',
+  quoteTextDeposit: (hint: string): string => `Deposit: ${hint}`,
+  quoteTextPayment: (line: string): string => `Payment: ${line}`,
+  quoteTextFooter: 'Pakka karne ya kuch badalne ke liye yahin reply karein. Shukriya.',
 }

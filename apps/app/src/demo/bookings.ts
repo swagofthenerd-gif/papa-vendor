@@ -118,7 +118,7 @@ export interface BookingIds {
   newId: () => string
 }
 
-const defaultIds = (nowMs: number): BookingIds => ({
+export const defaultIds = (nowMs: number): BookingIds => ({
   now: () => nowMs,
   newId: () => crypto.randomUUID(),
 })
@@ -362,7 +362,7 @@ function lastBookingOp(db: SqlDriver, bookingId: string): string | null {
   return row?.id ?? null
 }
 
-function enqueueBookingOp(
+export function enqueueBookingOp(
   db: SqlDriver,
   ids: BookingIds,
   op: string,
