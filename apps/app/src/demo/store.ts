@@ -115,6 +115,37 @@ import {
   type LateFeeDraftView,
   type MoneyStrip,
 } from './khata.ts'
+import {
+  availabilityFor,
+  bookingConfirmText,
+  bookingSettings,
+  bookingView,
+  calendar,
+  cancelBooking,
+  confirmBooking,
+  convertBookingToJob,
+  createBooking,
+  extendBooking,
+  listBookings,
+  pruneExpiredPencils,
+  type BookingFilter,
+  type BookingRow,
+  type BookingView,
+  type CalendarDay,
+  type CancelBookingResult,
+  type ConfirmBookingResult,
+  type ConfirmOptions,
+  type ConvertBookingResult,
+  type CreateBookingInput,
+  type CreateBookingResult,
+  type ExtendBookingResult,
+} from './bookings.ts'
+import {
+  promisedSoon,
+  type BookingAvailability,
+  type BookingSettings,
+  type PromisedSoon,
+} from '@papa/core'
 import { STR } from '../strings.ts'
 import { buildParchi } from '../parchi.ts'
 import { buildProveIt } from '../prove-it.ts'
@@ -1367,6 +1398,89 @@ export class DemoStore {
   /** Everything spoken over one item, newest first — inline playback. */
   voiceNotesFor(assetId: string): VoiceNoteRow[] {
     return this.voice.forAsset(assetId)
+  }
+
+  // ---- the promise calendar (Phase C, 0022) -------------------------------
+  // Thin doors onto demo/bookings.ts and @papa/core bookings.ts: every rule
+  // lives there under plain Node; the store binds the database, the org,
+  // the clock and the active string table. Every write here also queues
+  // the matching RPC op for the pipe to replay — nothing is confirmed
+  // server-side until it drains, and the sync strip says so.
+
+  /** The org's buffers, pencil TTL and credential threshold. */
+  bookingSettings(): BookingSettings {
+    return bookingSettings(this.db)
+  }
+
+  /** Bookings for a list, soonest start first; 'live' hides dead pencils. */
+  bookings(filter: BookingFilter = {}, nowMs: number = Date.now()): BookingRow[] {
+    return listBookings(this.db, filter, nowMs)
+  }
+
+  booking(id: string, nowMs: number = Date.now()): BookingView | null {
+    return bookingView(this.db, id, nowMs)
+  }
+
+  /** One row per day of the month, with the bookings touching it and the
+   *  season shading (ASSUMPTION #wedding-season). */
+  calendar(monthStartMs: number, nowMs: number = Date.now()): CalendarDay[] {
+    return calendar(this.db, monthStartMs, nowMs)
+  }
+
+  /** The three-layer answer (0022 D6): here-now / pencilled / confirmed. */
+  availabilityFor(
+    productId: string,
+    startMs: number,
+    endMs: number,
+    nowMs: number = Date.now(),
+  ): BookingAvailability {
+    return availabilityFor(this.db, productId, startMs, endMs, nowMs)
+  }
+
+  /** A pencil or draft, or a pencil confirmed in the same breath. Refusals
+   *  are RESULTS: a collision names the winner, a shortfall the count. */
+  createBooking(input: CreateBookingInput, nowMs: number = Date.now()): CreateBookingResult {
+    return createBooking(this.db, this.seed.orgId, input, nowMs)
+  }
+
+  /** Confirm = allocate (override 3), behind the credential gate (D9). */
+  confirmBooking(
+    id: string,
+    opts: ConfirmOptions = {},
+    nowMs: number = Date.now(),
+  ): ConfirmBookingResult {
+    return confirmBooking(this.db, this.seed.orgId, id, opts, nowMs)
+  }
+
+  cancelBooking(id: string, reason: string | null, nowMs: number = Date.now()): CancelBookingResult {
+    return cancelBooking(this.db, id, reason, nowMs)
+  }
+
+  /** The extension-collision preview (D10): extends, or names who breaks. */
+  extendBooking(id: string, newEndMs: number, nowMs: number = Date.now()): ExtendBookingResult {
+    return extendBooking(this.db, id, newEndMs, nowMs)
+  }
+
+  /** The bridge (D8): the confirmed booking becomes the job on the board. */
+  convertBookingToJob(id: string, nowMs: number = Date.now()): ConvertBookingResult {
+    return convertBookingToJob(this.db, this.seed.orgId, id, nowMs)
+  }
+
+  /** Opportunistic pruning (D7) — every write already runs it; a screen
+   *  may call it on open so a dead pencil reads cancelled. */
+  pruneExpiredPencils(nowMs: number = Date.now()): number {
+    return pruneExpiredPencils(this.db, nowMs)
+  }
+
+  /** The WhatsApp confirmation, in the active language; null unless confirmed. */
+  bookingConfirmText(id: string, nowMs: number = Date.now()): string | null {
+    return bookingConfirmText(this.db, STR, this.seed.houseName, id, nowMs)
+  }
+
+  /** The scanner's warning: this unit is promised to a confirmed booking
+   *  whose hold begins inside the horizon (48h). */
+  promisedSoon(assetId: string, nowMs: number = Date.now()): PromisedSoon | null {
+    return promisedSoon(this.db, assetId, nowMs)
   }
 
   /** The active tag for an asset — how a ginti scan names it. */

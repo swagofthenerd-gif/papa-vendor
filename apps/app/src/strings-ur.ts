@@ -687,4 +687,43 @@ export const STR_UR: StrTable = {
   awaazRecordedAt: (when: string): string =>
     `${when} par record hui — isi phone ki ghari se`,
   awaazHoldAria: (target: string): string => `${target} ke liye awaaz note record karein`,
+
+  // --------------------------------------------------------------- booking
+  bookingStatusDraft: 'Draft',
+  bookingStatusPencil: 'Pencil',
+  bookingStatusConfirmed: 'Pakki',
+  bookingStatusCancelled: 'Cancel',
+  bookingStatusExpired: 'Pencil khatam',
+  bookingSeasonWedding: 'Shaadi season',
+  bookingPencilLeft: (hours: number, minutes: number): string =>
+    `Pencil — ${hours}h ${minutes}m baaqi`,
+  bookingPromisedSoon: (no: number, name: string, when: string): string =>
+    `Booking #${no} (${name}) ko ${when} se wada hai`,
+  bookingActionNudge: 'WhatsApp yaad dilao',
+  bookingActionCall: 'Client ko call karo',
+  bookingActionLateFee: 'Late fee ka draft banao',
+  bookingActionManager: 'Manager tak le jao',
+  bookingConsiderBlacklist: 'Blacklist ka socho',
+  bookingCollision: (code: string, no: number, name: string): string =>
+    `${code} pehle se booking #${no} (${name}) ko wada hai`,
+  bookingShort: (available: number, wanted: number, product: string): string =>
+    `In dates pe ${product} ke sirf ${available} of ${wanted} khali hain`,
+  bookingNeedsCredentials: (rupees: string): string =>
+    `${rupees} ke wade se pehle kaghaz chahiye — manager note likh ke override kar sakta hai`,
+  bookingBlacklisted: 'Yeh customer blacklist hai — booking pakki nahi ho sakti',
+  bookingAlreadyConfirmed: (no: number): string => `Booking #${no} pehle se pakki hai`,
+  bookingIsCancelled: (no: number): string => `Booking #${no} cancel hai`,
+  bookingJobOpen: (no: number, label: string): string =>
+    `Booking #${no} job “${label}” pe bahar hai — pehle job band karo`,
+  bookingExtensionBlocked: (n: number): string =>
+    `Barhane se ${n} aur booking${n === 1 ? '' : 's'} toot${n === 1 ? 'i' : 'ti'} hai`,
+  bookingConfirmTitle: (house: string): string => `${house} — booking pakki`,
+  bookingConfirmNo: (no: number): string => `Booking #${no}`,
+  bookingConfirmFor: (name: string): string => `Naam: ${name}`,
+  bookingConfirmWindow: (from: string, until: string): string =>
+    `${from} se ${until} tak`,
+  bookingConfirmItems: 'Samaan:',
+  bookingConfirmLine: (qty: number, name: string): string => `${qty}x ${name}`,
+  bookingConfirmNote: (note: string): string => `Note: ${note}`,
+  bookingConfirmFooter: 'Kuch badalna ho to yahin reply karein. Shukriya.',
 }

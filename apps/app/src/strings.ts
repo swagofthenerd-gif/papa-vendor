@@ -759,6 +759,49 @@ const STR_EN = {
   awaazRecordedAt: (when: string): string =>
     `Recorded ${when} — this phone’s clock`,
   awaazHoldAria: (target: string): string => `Record an awaaz note for ${target}`,
+
+  // --------------------------------------------------------------- booking
+  // The promise calendar (0022, phase 2): status stamps, the pencil
+  // countdown, the overdue ladder's buttons, the refusals the write side
+  // returns as data, and the WhatsApp confirmation the client receives
+  // (demo/bookings.ts bookingConfirmText — golden-tested in both tables).
+  bookingStatusDraft: 'Draft',
+  bookingStatusPencil: 'Pencil',
+  bookingStatusConfirmed: 'Confirmed',
+  bookingStatusCancelled: 'Cancelled',
+  bookingStatusExpired: 'Pencil expired',
+  bookingSeasonWedding: 'Wedding season',
+  bookingPencilLeft: (hours: number, minutes: number): string =>
+    `Pencil — ${hours}h ${minutes}m left`,
+  bookingPromisedSoon: (no: number, name: string, when: string): string =>
+    `Promised to booking #${no} (${name}) from ${when}`,
+  bookingActionNudge: 'Send a WhatsApp nudge',
+  bookingActionCall: 'Call the client',
+  bookingActionLateFee: 'Draft the late fee',
+  bookingActionManager: 'Escalate to the manager',
+  bookingConsiderBlacklist: 'Consider blacklisting',
+  bookingCollision: (code: string, no: number, name: string): string =>
+    `${code} is already promised to booking #${no} (${name})`,
+  bookingShort: (available: number, wanted: number, product: string): string =>
+    `Only ${available} of ${wanted} × ${product} free for these dates`,
+  bookingNeedsCredentials: (rupees: string): string =>
+    `Needs credentials on file before a promise of ${rupees} — a manager can override with a note`,
+  bookingBlacklisted: 'This customer is blacklisted — a booking cannot be confirmed',
+  bookingAlreadyConfirmed: (no: number): string => `Booking #${no} is already confirmed`,
+  bookingIsCancelled: (no: number): string => `Booking #${no} is cancelled`,
+  bookingJobOpen: (no: number, label: string): string =>
+    `Booking #${no} is out on job “${label}” — close the job first`,
+  bookingExtensionBlocked: (n: number): string =>
+    `Extending breaks ${n} other booking${s(n)}`,
+  bookingConfirmTitle: (house: string): string => `${house} — booking confirmed`,
+  bookingConfirmNo: (no: number): string => `Booking #${no}`,
+  bookingConfirmFor: (name: string): string => `For: ${name}`,
+  bookingConfirmWindow: (from: string, until: string): string =>
+    `From ${from} to ${until}`,
+  bookingConfirmItems: 'Items:',
+  bookingConfirmLine: (qty: number, name: string): string => `${qty}x ${name}`,
+  bookingConfirmNote: (note: string): string => `Note: ${note}`,
+  bookingConfirmFooter: 'Reply here to change anything. Thank you.',
 }
 
 /**

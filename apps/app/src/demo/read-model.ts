@@ -82,12 +82,20 @@ create table if not exists product_rates (
 -- comment warned about.
 -- The ledger is APPEND-ONLY: nothing in this codebase updates or deletes a
 -- row, and the balance is a projection (see @papa/core ledger.ts).
+-- blacklisted and credentials_verified mirror what the server's confirm
+-- gate reads (0017 customers.blacklisted; 0017 verified_customers, which
+-- is DERIVED there from customer_credentials + clean history). The phone
+-- holds no credential rows, so the demo carries the verdict as one flag —
+-- see confirmBooking in bookings.ts for the honesty note that rides the
+-- result.
 create table if not exists customers (
   id     text primary key,
   org_id text not null,
   name   text not null,
   phone  text,
-  note   text
+  note   text,
+  blacklisted integer not null default 0,
+  credentials_verified integer not null default 0
 );
 create index if not exists jobs_customer_idx on jobs (customer_id);
 
@@ -134,11 +142,15 @@ create index if not exists expenses_job_idx on org_expenses (job_id);
 
 -- The turned-away demand log: one row per shortage the enquiry answer was
 -- actually USED for (reply copied, or a job made) — the buy signal.
+-- reason: 'short' when the shelf itself could not fill the line,
+-- 'committed' when the shelf could but confirmed bookings over the asked
+-- window already spoke for it (year finding turnaway-blind-to-commitments).
 create table if not exists demand_log (
   id         text primary key,
   product_id text not null,
   qty        integer not null,
-  date       text not null
+  date       text not null,
+  reason     text not null default 'short'
 );
 create index if not exists demand_log_product_idx on demand_log (product_id, date);
 
@@ -352,6 +364,9 @@ export interface CreateJobInput {
   customerId?: string | null
   /** Product id and how many units, from resolved kit-list lines. */
   wants: { productId: string; qty: number }[]
+  /** Units already bound elsewhere — a confirmed booking's allocation
+   *  (0022 D4). Promised as-is, in addition to whatever `wants` picks. */
+  expectedAssetIds?: string[]
 }
 
 /**
@@ -382,6 +397,11 @@ export function createJob(
       ],
     )
     db.exec(`insert into job_meta (job_id, departs_at) values (?, null)`, [input.id])
+
+    for (const assetId of input.expectedAssetIds ?? []) {
+      requested++
+      expected.push(assetId)
+    }
 
     for (const want of input.wants) {
       requested += want.qty
