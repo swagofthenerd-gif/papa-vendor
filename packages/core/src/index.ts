@@ -35,6 +35,8 @@ export type {
 } from './csv-import.ts'
 export { PhotoStore, pairBySide, DEFAULT_BUDGET_BYTES } from './photos.ts'
 export type { PhotoRow, PhotoSide, PhotoPair, CaptureInput, CaptureResult } from './photos.ts'
+export { VoiceNoteStore, DEFAULT_VOICE_BUDGET_BYTES } from './voice-notes.ts'
+export type { VoiceNoteRow, VoiceCaptureInput, VoiceCaptureResult } from './voice-notes.ts'
 export {
   whatsAppShareUrl, parsePhoneNumber, whatsAppNudgeUrl, whatsAppChatUrl, telUrl,
   overdueNudgeMessage, OVERDUE_NUDGE_TEMPLATE,
@@ -53,12 +55,13 @@ export type {
 export { EXPENSE_KINDS, liveExpenses, totalExpenses } from './expenses.ts'
 export type { ExpenseKind, ExpenseView } from './expenses.ts'
 export {
-  markTerminal, markFound, swapAsset, cycleCountDiff,
+  markTerminal, markFound, swapAsset, cycleCountDiff, recordServiced,
 } from './fleet.ts'
 export type {
   Disposition, MarkTerminalInput, FleetOpResult,
-  SwapInput, SwapResult, SwapFlag, CountDiff,
+  SwapInput, SwapResult, SwapFlag, CountDiff, RecordServicedInput,
 } from './fleet.ts'
+export { rentalDaysBetween } from './project.ts'
 export { dueStatus, parseDueDate, compareDueDates, compareJobsByDue } from './overdue.ts'
 export type { DueState, DueStatus } from './overdue.ts'
 export { FEEDBACK, ERROR_FEEDBACK, firstBuzzMs, hapticDurationMs } from './feedback.ts'
