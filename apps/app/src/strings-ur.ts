@@ -293,6 +293,7 @@ export const STR_UR: StrTable = {
   gearFilterOnTheShelf: 'Shelf par',
   gearFilterOut: 'Bahar',
   gearFilterNeedsALook: 'Dekhna hai',
+  gearFilterGone: 'Nikal gayi',
   gearSearchPlaceholder: 'Naam ya code se dhoondein — FX9, AP600, battery',
   gearClearSearchAria: 'Search saaf karein',
   gearItemCount: (n: number): string => `${n} ${cheezein(n)}`,
@@ -565,4 +566,81 @@ export const STR_UR: StrTable = {
   closedJobsClosedOn: (date: string): string => `${date} ko band hui`,
   closedJobsNeverCameBack: (n: number): string =>
     n === 1 ? '1 cheez kabhi wapas nahi aayi' : `${n} cheezein kabhi wapas nahi aayin`,
+
+  // ----------------------------------------------------------------- fleet
+  fleetGoneHeading: 'Yeh cheez fleet se nikal gayi',
+  fleetDispositionWord: (d: string): string =>
+    ({ lost: 'gum', stolen: 'chori', sold: 'bik gayi', retired: 'retire' }[d] ?? d),
+  fleetMarkGone: 'Gum, chori ya bech di — mark karein',
+  fleetMarkGoneHint:
+    'Yeh cheez ko fleet se nikaal dete hain. Kholne ke liye daba ke rakhein, phir confirm.',
+  fleetHoldToReveal: 'Kholne ke liye daba ke rakhein',
+  fleetLost: 'Gum',
+  fleetStolen: 'Chori',
+  fleetSold: 'Bech di',
+  fleetMarkNoteLabel: 'Kya hua? (optional)',
+  fleetSaleAmountLabel: 'Bikri ki raqam (Rs, optional)',
+  fleetSaleAmountHint:
+    'Cheez par note ke taur par mehfooz — abhi paison ki kitaab par nahi.',
+  fleetConfirmLost: 'Confirm — gum mark karein',
+  fleetConfirmStolen: 'Confirm — chori mark karein',
+  fleetConfirmSold: 'Confirm — bikri mark karein',
+  fleetMarkedNote: (word: string): string => `${word} mark ki`,
+  fleetFound: 'Mil gayi — wapas fleet mein',
+  fleetFoundNote: 'Mil gayi — wapas fleet mein',
+  fleetStampLost: 'gum',
+  fleetStampStolen: 'chori',
+  fleetStampSold: 'bik gayi',
+  fleetStampRetired: 'retire',
+  fleetTheftReport: 'Chori ki report',
+  fleetTheftHeading: 'CHORI KI REPORT',
+  fleetTheftBanner: 'Yeh saman CHORI report hua hai.',
+  fleetTheftCodeLabel: 'Code',
+  fleetTheftSerialLabel: 'Serial',
+  fleetTheftNoSerial: 'darj nahi',
+  fleetTheftPhotos: (n: number): string =>
+    n === 0
+      ? 'Koi condition photo record par nahi.'
+      : n === 1
+        ? '1 condition photo record par.'
+        : `${n} condition photos record par.`,
+  fleetTheftLastSeen: 'Aakhri baar dekha',
+  fleetTheftLastSeenLine: (when: string, jobLabel: string | null): string =>
+    jobLabel ? `${when} — ${jobLabel} par` : when,
+  fleetTheftLastSeenUnknown: 'Koi scan record par nahi.',
+  fleetTheftContact: 'Raabta',
+  fleetTheftFooter: (houseName: string): string =>
+    `${houseName} ki taraf se report. Koi maloomat ho to raabta karein.`,
+  fleetSwapOntoJob: 'Job par swap karein',
+  fleetSwapTitle: 'Substitute swap karein',
+  fleetSwapBrokenLine: (code: string, jobLabel: string): string =>
+    `${code} ${jobLabel} se hatega aur flag ho jayega.`,
+  fleetSwapPickSubstitute: 'Substitute chunein',
+  fleetSwapSamePreferred: 'Wahi product, shelf par',
+  fleetSwapOther: 'Shelf par koi aur cheez',
+  fleetSwapNoSubstitutes: 'Shelf par bhejne layak kuch nahi.',
+  fleetSwapConfirm: 'Swap — dono harkatein record karein',
+  fleetSwapDone: (broken: string, sub: string): string =>
+    `${sub} bahar; ${broken} wapas aur flag.`,
+  fleetSwapNoLiveJob: 'Yeh cheez kisi live job par bahar nahi ke swap ho.',
+  fleetGinti: 'Ginti',
+  fleetGintiSubtitle: 'Kitaab ke against shelf ginein',
+  fleetGintiScanShelf: 'Shuru karne ke liye shelf tag scan karein ya shelf chunein',
+  fleetGintiPickShelf: 'Shelf chunein',
+  fleetGintiCounting: (shelf: string): string => `${shelf} gin rahe hain`,
+  fleetGintiSeen: (n: number): string => `${n} dekhi`,
+  fleetGintiOk: (n: number): string => `${n} mil gayi`,
+  fleetGintiMissing: (n: number): string => `${n} gayab`,
+  fleetGintiUnexpected: (n: number): string => `${n} is shelf par nahi`,
+  fleetGintiScanItems: 'Shelf ki cheezein scan karein',
+  fleetGintiFinish: 'Ginti mukammal karein',
+  fleetGintiReportButton: 'Farq ki report copy karein',
+  fleetGintiClean: 'Is shelf ki har cheez mil gayi.',
+  fleetGintiReportHeading: 'GINTI',
+  fleetGintiReportShelf: (shelf: string): string => `Shelf: ${shelf}`,
+  fleetGintiReportMissing: 'GAYAB (honi chahiye thi, nahi mili):',
+  fleetGintiReportUnexpected: 'IS SHELF PAR NAHI (phir bhi yahan mili):',
+  fleetGintiReportOkLine: (n: number): string => `${n} kitaab se mil gayin.`,
+  fleetGintiReportDecide:
+    'Gayab cheezein aap ke faisle par — kahin aur mili, ya gum.',
 }

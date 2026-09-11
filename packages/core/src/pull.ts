@@ -34,8 +34,8 @@ const MIRROR_COLUMNS: Record<string, string[]> = {
   products: ['id', 'org_id', 'display_name', 'category'],
   assets: [
     'id', 'org_id', 'product_id', 'asset_code', 'serial_number', 'is_container',
-    'presence', 'health', 'ownership', 'current_location_id', 'current_parent_id',
-    'current_job_id', 'last_scanned_at', 'notes', 'updated_at',
+    'presence', 'health', 'ownership', 'disposition', 'current_location_id',
+    'current_parent_id', 'current_job_id', 'last_scanned_at', 'notes', 'updated_at',
   ],
   asset_tags: ['tag_code', 'asset_id', 'status'],
   locations: ['id', 'org_id', 'name', 'kind', 'path', 'code'],

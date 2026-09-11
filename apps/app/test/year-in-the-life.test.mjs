@@ -37,6 +37,10 @@ import {
   allocateUnitCodes,
   lookupTag,
   voidScan,
+  markTerminal,
+  markFound,
+  swapAsset,
+  cycleCountDiff,
   dueStatus,
   lateFeeDraft,
   checkAvailability,
@@ -93,6 +97,8 @@ import {
   recordExpense,
 } from '../src/demo/kharcha.ts'
 import { buildSummary } from '../src/session-summary.ts'
+import { buildTheftReport, theftLabels } from '../src/theft-report.ts'
+import { buildGintiReport, gintiLabels } from '../src/ginti-report.ts'
 import { STR_EN } from '../src/strings.ts'
 
 // ---------------------------------------------------------------- the world
@@ -614,17 +620,32 @@ describe('a year in the life of the rental house', () => {
     spend('purchase', 1_500, {
       k: 1, d: -3, counterparty: 'Hall Road', note: 'Replacement XLR 5m',
     })
-    // The cable was paid for — but it stays presence='out' on this job,
-    // so the CLOSE RULE refuses: a job cannot end while its projection
-    // says gear is still at the client's. The refusal is honest and the
-    // job sits open on the board from here to year end, because there is
-    // still no terminal state (lost / sold / written off) to move the
-    // cable to. The wall moved from "cannot close anything" to exactly
-    // where it belongs: `no-terminal-asset-state`.
+    // The cable was paid for — but it is still presence='out' on this job,
+    // so the CLOSE RULE refuses first: a job cannot end while its projection
+    // says gear is at the client's. The refusal is right.
     const refused = closeJob(db, o1.id, at(1, -4, 13))
     assert.deepEqual(refused, { ok: false, reason: 'still_out', stillOut: 1 })
-    finding('no-terminal-asset-state')
     assert.ok(sqlOutSet().has(missingCable))
+
+    // NOW the terminal state exists (0020, was `no-terminal-asset-state`):
+    // the owner marks the paid-for cable LOST — it leaves the fleet, off the
+    // job, in one append-only event — and the job closes at last. The ghost
+    // that used to sit on the board from October to year-end is gone.
+    const lost = markTerminal(db, {
+      assetId: missingCable, disposition: 'lost',
+      note: 'Client paid the damage; cable never came back', now: () => at(1, -4, 13),
+    })
+    assert.ok(lost.outboxId)
+    expectedScanOps++
+    outTracker.delete(missingCable)
+    const goneCable = db.get(
+      `select presence, disposition, current_job_id from assets where id = ?`,
+      [missingCable],
+    )
+    assert.equal(goneCable.presence, 'gone')
+    assert.equal(goneCable.disposition, 'lost')
+    assert.equal(goneCable.current_job_id, null)
+    mustClose(o1.id, at(1, -4, 14))
 
     // --- The first late fee, and the order-of-operations trap -------------
     const o2 = makeJob('Fashion lookbook — Model Town', 'cust-sana',
@@ -685,7 +706,7 @@ describe('a year in the life of the rental house', () => {
     assertBooks()
     assertPhysical()
     assertNoLostScans()
-    assert.equal(sqlOutSet().size, 1) // the ghost cable
+    assert.equal(sqlOutSet().size, 0) // the cable is GONE, not a ghost 'out'
     const strip = moneyStrip(db, at(1, 9))
     assert.equal(strip.earnedMonthMinor, monthCharged[1])
     assert.equal(monthCharged[1], rs(40_000 + 8_000 + 55_000 + 15_000 + 25_000 + 28_000 + 30_000 + 12_000))
@@ -818,13 +839,65 @@ describe('a year in the life of the rental house', () => {
     jobBack(n3.id, 'cust-hamza', at(2, 12), { k: 2, d: 12, chargeRs: 20_000, payRs: 20_000 })
     jobBack(n4.id, 'cust-sana', at(2, 12), { k: 2, d: 12, chargeRs: 22_000, payRs: 22_000 })
 
+    // --- The crisis-day swap, for real (was `no-swap-flow`) ----------------
+    // A V-Mount dies on set mid-shoot; the client needs a live one NOW. The
+    // desk swaps a fresh battery onto the SAME job in one flow: the dead one
+    // comes home and is flagged, the substitute goes out on the job, and the
+    // rental stays one job's story — no faked second job splitting the charge
+    // and orphaning the evidence (the wall JAN used to hit). Three linked
+    // events in one session, through the real swapAsset door.
+    const swapJob = makeJob('Corporate AV — Mall Road', 'cust-hamza',
+      [{ productId: 'prod-vmount', qty: 3 }], iso(2, 10))
+    const swapOut = openSession(swapJob.id, 'out', at(2, 9, 6))
+    scanAll(swapOut, swapJob.expected, 'check_out')
+
+    const deadBattery = swapJob.expected[0]
+    const spareBattery = db.get(
+      `select id from assets
+        where product_id = 'prod-vmount' and presence = 'here' and health = 'ok'
+        order by asset_code limit 1`,
+    ).id
+    const swap = swapAsset(db, {
+      jobId: swapJob.id, brokenAssetId: deadBattery, substituteAssetId: spareBattery,
+      note: 'Battery died on set', now: () => at(2, 9, 10),
+    })
+    assert.equal(swap.outcome, 'swapped')
+    expectedScanOps += 3 // check_in + flag + check_out, all real ops
+    outTracker.delete(deadBattery)
+    outTracker.add(spareBattery)
+
+    // The substitute is out on the SAME job; the dead one is home and flagged.
+    assert.equal(
+      db.get(`select current_job_id as j from assets where id = ?`, [spareBattery]).j,
+      swapJob.id,
+    )
+    const deadRow = db.get(
+      `select presence, current_job_id, health from assets where id = ?`,
+      [deadBattery],
+    )
+    assert.equal(deadRow.presence, 'here')
+    assert.equal(deadRow.current_job_id, null)
+    assert.equal(deadRow.health, 'quarantined')
+    // All three movements carry one session id — the swap reads as one act,
+    // not three loose scans (the JAN fake could never link them).
+    const swapSession = new Set(
+      db
+        .all(`select payload from outbox where op = 'submit_scan_batch'`)
+        .map((r) => JSON.parse(r.payload))
+        .filter((p) => p.swap && (p.asset_id === deadBattery || p.asset_id === spareBattery))
+        .map((p) => p.session_id),
+    )
+    assert.equal(swapSession.size, 1)
+
+    jobBack(swapJob.id, 'cust-hamza', at(2, 10), { k: 2, d: 10, chargeRs: 15_000, payRs: 15_000 })
+
     // --- Month end --------------------------------------------------------
     assertBooks()
     assertPhysical()
     assertNoLostScans()
     const strip = moneyStrip(db, at(2, 13))
     assert.equal(strip.earnedMonthMinor, monthCharged[2])
-    assert.equal(monthCharged[2], rs(50_000 + 25_000 + 20_000 + 22_000))
+    assert.equal(monthCharged[2], rs(50_000 + 25_000 + 20_000 + 22_000 + 15_000))
   })
 
   // -------------------------------------------------------------- DEC (k=3)
@@ -915,7 +988,7 @@ describe('a year in the life of the rental house', () => {
   })
 
   // -------------------------------------------------------------- JAN (k=4)
-  test('JAN — a camera drops on set: photos, damage, and the missing swap flow', () => {
+  test('JAN — a camera drops on set: photos, damage, and the real swap', () => {
     // Bilal's TVC week: the seeded FX9-01 goes out, photographed.
     const j1 = makeJob('TVC — Ferozepur Road', 'cust-bilal',
       [{ productId: 'prod-fx9', qty: 1 }, { productId: 'prod-sigma1835', qty: 1 }],
@@ -930,20 +1003,37 @@ describe('a year in the life of the rental house', () => {
     assert.equal(cap.ok, true)
     scanAll(j1out, j1.expected, 'check_out')
 
-    // Day 3: the camera drops on set. The client needs a replacement NOW.
-    // There is no swap flow — the desk fakes it with a second one-line job.
-    const j1b = jobOut('TVC — replacement body', 'cust-bilal',
-      [{ productId: 'prod-c500', qty: 1 }], iso(4, -3), at(4, -4))
-    assert.equal(j1b.expected.length, 1)
-    finding('no-swap-flow')
+    // Day 3: the camera drops on set. The client needs a replacement NOW —
+    // and now there is a REAL swap (was `no-swap-flow`, demonstrated NOV):
+    // the broken FX9 comes home and is flagged, a C500 goes out on the SAME
+    // job, and the rental stays one job's story. No faked second job, no
+    // split charge, no orphaned photo evidence.
+    const swap = swapAsset(db, {
+      jobId: j1.id, brokenAssetId: 'asset-fx9-1', substituteAssetId: 'asset-c500-1',
+      note: 'FX9 dropped on set — top handle cracked', now: () => at(4, -4),
+    })
+    assert.equal(swap.outcome, 'swapped')
+    expectedScanOps += 3
+    outTracker.delete('asset-fx9-1')
+    outTracker.add('asset-c500-1')
+    assert.equal(
+      db.get(`select current_job_id as j from assets where id = 'asset-c500-1'`).j,
+      j1.id,
+      'the substitute is out on the same job',
+    )
 
-    // The broken camera comes home; the 'in' photo shows the crack.
-    const j1back = openSession(j1.id, 'in', at(4, -3))
-    scanAll(j1back, j1back.expected, 'check_in')
+    // The broken camera is home, off the job, and flagged by the swap — the
+    // 'in' photo (the crack) pairs with the out photo taken this morning.
+    const brokenRow = db.get(
+      `select presence, current_job_id, health from assets where id = 'asset-fx9-1'`,
+    )
+    assert.equal(brokenRow.presence, 'here')
+    assert.equal(brokenRow.current_job_id, null)
+    assert.equal(brokenRow.health, 'quarantined')
     const photosIn = new PhotoStore(db, { now: () => at(4, -3) })
     assert.equal(
       photosIn.capture({
-        assetId: 'asset-fx9-1', jobId: j1.id, sessionId: j1back.session.id,
+        assetId: 'asset-fx9-1', jobId: j1.id, sessionId: null,
         side: 'in', localUri: 'data:,sim-in', bytes: 130_000, sha256: 'sim-jan-in',
         note: 'Cracked top handle',
       }).ok,
@@ -957,8 +1047,10 @@ describe('a year in the life of the rental house', () => {
     assert.equal(mine.in.sha256, 'sim-jan-in')
     assert.ok(mine.in.capturedAt >= mine.out.capturedAt)
 
-    // Out of service: no screen can mark health. SQL stands in.
-    db.exec(`update assets set health = 'needs_check' where id = 'asset-fx9-1'`)
+    // The swap flagged the broken FX9 quarantined, so it drops out of
+    // availability with no SQL health hack. But the general health door is
+    // still missing — a "this is broken" toggle with no swap behind it has
+    // no screen (`no-health-door` stands, narrowed).
     finding('no-health-door')
     const avail = checkAvailability(
       db,
@@ -966,14 +1058,18 @@ describe('a year in the life of the rental house', () => {
       openJobCommitments(db),
       at(4, -2),
     )
-    assert.equal(avail.lines[0].onHand, 2) // 3 units minus the hurt one
+    assert.equal(avail.lines[0].onHand, 2) // 3 units minus the flagged one
 
     // The claim: rental + damage on the khata, partly paid.
     post('cust-bilal', 'charge', 35_000, { k: 4, d: -3, jobId: j1.id, assetId: 'asset-fx9-1', note: 'FX9 day rate x2' })
     post('cust-bilal', 'damage_charge', 150_000, { k: 4, d: -3, jobId: j1.id, assetId: 'asset-fx9-1', note: 'Top handle + mount repair' })
     post('cust-bilal', 'payment', -100_000, { k: 4, d: -2, note: 'Bank transfer' })
+
+    // The job comes home — sigma and the swapped-in C500 (the FX9 is already
+    // back). Then it closes cleanly, one job start to finish.
+    const j1back = openSession(j1.id, 'in', at(4, -3))
+    scanAll(j1back, j1back.expected, 'check_in')
     mustClose(j1.id, at(4, -2, 13))
-    jobBack(j1b.id, 'cust-bilal', at(4, -3), { k: 4, d: -3, chargeRs: 20_000, payRs: 20_000 })
 
     // The payback bar counts RENTAL money only: the Rs 150,000 damage
     // RECOVERY stays on Bilal's khata but never inflates the camera's
@@ -1071,23 +1167,77 @@ describe('a year in the life of the rental house', () => {
       }),
     )
     assert.match(nudge, /^https:\/\/wa\.me\//)
-    // …and that is ALL that exists. No blacklist flag, no theft report
-    // export (serials + photos for the police / partner houses), no way to
-    // mark the customer. Finding `no-blacklist-or-theft-export`.
-    finding('no-blacklist-or-theft-export')
 
     // The write-off now has its own kind — legible on every statement as
     // 'write-off', never mistakable for a discount or a data fix (POLICY,
     // owner may overrule; no screen writes it yet — `no-adjustment-door`).
-    // The Rs 2.6M of GEAR he kept still appears on no book at all.
     post('cust-farhan', 'write_off', -38_000, { k: 5, d: 8, note: 'Written off — client absconded' })
     assert.equal(L.kindLabel('write_off'), 'write-off')
     assert.equal(books.get('cust-farhan').balance, 0)
     assert.ok(
       !customersByBalance(db).some((c) => c.id === 'cust-farhan' && c.balanceMinor > 0),
     )
-    // The stolen gear stays 'out' forever; the board shows red forever.
-    finding('no-terminal-asset-state')
+
+    // The GEAR side finally has a home too (0020, was the terminal half of
+    // `no-blacklist-or-theft-export` and `no-terminal-asset-state`): the
+    // owner marks the absconded FX6 and lens STOLEN — they leave the fleet,
+    // off the ghost job — and the theft report builds the police/insurance
+    // card from local facts: code, serial, photo count, last-seen, contact.
+    const stolenJobId = f1row.id
+    const stolen = db.all(
+      `select id, asset_code, serial_number from assets
+        where current_job_id = ? and presence = 'out' order by asset_code`,
+      [stolenJobId],
+    )
+    assert.equal(stolen.length, 2)
+    for (const a of stolen) {
+      const r = markTerminal(db, {
+        assetId: a.id, disposition: 'stolen',
+        note: 'Client absconded — FIR filed', now: () => at(5, 8),
+      })
+      assert.ok(r.outboxId)
+      expectedScanOps++
+      outTracker.delete(a.id)
+    }
+    // Gone + stolen + off the job: the red row leaves the board (the loss is
+    // recorded as a disposition, not an eternal 'out'), and the job can close.
+    const fx6 = stolen.find((a) => a.asset_code.startsWith('FX6'))
+    const goneFx6 = db.get(
+      `select presence, disposition, current_job_id from assets where id = ?`,
+      [fx6.id],
+    )
+    assert.equal(goneFx6.presence, 'gone')
+    assert.equal(goneFx6.disposition, 'stolen')
+    assert.equal(goneFx6.current_job_id, null)
+    mustClose(stolenJobId, at(5, 8, 12))
+
+    // THE THEFT REPORT — the export the year had nothing for. Serials, code,
+    // photo count, last-seen, and the org's contact, forwardable to police or
+    // a partner house. (The public tag resolver's stolen notice is the
+    // server half, pinned in 0020_fleet_lifecycle_test.sql.)
+    const lastScan = decodeScanOps(db)
+      .filter((op) => op.assetId === fx6.id && op.eventType !== 'mark_stolen')
+      .at(-1)
+    const theft = buildTheftReport(
+      {
+        houseName: seed.houseName,
+        item: { code: fx6.asset_code, name: 'Sony FX6', serial: fx6.serial_number },
+        photoCount: 0,
+        lastSeen: lastScan
+          ? { whenMs: lastScan.createdAt, jobLabel: f1row.label, place: null }
+          : null,
+        contactLine: 'JazzCash: 0300 1234567',
+      },
+      theftLabels(STR_EN),
+    )
+    assert.match(theft, /THEFT REPORT/)
+    assert.match(theft, /reported STOLEN/)
+    assert.ok(theft.includes(fx6.asset_code))
+    assert.match(theft, /Contact: JazzCash: 0300 1234567/)
+    assert.match(theft, new RegExp(seed.houseName))
+    // The blacklist flag on the CUSTOMER is still missing — the theft export
+    // ships, the customer-side blacklist door does not yet.
+    finding('no-blacklist')
 
     // A quiet rental keeps February honest.
     const feb1 = jobOut('Corporate AGM — PC Hotel', 'cust-imran',
@@ -1271,14 +1421,12 @@ describe('a year in the life of the rental house', () => {
   })
 
   // -------------------------------------------------------------- JUL (k=10)
-  test('JUL — stocktake: how close can lookup mode get to a cycle count?', () => {
+  test('JUL — the stocktake: a real ginti, and the seeded discrepancy caught', () => {
     // A retired label (peeled sticker) resolves without confidence — right.
-    // But retiring it took SQL: no screen retires a tag either.
     db.exec(`update asset_tags set status = 'retired' where asset_id = 'asset-sachdeva-3'`)
     assert.equal(lookupTag(db, tagOf.get('asset-sachdeva-3')).kind, 'retired')
 
-    // The tech walks every rack pointing the camera at labels. Lookup mode
-    // answers each one and writes NOTHING — the scan-free invariant holds.
+    // Lookup mode still writes NOTHING — the scan-free invariant holds.
     const outboxBefore = Number(db.get(`select count(*) as n from outbox`).n)
     let found = 0
     for (const [assetId, code] of tagOf) {
@@ -1291,18 +1439,68 @@ describe('a year in the life of the rental house', () => {
     assert.equal(found, tagOf.size - 1) // all but the retired label
     assert.equal(Number(db.get(`select count(*) as n from outbox`).n), outboxBefore)
 
-    // But a stocktake is a DIFF, and only half of it exists. The mirror
-    // says these items are on the shelf:
-    const hereSet = db
-      .all(`select id from assets where presence = 'here'`)
+    // Now the OTHER half of a stocktake exists (0020, was `no-cycle-count`):
+    // the diff. The book says these live items sit on Grip Bay —
+    const gripExpected = db
+      .all(
+        `select id from assets
+          where current_location_id = 'loc-grip' and presence = 'here'
+            and disposition is null
+          order by asset_code`,
+      )
       .map((r) => r.id)
-    // The tech cannot find C-Stand #8 anywhere. The app still answers
-    // 'here' with full confidence, and there is nowhere to record the
-    // disagreement — no missing state, no count session, no discrepancy
-    // list. Finding `no-cycle-count`.
-    assert.ok(hereSet.includes('asset-cstand-8'))
-    assert.equal(lookupTag(db, tagOf.get('asset-cstand-8')).kind, 'found')
-    finding('no-cycle-count')
+    assert.ok(gripExpected.includes('asset-cstand-8'), 'the book puts C-Stand #8 on Grip Bay')
+
+    // The tech walks Grip Bay and scans everything actually there. C-Stand #8
+    // is NOT — someone walked it off and never scanned it (the seeded
+    // discrepancy). And a Sachdeva tripod the book had on Rack C turns up here
+    // instead — the count found gear the mirror had misplaced.
+    const seen = gripExpected.filter((id) => id !== 'asset-cstand-8')
+    seen.push('asset-sachdeva-1') // stray: the book says Rack C
+
+    const diff = cycleCountDiff(gripExpected, seen)
+    assert.deepEqual(diff.missing, ['asset-cstand-8'])
+    assert.ok(diff.unexpected.includes('asset-sachdeva-1'))
+
+    // Finishing writes an inventory_count for every SEEN item — and the write
+    // is NON-DESTRUCTIVE: a count asserts "seen on the shelf", never a
+    // movement, so presence is untouched. Pin it on the first seen item.
+    const before = db.get(`select presence from assets where id = ?`, [seen[0]])
+    const countSession = new ScanSession(db, { deviceId: 'sim-phone', now: () => at(10, 0) })
+    for (const id of seen) {
+      const r = countSession.scan(tagOf.get(id), 'inventory_count')
+      assert.ok(r.outboxId)
+      expectedScanOps++
+    }
+    assert.equal(
+      db.get(`select presence from assets where id = ?`, [seen[0]]).presence,
+      before.presence,
+      'a cycle count never moved the item it counted',
+    )
+
+    // The copyable discrepancy report names the missing and the stray, and
+    // defers the found-vs-lost decision to the owner (never auto-marks).
+    const facts = (id) => {
+      const r = db.get(
+        `select a.asset_code, coalesce(p.display_name, a.display_name) as name
+           from assets a left join products p on p.id = a.product_id where a.id = ?`,
+        [id],
+      )
+      return { code: r?.asset_code ?? null, name: r?.name ?? null }
+    }
+    const report = buildGintiReport(
+      {
+        shelf: 'Grip Bay',
+        okCount: diff.ok.length,
+        missing: diff.missing.map(facts),
+        unexpected: diff.unexpected.map(facts),
+      },
+      gintiLabels(STR_EN),
+    )
+    assert.match(report, /GINTI/)
+    assert.match(report, /MISSING/)
+    assert.ok(report.includes('CST-08'))
+    assert.match(report, /Missing items are for you to decide/)
 
     assertPhysical()
     assertNoLostScans()
@@ -1364,15 +1562,29 @@ describe('a year in the life of the rental house', () => {
     assertPhysical()
     assertNoLostScans()
 
-    // Still out after a year, and correctly so: Farhan's stolen FX6 and
-    // lens, and October's ghost cable. The board still shows the theft red.
+    // Nothing hangs 'out' at year end any more. The three items that used to
+    // stay red forever — October's paid-for cable, February's stolen FX6 and
+    // lens — now have terminal states (0020): the cable is 'lost', the two
+    // absconded units are 'stolen', all off their jobs. The loss is RECORDED,
+    // as a disposition, instead of an eternal ghost on the coming-back board.
     const stillOut = sqlOutSet()
-    assert.equal(stillOut.size, 3)
+    assert.equal(stillOut.size, 0)
+    const gone = db.all(
+      `select disposition, count(*) as n from assets
+        where disposition is not null group by disposition order by disposition`,
+    )
+    assert.deepEqual(
+      gone.map((r) => [r.disposition, Number(r.n)]),
+      [['lost', 1], ['stolen', 2]],
+    )
+    // The absconded job left the coming-back board when its gear went stolen —
+    // no red row, because the truth is now "gone", not "late".
     const board = dueBoard(db, at(11, 5))
-    const theft = board.outJobs.find((j) => j.label.startsWith('Music video'))
-    assert.ok(theft)
-    assert.equal(theft.due.state, 'overdue')
-    assert.ok(theft.due.daysLate > 150, `${theft.due.daysLate} days late and counting`)
+    assert.equal(
+      board.outJobs.find((j) => j.label.startsWith('Music video')),
+      undefined,
+      'a stolen-out job is no longer a late row — its gear left the fleet',
+    )
 
     // The money strip agrees with the hand-kept books to the paisa.
     const strip = moneyStrip(db, at(11, 5))
@@ -1392,25 +1604,27 @@ describe('a year in the life of the rental house', () => {
     // Phase B0 took three ids off this list — `no-add-customer`,
     // `no-customer-on-desk-job`, `no-close-job` — by shipping the doors;
     // the expense book (0019) took two more — `no-expense-book`,
-    // `no-subrent-intake` — the simulation now records the JAN repair,
-    // the OCT cable purchase and the APR sub-hire on the real book and
-    // asserts the margins above.
+    // `no-subrent-intake`. Wave 2 (the fleet lifecycle, 0020) takes THREE
+    // MORE: `no-terminal-asset-state` (the OCT cable is marked lost and its
+    // job closes; FEB's absconded gear is marked stolen), `no-swap-flow`
+    // (the real swap ships — NOV and JAN both run it), and `no-cycle-count`
+    // (JUL runs a real ginti and catches the seeded discrepancy). The theft
+    // half of `no-blacklist-or-theft-export` shipped too — the export builds
+    // — so that id narrows to `no-blacklist` (the customer-flag door is the
+    // remaining gap).
     assert.deepEqual(
       [...FINDINGS].sort(),
       [
         'double-promise',
         'import-apply-welded',
         'no-adjustment-door',
-        'no-blacklist-or-theft-export',
+        'no-blacklist',
         'no-bookings',
-        'no-cycle-count',
         'no-deposit-door',
         'no-health-door',
         'no-lifetime-value-view',
         'no-month-history-screen',
         'no-service-tracking',
-        'no-swap-flow',
-        'no-terminal-asset-state',
         'no-utilization-read',
         'turnaway-blind-to-commitments',
         'waived-fee-invisible',

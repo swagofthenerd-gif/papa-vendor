@@ -52,6 +52,13 @@ export type {
 } from './ledger.ts'
 export { EXPENSE_KINDS, liveExpenses, totalExpenses } from './expenses.ts'
 export type { ExpenseKind, ExpenseView } from './expenses.ts'
+export {
+  markTerminal, markFound, swapAsset, cycleCountDiff,
+} from './fleet.ts'
+export type {
+  Disposition, MarkTerminalInput, FleetOpResult,
+  SwapInput, SwapResult, SwapFlag, CountDiff,
+} from './fleet.ts'
 export { dueStatus, parseDueDate, compareDueDates, compareJobsByDue } from './overdue.ts'
 export type { DueState, DueStatus } from './overdue.ts'
 export { FEEDBACK, ERROR_FEEDBACK, firstBuzzMs, hapticDurationMs } from './feedback.ts'

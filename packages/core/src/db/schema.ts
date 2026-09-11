@@ -29,6 +29,13 @@ create table if not exists assets (
   presence            text default 'here',
   health              text default 'ok',
   ownership           text default 'owned',
+  -- Why it left the fleet: null | lost | stolen | sold | retired (0020). A
+  -- projection like presence/health/ownership, driven by mark_* / retire /
+  -- found scan events. Added under the same caveat as current_job_id and the
+  -- other 0018 columns: no installed phone exists yet (pre-auth, demo only),
+  -- so create-if-not-exists still covers every real database — but a local
+  -- migration path stays a pre-ship requirement before ANY device persists.
+  disposition         text,
   current_location_id text,
   current_parent_id   text,
   current_job_id      text,

@@ -3,7 +3,7 @@ import { Icon } from '@papa/icons'
 import { go } from '../nav.ts'
 import { StatusBadge } from '../components/StatusBadge.tsx'
 import { toBucket } from '../status.ts'
-import type { Presence, Health } from '../status.ts'
+import type { Presence, Health, Disposition } from '../status.ts'
 import { STR } from '../strings.ts'
 
 /**
@@ -26,17 +26,22 @@ export interface GearRow {
   category: string
   presence: Presence
   health: Health
+  disposition: Disposition
   locationName: string | null
   jobLabel: string | null
 }
 
-export type GearFilter = 'all' | 'here' | 'out' | 'attention'
+export type GearFilter = 'all' | 'here' | 'out' | 'attention' | 'gone'
 
 const FILTERS: { key: GearFilter; label: string }[] = [
   { key: 'all', label: STR.gearFilterEverything },
   { key: 'here', label: STR.gearFilterOnTheShelf },
   { key: 'out', label: STR.gearFilterOut },
   { key: 'attention', label: STR.gearFilterNeedsALook },
+  // Terminal gear lives behind its own filter, off every other view — a
+  // sold camera in the default list is noise, but "where did that stolen
+  // FX9 go" is a real question with a real answer (0020).
+  { key: 'gone', label: STR.gearFilterGone },
 ]
 
 export function Gear({
@@ -56,7 +61,15 @@ export function Gear({
     return rows.filter((r) => {
       // The same three-axes-to-one-bucket collapse the badge uses, so a
       // filter and the chip it filters by never disagree on the same row.
-      if (filter !== 'all' && toBucket(r) !== filter) return false
+      // Terminal gear ('gone') is EXCLUDED from every default view including
+      // 'Everything' — it is off the fleet, out of availability and dead-
+      // stock math — and shows only under its own Gone filter (0020).
+      if (filter === 'gone') {
+        if (toBucket(r) !== 'gone') return false
+      } else {
+        if (toBucket(r) === 'gone') return false
+        if (filter !== 'all' && toBucket(r) !== filter) return false
+      }
       if (q.length === 0) return true
       return (
         r.name.toLowerCase().includes(q) ||
@@ -143,12 +156,17 @@ export function Gear({
                       <span className="gear-code code">{r.code}</span>
                       <span className="gear-where">
                         {/* Where it IS, in the words a person would use.
-                            "Out — Wedding, DHA" beats a status enum. */}
-                        {r.presence === 'here'
-                          ? (r.locationName ?? STR.gearSomewhereHere)
-                          : (r.jobLabel ?? STR.gearOutFallback)}
+                            "Out — Wedding, DHA" beats a status enum; a gone
+                            item says WHY it left. */}
+                        {r.presence === 'gone'
+                          ? STR.fleetDispositionWord(r.disposition ?? 'lost')
+                          : r.presence === 'here'
+                            ? (r.locationName ?? STR.gearSomewhereHere)
+                            : (r.jobLabel ?? STR.gearOutFallback)}
                       </span>
-                      <StatusBadge status={{ presence: r.presence, health: r.health }} />
+                      <StatusBadge
+                        status={{ presence: r.presence, health: r.health, disposition: r.disposition }}
+                      />
                     </button>
                   </li>
                 ))}

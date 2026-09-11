@@ -765,6 +765,101 @@ export function dayRateFor(db: SqlDriver, productId: string): number | null {
     : Number(row.day_rate_minor)
 }
 
+/**
+ * Substitutes for a swap: everything fit to send off the shelf — here,
+ * healthy, not terminal — with the broken item's product marked so the UI
+ * can lead with same-product options (the CLIENT's usual preference, never a
+ * server rule). Ordered same-product-first, then by code.
+ */
+export interface SubstituteRow {
+  id: string
+  code: string
+  name: string
+  sameProduct: boolean
+}
+
+export function substitutesFor(
+  db: SqlDriver,
+  brokenAssetId: string,
+): SubstituteRow[] {
+  const broken = db.get<{ product_id: string | null }>(
+    `select product_id from assets where id = ?`,
+    [brokenAssetId],
+  )
+  const productId = broken?.product_id ?? null
+
+  return db
+    .all<{
+      id: string
+      asset_code: string | null
+      display_name: string | null
+      product_id: string | null
+    }>(
+      `select a.id, a.asset_code, coalesce(p.display_name, a.display_name) as display_name,
+              a.product_id
+         from assets a
+         left join products p on p.id = a.product_id
+        where a.id <> ?
+          and a.presence = 'here'
+          and a.health = 'ok'
+          and a.disposition is null
+        order by a.asset_code`,
+      [brokenAssetId],
+    )
+    .map((r) => ({
+      id: r.id,
+      code: r.asset_code ?? '—',
+      name: r.display_name ?? 'Unnamed',
+      sameProduct: productId !== null && r.product_id === productId,
+    }))
+    .sort((a, b) => Number(b.sameProduct) - Number(a.sameProduct))
+}
+
+/** The shelf's live contents as rows (id, code, name) — the ginti checklist.
+ *  Same predicate as expectedOnShelf; this carries the display fields. */
+export function shelfContents(
+  db: SqlDriver,
+  locationId: string,
+): { id: string; code: string; name: string }[] {
+  return db
+    .all<{ id: string; asset_code: string | null; display_name: string | null }>(
+      `select a.id, a.asset_code, coalesce(p.display_name, a.display_name) as display_name
+         from assets a
+         left join products p on p.id = a.product_id
+        where a.current_location_id = ?
+          and a.presence = 'here'
+          and a.disposition is null
+        order by a.asset_code`,
+      [locationId],
+    )
+    .map((r) => ({ id: r.id, code: r.asset_code ?? '—', name: r.display_name ?? 'Unnamed' }))
+}
+
+/** Shelves (locations) to count against, for the ginti picker. */
+export function shelves(db: SqlDriver): { id: string; name: string }[] {
+  return db
+    .all<{ id: string; name: string | null }>(
+      `select id, name from locations order by name`,
+    )
+    .map((r) => ({ id: r.id, name: r.name ?? 'Shelf' }))
+}
+
+/** What the mirror says is on a shelf right now — the EXPECTED side of a
+ *  ginti diff. Live fleet only: a terminal item is not "missing", it is
+ *  gone, and a shelf's count should not cry wolf over it. */
+export function expectedOnShelf(db: SqlDriver, locationId: string): string[] {
+  return db
+    .all<{ id: string }>(
+      `select id from assets
+        where current_location_id = ?
+          and presence = 'here'
+          and disposition is null
+        order by asset_code`,
+      [locationId],
+    )
+    .map((r) => r.id)
+}
+
 /** Names of the items physically out on a job, for the nudge message. */
 export function outItemNames(db: SqlDriver, jobId: string): string[] {
   return db

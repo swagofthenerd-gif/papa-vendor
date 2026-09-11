@@ -1252,3 +1252,40 @@ h2.stamp .h-ico { display: none; }
    line-note) and in colour, and the mark survives greyscale because the
    note text carries it too. */
 .line-assumed .line-name { color: var(--accent-strong); }
+
+/* ---- the fleet lifecycle (0020) ---------------------------- */
+/* The destructive door sits at the page foot, spaced well clear of the
+   read-only actions above — adjacency, not size, is what stops a mis-tap
+   ending a camera's life. */
+.fleet-danger { margin-top: var(--sp-6); }
+.fleet-disclosure { display: flex; flex-direction: column; gap: var(--sp-2); }
+.fleet-mark { display: flex; flex-direction: column; gap: var(--sp-2); }
+.fleet-stamp-row { display: flex; justify-content: flex-start; margin-bottom: var(--sp-3); }
+
+/* A confirm that ends a unit's life reads in margin-red — the ledger's one
+   alarm ink — on a quiet card, never a loud fill: it must look grave, not
+   festive. */
+.btn-danger {
+  background: var(--card);
+  border: 2px solid var(--margin-red);
+  color: var(--margin-red);
+  font-weight: 800;
+}
+
+/* A counted item on the ginti checklist: found, and quietly marked so. */
+.gear-unit.is-seen { background: var(--card-2); }
+
+/* The discrepancy report, as a forwardable block — monospace so the columns
+   line up the way they will in WhatsApp, scrollable so a long shelf never
+   pushes the copy button off-screen. */
+.report-block {
+  margin: var(--sp-3) 0;
+  padding: var(--sp-3);
+  border: var(--line-w) solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--card-2);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
+  overflow-x: auto;
+}

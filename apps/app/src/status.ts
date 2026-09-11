@@ -18,6 +18,8 @@
 export type Presence = 'here' | 'out' | 'in_transit' | 'gone'
 export type Health = 'ok' | 'servicing' | 'quarantined'
 export type Ownership = 'owned' | 'sub_rented_in'
+/** Why the item left the fleet (0020). null while it is fleet. */
+export type Disposition = 'lost' | 'stolen' | 'sold' | 'retired' | null
 
 export type Bucket = 'here' | 'out' | 'attention' | 'gone'
 
@@ -25,6 +27,7 @@ export interface AssetStatus {
   presence: Presence
   health: Health
   ownership?: Ownership
+  disposition?: Disposition
 }
 
 /**
@@ -77,7 +80,16 @@ export function statusSentence(
       parts.push(ctx.locationName ? `In transit on ${ctx.locationName}` : 'In transit')
       break
     case 'gone':
-      parts.push('No longer in the fleet')
+      // The disposition says WHY, when it is known — 'Sold', 'Reported
+      // stolen' — falling back to the plain 'no longer in the fleet' for a
+      // bare 'lost' observation with no owner declaration behind it.
+      switch (status.disposition) {
+        case 'lost':    parts.push('Reported lost'); break
+        case 'stolen':  parts.push('Reported stolen'); break
+        case 'sold':    parts.push('Sold'); break
+        case 'retired': parts.push('Retired'); break
+        default:        parts.push('No longer in the fleet')
+      }
       break
     default:
       parts.push(ctx.locationName ? `Here, ${ctx.locationName}` : 'Here')

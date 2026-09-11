@@ -160,10 +160,10 @@ owner/manager and audited, and closed jobs leave both boards but stay
 reachable — dated, khata-linked, reopenable — behind a "Closed jobs"
 door on the search surface. The simulation now creates jobs WITH their
 customers and closes them at each month's end; its three SQL workaround
-functions are deleted. One sharp edge moved rather than vanished:
-October's paid-for lost cable now makes its job REFUSE to close — pinned
-— because the cable still has no terminal state; that wall lives under
-`no-terminal-asset-state` (§4 below), where it belongs.
+functions are deleted. October's paid-for lost cable used to make its job
+REFUSE to close (the close rule was right; the cable had nowhere to go) —
+Wave 2's terminal states (§4 below) fixed the other half: the owner marks
+the cable `lost` and the job closes.
 
 ### 2. No bookings, and its two sharp edges — SEP, NOV, DEC, APR (the whole season)
 `no-bookings`, `double-promise`, `turnaway-blind-to-commitments`
@@ -216,34 +216,43 @@ but nothing yet sets `ownership='subrented'` on the units, so a
 stocktake still counts them as fleet. That intake flag rides with Phase
 E1 (cross-hire), where the partner list lives.
 
-### 4. No terminal state for gear — OCT, FEB, JUL, AUG
-`no-terminal-asset-state`, `no-blacklist-or-theft-export`
+### 4. No terminal state for gear — SHIPPED as the fleet lifecycle (0020)
 
-Three ways gear left the fleet this year, none expressible:
+Was `no-terminal-asset-state` and the theft half of
+`no-blacklist-or-theft-export` — hit OCT, FEB, JUL, AUG: three ways gear
+left the fleet this year, none expressible. Shipped end to end as Wave 2
+(migration `0020_fleet_lifecycle`):
 
-- The **paid-for lost cable** (OCT): client paid the damage charge; the
-  cable stays `presence='out'` until the end of time, and since B0 its
-  job now honestly REFUSES to close ("1 item still out") — so the board
-  carries an open ghost job from October onward, the refusal pinned. The
-  close rule is right; what is missing is a terminal state to move the
-  cable to.
-- The **absconded client** (FEB): FX6 + lens stolen. The board shows the
-  red overdue row forever (correct!), and the money side is now a legible
-  `write_off` line — but the Rs 2.6M gear loss appears on **no book at
-  all** (the money book only knows the Rs 38,000 of unbilled rental),
-  there is no blacklist flag for the client, and no theft export
-  (serials + photos + last-scan) to hand police or partner houses.
-- The **stocktake ghost** (JUL): C-Stand #8 is nowhere on the shelf, the
-  mirror says `here` with full confidence, and there is no way to record
-  the disagreement.
+- **A `disposition` axis on assets** (`null | lost | stolen | sold |
+  retired`), a projection like presence/health/ownership, driven by three
+  new scan-event verbs — `mark_lost`, `mark_stolen`, `mark_sold` — through
+  the same append-only pipeline (owner/manager-gated at the RPC), plus the
+  existing `retire`. The reducer sends a terminal item `presence='gone'`
+  **and clears `current_job_id`** — the line that finally lets October's
+  ghost job close. `found` is the recovery door (clears the disposition,
+  brings it home).
+- The **paid-for lost cable** (OCT): the owner marks it `lost`; it leaves
+  the fleet, off its job, and the job closes at last — the close rule never
+  changed, the cable just had nowhere to go.
+- The **absconded client** (FEB): the FX6 + lens are marked `stolen` and a
+  **theft report** builds from local facts (code, serial, photo count,
+  last-seen, org contact) — the forwardable police/insurance card. The
+  **public tag resolver goes deliberately LOUD for a stolen tag** (a STOLEN
+  notice with the org's contact line, `public_tag_show_owner` or not — the
+  Phase E2 groundwork), while lost/sold/retired stay indistinguishable from
+  an unknown tag (the anti-enumeration rule). Only the customer-side
+  **blacklist flag** remains (narrowed to `no-blacklist`); the Rs 2.6M gear
+  loss is now recorded as a disposition, not an eternal `out`.
+- The **stocktake** (JUL): shipped as **ginti** — a cycle count is a diff
+  (`cycleCountDiff`), and both sides now exist. The tech walks a shelf,
+  the seen set is written as `inventory_count` events (non-destructive:
+  `last_scanned_at` moves, presence does not), and the diff surfaces
+  missing / unexpected / matched. Missing items are the owner's to decide
+  (found elsewhere vs lost) — the count never auto-marks. JUL now catches
+  the seeded C-Stand #8 discrepancy and prints a copyable report.
 
-*Plan check:* Phase E2 (stolen-gear mode) covers the dramatic case but
-nothing covers the mundane ones. A `lost/written_off/sold` presence or
-disposition state is schema-level and should ride with Phase D's cycle
-counting (D4), which the JUL stocktake showed is 80% missing anyway:
-lookup mode walks a rack beautifully and writes nothing (verified — the
-scan-free invariant held over ~100 lookups), but a stocktake is a *diff*,
-and only one side of it exists.
+*Plan check:* Phase E2 (stolen-gear mode) and Phase D4 (cycle counting)
+were the right shapes; the disposition axis rode with them as predicted.
 
 ### 5. The correction vocabulary is one unlabeled word — DEC, FEB, MAY
 `no-adjustment-door`
@@ -289,22 +298,30 @@ The data exists; the readers don't:
 *Plan check:* D1/D6 confirmed as the right shape; the month picker and
 lifetime-value column are cheap Phase B polish, not Phase D work.
 
-### 8. The crisis-day swap — JAN
-`no-swap-flow`
+### 8. The crisis-day swap — SHIPPED as the swap flow (0020)
 
-Camera drops on set; the desk fakes the swap as a second one-line job.
-Works, but: the rental charge splits across two jobs, the photo evidence
-attaches to the first, and nothing links them. Phase D3's one-flow swap is
-validated by the fake being *possible but illegible*.
+Was `no-swap-flow` — the JAN camera drop, faked as a second one-line job
+that split the rental charge and orphaned the photo evidence. Shipped as
+one atomic RPC (`swap_asset`) and its offline twin (`swapAsset`): given a
+live job, the broken asset on it, and a fit substitute, it records the
+broken item's `check_in` (off the job), a `flag_damage`/`quarantine` on it,
+and the substitute's `check_out` onto the **same job** — three linked
+events in one session, the flag and the checkout carrying `implied_by`, the
+payloads cross-referencing. Refuses cross-org, closed jobs, a broken item
+not on the job, and terminal / off-shelf / unfit substitutes. NOV and JAN
+now both run the real swap; the rental stays one job's story and the
+evidence chain holds.
 
-### 9. Health cannot be set from the phone — JAN
+### 9. Health cannot be set standalone from the phone — JAN (narrowed)
 `no-health-door`
 
-Availability honesty **depends** on `health` (`'here' and health='ok'`),
-but no screen sets it — the broken FX9 needed SQL to stop being offered to
-the next client. Until the server era, a local quarantine toggle is a
-one-column write with outsized honesty value. (Related: retiring a peeled
-tag also has no door — JUL.)
+Availability honesty **depends** on `health` (`'here' and health='ok'`).
+The **swap** now sets it for the swap case — the dropped FX9 is flagged
+`quarantined` in the same atomic flow that sends its substitute out, so
+JAN no longer needs SQL — but a STANDALONE "this is broken, quarantine it"
+toggle with no swap behind it still has no screen. That narrowed gap is
+what `no-health-door` now names. (Related: retiring a peeled tag also has
+no door — JUL.)
 
 ### 10. Import apply is welded to the store — SEP
 `import-apply-welded`
