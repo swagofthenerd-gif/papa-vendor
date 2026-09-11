@@ -24,7 +24,10 @@ export type { PullPayload, ApplyReport } from './pull.ts'
 export { buildPullList, progressSummary } from './pull-list.ts'
 export { parseKitList, matchKitList, normalise, similarity, editDistance, compact } from './kit-list.ts'
 export { checkAvailability, replySummary, availabilityNote } from './availability.ts'
-export type { AvailabilityLine, AvailabilitySummary, AvailabilityState, JobCommitment, CommitmentNote } from './availability.ts'
+export type {
+  AvailabilityLine, AvailabilitySummary, AvailabilityState, JobCommitment, CommitmentNote,
+  AvailabilityWindow, ShortReason,
+} from './availability.ts'
 export type { ParsedLine, MatchedLine, CatalogueItem, MatchConfidence } from './kit-list.ts'
 export type { PullListItem, PullListView, ShelfGroup } from './pull-list.ts'
 export { caseManifest, hasContents } from './containment.ts'
@@ -67,7 +70,7 @@ export {
   blockedPeriod, isLivePencil, pencilCountdown, overlaps, peakOverlap, msOf,
   loadBooking, loadBookings, loadLines, loadAssetReservations, loadStockReservations,
   bookingAvailability, extendedWindow, extensionCollisions, promisedSoon,
-  seasonFor, escalationStep,
+  seasonFor, escalationStep, bookingDateLabel, dayStartMs,
 } from './bookings.ts'
 export type {
   Booking, BookingLine, BookingStatus, TrackingMode, ReservationState,

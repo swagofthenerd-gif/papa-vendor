@@ -585,7 +585,19 @@ export function isoDate(nowMs: number): string {
  */
 export function recordTurnedAway(
   db: SqlDriver,
-  lines: { productId?: string | null; wanted: number; onHand: number; state: string }[],
+  lines: {
+    productId?: string | null
+    wanted: number
+    onHand: number
+    state: string
+    /** Units confirmed to bookings over the asked window (0 or absent
+     *  when the enquiry carried no dates). */
+    confirmedOverlap?: number
+    /** 'committed' when the shelf could have filled it but the calendar
+     *  could not — counted separately (year finding
+     *  turnaway-blind-to-commitments). */
+    shortReason?: 'short' | 'committed' | null
+  }[],
   nowMs: number,
 ): number {
   const date = isoDate(nowMs)
@@ -594,16 +606,40 @@ export function recordTurnedAway(
     for (const l of lines) {
       if (!l.productId) continue
       if (l.state !== 'short' && l.state !== 'none') continue
-      const qty = Math.max(0, l.wanted - Math.max(0, l.onHand))
+      const free = Math.max(0, l.onHand - (l.confirmedOverlap ?? 0))
+      const qty = Math.max(0, l.wanted - free)
       if (qty === 0) continue
       db.exec(
-        `insert into demand_log (id, product_id, qty, date) values (?, ?, ?, ?)`,
-        [`dem-${crypto.randomUUID()}`, l.productId, qty, date],
+        `insert into demand_log (id, product_id, qty, date, reason) values (?, ?, ?, ?, ?)`,
+        [`dem-${crypto.randomUUID()}`, l.productId, qty, date, l.shortReason ?? 'short'],
       )
       recorded++
     }
   })
   return recorded
+}
+
+/** The month's turned-away units split by why: the shelf was short, or
+ *  the calendar had already promised it. Its own reader so the plain
+ *  {times, units} shape above stays what every existing caller expects. */
+export function turnedAwayByReason(
+  db: SqlDriver,
+  productId: string,
+  nowMs: number,
+): { short: number; committed: number } {
+  const month = monthBounds(nowMs)
+  const rows = db.all<{ reason: string; units: number | null }>(
+    `select reason, sum(qty) as units from demand_log
+      where product_id = ? and date >= ? and date < ?
+      group by reason`,
+    [productId, isoDate(month.startMs), isoDate(month.endMs)],
+  )
+  const out = { short: 0, committed: 0 }
+  for (const r of rows) {
+    if (r.reason === 'committed') out.committed += Number(r.units ?? 0)
+    else out.short += Number(r.units ?? 0)
+  }
+  return out
 }
 
 /** How many times this product was turned away this month: incidents and

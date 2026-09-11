@@ -711,6 +711,28 @@ export function promisedSoon(
 
 // ------------------------------------------------------------- calendar
 
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+]
+
+/** 'Thu 17 Sep, 10:00' — the one way a booking instant is written, on the
+ *  calendar and in the WhatsApp confirmation alike. Local time: the desk
+ *  and the client are in the same city. */
+export function bookingDateLabel(ms: number): string {
+  const d = new Date(ms)
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}, ${hh}:${mm}`
+}
+
+/** Local calendar midnight of an instant — the calendar's day key. */
+export function dayStartMs(ms: number): number {
+  const d = new Date(ms)
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+}
+
 export type Season = 'wedding' | 'normal'
 
 /**

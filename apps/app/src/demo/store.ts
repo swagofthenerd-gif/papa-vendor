@@ -34,6 +34,7 @@ import {
   replySummary,
   whatsAppNudgeUrl,
   type AvailabilitySummary,
+  type AvailabilityWindow,
   type CatalogueItem,
   type CaptureResult,
   type ImportPlan,
@@ -108,6 +109,7 @@ import {
   setPaymentLine,
   setPaymentQr,
   turnedAwayThisMonth,
+  turnedAwayByReason,
   type AssetEarnings,
   type ChargedButReturned,
   type CustomerListRow,
@@ -512,14 +514,24 @@ export class DemoStore {
    * open jobs' claims attached, so a short line says WHEN another unit comes
    * back instead of leaving the owner to reconstruct it from memory.
    */
-  checkKitList(text: string): AvailabilitySummary {
+  checkKitList(
+    text: string,
+    window: AvailabilityWindow | null = null,
+    nowMs: number = Date.now(),
+  ): AvailabilitySummary {
     const matched = matchKitList(parseKitList(text), this.catalogue)
-    return checkAvailability(this.db, matched, openJobCommitments(this.db))
+    return checkAvailability(this.db, matched, openJobCommitments(this.db), nowMs, window)
   }
 
-  /** Re-answer a list after the desk has resolved a line by hand. */
-  recheck(lines: MatchedLine[]): AvailabilitySummary {
-    return checkAvailability(this.db, lines, openJobCommitments(this.db))
+  /** Re-answer a list after the desk has resolved a line by hand. With a
+   *  window, confirmed bookings over it are subtracted before the verdict
+   *  (the commitment layer, 0022 D6). */
+  recheck(
+    lines: MatchedLine[],
+    window: AvailabilityWindow | null = null,
+    nowMs: number = Date.now(),
+  ): AvailabilitySummary {
+    return checkAvailability(this.db, lines, openJobCommitments(this.db), nowMs, window)
   }
 
   /**
@@ -1157,6 +1169,13 @@ export class DemoStore {
   recordTurnedAway(summary: AvailabilitySummary, nowMs: number = Date.now()): number {
     return recordTurnedAway(this.db, summary.lines, nowMs)
   }
+
+  /** This month's turned-away units for a product, split by why — shelf
+   *  short vs already promised on the calendar. */
+  turnedAwayByReason(productId: string, nowMs: number = Date.now()): { short: number; committed: number } {
+    return turnedAwayByReason(this.db, productId, nowMs)
+  }
+
 
   /** 'JazzCash: 0300 1234567' — or null; the money documents omit it then. */
   paymentLine(): string | null {

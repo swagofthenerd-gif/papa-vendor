@@ -26,6 +26,7 @@ import {
   recordTurnedAway,
   setPaymentLine,
   turnedAwayThisMonth,
+  turnedAwayByReason,
 } from '../src/demo/khata.ts'
 import { STR_EN } from '../src/strings.ts'
 import { STR_UR } from '../src/strings-ur.ts'
@@ -234,6 +235,20 @@ describe('the turned-away demand log', () => {
     recordTurnedAway(db, lines, lastMonth.getTime())
     const fx9 = turnedAwayThisMonth(db, 'prod-fx9', Date.now())
     assert.equal(fx9.times, 0)
+  })
+
+  test('a commitment-driven refusal counts, flagged apart from a shelf shortage', () => {
+    // The shelf had 2 FX9s, but both were confirmed to a booking over the
+    // asked dates: the owner turned the client away and the old log wrote
+    // zero (year finding turnaway-blind-to-commitments).
+    const committed = [
+      { productId: 'prod-fx9', wanted: 2, onHand: 2, confirmedOverlap: 2, state: 'none', shortReason: 'committed' },
+      { productId: 'prod-fx6', wanted: 4, onHand: 3, confirmedOverlap: 0, state: 'short', shortReason: 'short' },
+    ]
+    assert.equal(recordTurnedAway(db, committed, Date.now()), 2)
+    assert.deepEqual(turnedAwayThisMonth(db, 'prod-fx9', Date.now()), { times: 1, units: 2 })
+    assert.deepEqual(turnedAwayByReason(db, 'prod-fx9', Date.now()), { short: 0, committed: 2 })
+    assert.deepEqual(turnedAwayByReason(db, 'prod-fx6', Date.now()), { short: 1, committed: 0 })
   })
 })
 
