@@ -1070,6 +1070,15 @@ begin
       using errcode = 'check_violation';
   end if;
 
+  -- Units this booking demands BY NAME are spoken for before the auto-pick
+  -- runs, whatever order the lines arrive in — otherwise the allocator
+  -- could hand line 1 the exact unit line 2 demands and collide with
+  -- itself inside its own transaction.
+  select coalesce(array_agg(l.asset_id), '{}') into v_picked
+    from booking_lines l
+   where l.booking_id = v_b.id and l.org_id = v_org
+     and l.asset_id is not null and l.deleted_at is null;
+
   begin
     for v_line in
       select l.id, l.product_id, l.asset_id, l.qty,
