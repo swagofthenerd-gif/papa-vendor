@@ -563,6 +563,8 @@ begin
   end if;
   perform require_role('owner', 'manager', 'desk');
 
+  -- ASSUMPTION: every kind of expense counts, not only sub_hire.
+  -- See docs/assumptions.md#sub-hire-cost.
   select coalesce(sum(e.amount_minor), 0) into v_sum
     from org_expenses e
    where e.org_id = v_org
@@ -1128,6 +1130,8 @@ begin
   v_min_days  := coalesce(v_card.min_billable_days, 1);
 
   -- ---- step 1: billable_days (D2, D3) ------------------------------------
+  -- ASSUMPTION: a rental day is 24h from pickup, dated in the org timezone.
+  -- See docs/assumptions.md#rental-day.
   v_start_date := (lower(v_booking.customer_period) at time zone v_tz)::date;
   v_calendar_days := greatest(1, ceil(
     extract(epoch from (upper(v_booking.customer_period)
@@ -1200,6 +1204,7 @@ begin
 
     if v_line.rate_minor is not null then
       -- D8: the override is the final day rate; no multiplier on top.
+      -- ASSUMPTION: see docs/assumptions.md#override-final.
       v_effective := v_line.rate_minor;
       v_applied   := false;
       v_override_n := v_override_n + 1;
@@ -1244,9 +1249,9 @@ begin
   -- ---- step 6: totals (D5, D9) -------------------------------------------
   v_cost := booking_sub_hire_cost(v_booking.id);
 
-  if v_unpriced_n > 0 then v_reasons := v_reasons || 'unpriced_lines'; end if;
-  if v_booking.status <> 'confirmed' then v_reasons := v_reasons || 'not_confirmed'; end if;
-  if not v_has_card then v_reasons := v_reasons || 'no_rate_card'; end if;
+  if v_unpriced_n > 0 then v_reasons := array_append(v_reasons, 'unpriced_lines'); end if;
+  if v_booking.status <> 'confirmed' then v_reasons := array_append(v_reasons, 'not_confirmed'); end if;
+  if not v_has_card then v_reasons := array_append(v_reasons, 'no_rate_card'); end if;
 
   v_totals := jsonb_build_object(
     'subtotal_minor', v_subtotal,
