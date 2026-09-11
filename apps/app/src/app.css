@@ -1480,3 +1480,53 @@ h2.stamp .h-ico { display: none; }
 .toggle-row input { width: 24px; height: 24px; margin: 2px 0 0; accent-color: var(--accent); }
 .toggle-row strong { display: block; font-size: var(--fs-sm); }
 .toggle-row .sheet-hint { display: block; margin-top: 2px; }
+
+/* ---- the quote (0024, phase 3) ------------------------------ */
+/* The challan: every line typewritten, the money in the right-hand
+   column where a khata row keeps it, the total closed by the tally's
+   rule. INDICATIVE is the pencilled stamp (a quote is a conversation
+   until it is a confirmed, fully priced booking); VERIFIED the small
+   red one beside the client. */
+.quote-head {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--sp-2) var(--sp-3); margin-top: var(--sp-3);
+}
+.quote-stamps { display: inline-flex; flex-wrap: wrap; gap: var(--sp-2); }
+.quote-figure { font-size: var(--fs-lg); font-weight: 700; }
+.quote-lines { margin-top: var(--sp-3); }
+.quote-line { grid-template-columns: 1fr auto; }
+.quote-line .line-name, .quote-line .line-note { grid-column: 1; }
+.quote-line-total { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--ink); font-weight: 800; font-size: var(--fs-sm); }
+.quote-line.is-unpriced .line-name { color: var(--accent-strong); }
+.quote-strike { color: var(--muted); text-decoration: line-through; }
+.quote-rate-field {
+  grid-column: 1 / -1; display: flex; gap: var(--sp-2); align-items: center; margin-top: var(--sp-1);
+}
+.quote-rate-field .sheet-search { flex: 1; min-width: 0; margin-top: 0; }
+.quote-override { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--sp-1); margin-top: var(--sp-2); }
+.quote-override .session-actions { margin-top: var(--sp-3); }
+.quote-tally .tally-line { display: flex; justify-content: space-between; gap: var(--sp-3); }
+.quote-override-door { margin-top: var(--sp-5); }
+/* The trace folds: a challan shows the total, and the working is one
+   tap away for the client who asks why. */
+.quote-trace {
+  margin-top: var(--sp-4); padding: var(--sp-3);
+  border: var(--line-w) dashed var(--line); border-radius: var(--r-sm);
+  background: var(--card-2);
+}
+.quote-trace summary { cursor: pointer; font-size: var(--fs-sm); font-weight: 800; }
+.quote-steps { margin: var(--sp-2) 0 0; padding-left: var(--sp-4); font-size: var(--fs-sm); font-weight: 600; }
+.quote-steps li { margin-top: var(--sp-1); }
+.quote-section .enquiry-foot { margin-top: var(--sp-3); }
+.enquiry-window { margin-top: var(--sp-4); }
+.enquiry-price { margin-top: var(--sp-2); }
+
+/* Settings → Rates: the rate list with its inline figure, the calendar
+   rows, the weekday toggles. */
+.rate-row { grid-template-columns: 1fr auto; }
+.rate-row .line-name, .rate-row .line-note { grid-column: 1; }
+.rate-row.is-unpriced .line-note { color: var(--accent-strong); }
+.rate-input { grid-column: 2; grid-row: 1 / span 2; width: 7.5em; margin-top: 0; text-align: right; }
+.weekday-row .filter-chip { padding-left: 10px; padding-right: 10px; }
+.calendar-row-tap { min-height: var(--tap); display: flex; align-items: center; }
+.calendar-row-doors { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--tap-gap-glove); align-items: center; margin-top: var(--sp-1); }

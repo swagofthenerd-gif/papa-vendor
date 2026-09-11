@@ -954,6 +954,7 @@ export const STR_UR: StrTable = {
   quoteCardMinDaysLabel: 'Kam az kam bill wale din',
   quoteCardWeekendLabel: 'Jo din bill nahi hote',
   quoteCardWeekendHint: 'Har din bill hota hai jab tak yahan koi din tick na ho. Sirf weekend wali job bhi minimum bill hoti hai.',
+  quoteCardSave: 'Card save karo',
   quoteCardSaved: 'Card save ho gaya — bhejne ka intezaar',
   quoteRatesListHeading: 'Din ke rates',
   quoteRatesListSub: (priced: number, total: number): string => `${total} mein se ${priced} priced`,

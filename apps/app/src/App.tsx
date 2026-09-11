@@ -14,6 +14,7 @@ import { DeskScreen } from './demo/DeskScreen.tsx'
 import { CalendarScreen } from './demo/CalendarScreen.tsx'
 import { BookingScreen } from './demo/BookingScreen.tsx'
 import { SettingsScreen } from './demo/SettingsScreen.tsx'
+import { RatesScreen } from './demo/RatesScreen.tsx'
 import { ImportScreen } from './demo/ImportScreen.tsx'
 import { HisaabScreen } from './demo/HisaabScreen.tsx'
 import { KharchaSheet } from './demo/KharchaSheet.tsx'
@@ -326,5 +327,8 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
 
     case 'settings':
       return <SettingsScreen store={store} />
+
+    case 'rates':
+      return <RatesScreen store={store} />
   }
 }

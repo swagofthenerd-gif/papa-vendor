@@ -1047,6 +1047,7 @@ const STR_EN = {
   quoteCardMinDaysLabel: 'Minimum billable days',
   quoteCardWeekendLabel: 'Days that do not bill',
   quoteCardWeekendHint: 'Every day bills unless a weekday is ticked here. A weekend-only job still bills the minimum.',
+  quoteCardSave: 'Save the card',
   quoteCardSaved: 'Card saved — waiting to send',
   quoteRatesListHeading: 'Day rates',
   quoteRatesListSub: (priced: number, total: number): string => `${priced} of ${total} priced`,
