@@ -268,11 +268,10 @@ export interface AssetCosts {
 /** What one unit has COST — the other half of the payback question. */
 export function assetCosts(db: SqlDriver, assetId: string): AssetCosts {
   const rows = liveExpenses(expenseRows(db)).filter((e) => e.assetId === assetId)
+  const repairs = rows.filter((e) => e.kind === 'repair')
   return {
-    repairMinor: rows
-      .filter((e) => e.kind === 'repair')
-      .reduce((n, e) => n + e.amountMinor, 0),
-    repairCount: rows.filter((e) => e.kind === 'repair').length,
+    repairMinor: repairs.reduce((n, e) => n + e.amountMinor, 0),
+    repairCount: repairs.length,
     purchaseExpenseMinor: rows
       .filter((e) => e.kind === 'purchase')
       .reduce((n, e) => n + e.amountMinor, 0),
