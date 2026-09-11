@@ -1480,3 +1480,53 @@ h2.stamp .h-ico { display: none; }
 .toggle-row input { width: 24px; height: 24px; margin: 2px 0 0; accent-color: var(--accent); }
 .toggle-row strong { display: block; font-size: var(--fs-sm); }
 .toggle-row .sheet-hint { display: block; margin-top: 2px; }
+
+/* ---- network (0025): partners, sub-hire, crew, the send sheet ---------- */
+/* The crew line under a job card: a label, the chips, the add door. */
+.crew-row {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-2) var(--sp-2);
+}
+.crew-label {
+  display: inline-flex; align-items: center; gap: 4px;
+  color: var(--muted); font-size: var(--fs-xs); font-weight: 700;
+}
+/* A crew chip is a HOLD target (remove), so it wears the hold ring's fill
+   under its label, small. Glove height, not glove width — it sits in a
+   row beside the frequent doors, so the hold is what protects it. */
+.crew-chip {
+  position: relative; display: inline-flex; align-items: center; gap: 5px;
+  min-height: 36px; padding: 4px 12px;
+  border: var(--line-w) solid var(--line); border-radius: var(--r-pill);
+  background: var(--card); color: var(--ink);
+  font: inherit; font-size: var(--fs-xs); font-weight: 800;
+  overflow: hidden; cursor: pointer;
+  touch-action: none; -webkit-user-select: none; user-select: none;
+}
+.crew-chip.is-driver { border-style: dashed; }
+.crew-chip-fill {
+  position: absolute; inset: 0;
+  transform-origin: left center;
+  transform: scaleX(var(--hold-progress, 0));
+  background: var(--accent); opacity: 0.85;
+}
+.crew-chip-name, .crew-chip svg { position: relative; }
+/* The per-partner send list. */
+.send-list { list-style: none; margin: var(--sp-3) 0 0; padding: 0; }
+.send-row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  min-height: var(--tap-glove); padding: var(--sp-2) 0;
+  border-bottom: var(--line-w) solid var(--rule-feint);
+}
+.send-row.is-sent { color: var(--muted); }
+.send-tick { display: flex; align-items: center; gap: var(--sp-3); cursor: pointer; min-width: 0; }
+.send-tick input { width: 24px; height: 24px; accent-color: var(--accent); flex: none; }
+.send-tick strong { display: block; font-size: var(--fs-sm); }
+.send-tick .line-note { display: block; }
+.sub-hire-line .sub-hire-doors { padding: var(--sp-1) 0 0; grid-column: 1; }
+.sub-hire-line.is-closed .line-name { color: var(--muted); }
+.notice-inline { display: inline-flex; align-items: center; gap: 4px; color: var(--status-attention); }
+.sub-hire-code { margin: var(--sp-3) 0; font-size: var(--fs-xl); text-align: center; }
+.shortage-list { margin-bottom: var(--sp-2); }
+.partner-head .job-actions { margin-top: var(--sp-2); padding: 0; }

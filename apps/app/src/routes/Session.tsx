@@ -38,6 +38,7 @@ export function Session({
   onVoiceNote,
   onShareWhatsApp,
   onShowParchi,
+  onThermalPrint,
   onBackToScanning,
   onDone,
   onChargeClient,
@@ -57,6 +58,8 @@ export function Session({
   onShareWhatsApp: () => void
   /** Show the challan as a full-screen QR — the phone-to-phone gate pass. */
   onShowParchi: () => void
+  /** --- network --- the thermal parchi (0025): bytes to the printer seam. */
+  onThermalPrint: () => void
   onBackToScanning: () => void
   onDone: () => void
   /** Open the damage/extras charge sheet — a write, so it lives with the
@@ -228,6 +231,11 @@ export function Session({
             network on either side. */}
         <button className="btn btn-outline btn-block" onClick={onShowParchi}>
           <Icon name="qr" size={18} /> {STR.sessionParchiShowAtTheGate}
+        </button>
+        {/* --- network --- the same challan on 58mm paper. Honest when no
+            printer is connected: the button says so, it does not pretend. */}
+        <button className="btn btn-ghost btn-block" onClick={onThermalPrint}>
+          <Icon name="receipt" size={18} /> {STR.networkThermalPrint}
         </button>
         <button className="btn btn-ghost btn-block" onClick={onBackToScanning}>
           <Icon name="camera" size={18} /> {STR.sessionKeepScanning}

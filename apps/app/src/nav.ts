@@ -26,6 +26,7 @@ export type View =
   | { name: 'import' }                           // load the house's catalogue
   | { name: 'ginti' }                            // cycle count: shelf vs book
   | { name: 'settings' }
+  | { name: 'partner'; partnerId: string }       // --- network --- one partner house
 
 /**
  * 'out' and 'in' open a real session and write events. 'lookup' is the
@@ -90,6 +91,9 @@ export function parseHash(hash: string): View {
       return { name: 'ginti' }
     case 'settings':
       return { name: 'settings' }
+    // --- network ---
+    case 'partner':
+      return parts[1] ? { name: 'partner', partnerId: parts[1] } : { name: 'settings' }
     default:
       return { name: 'jobs' }
   }
@@ -127,6 +131,9 @@ export function viewToHash(view: View): string {
       return '#/ginti'
     case 'settings':
       return '#/settings'
+    // --- network ---
+    case 'partner':
+      return `#/partner/${view.partnerId}`
   }
 }
 

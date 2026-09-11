@@ -2,6 +2,8 @@ import { Icon } from '@papa/icons'
 import { Shell, SectionHead } from '../components/Shell.tsx'
 import { go } from '../nav.ts'
 import { BackedUpRow, LanguageRow, PaymentRow, Tags } from './Tags.tsx'
+// --- network --- (0025)
+import { PartnersSection } from './PartnersSection.tsx'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 
@@ -28,6 +30,9 @@ export function SettingsScreen({ store }: { store: DemoStore }) {
       <LanguageRow />
       <BackedUpRow store={store} />
       <PaymentRow store={store} />
+
+      {/* --- network --- (0025): the partner houses and the public line. */}
+      <PartnersSection store={store} />
 
       <section className="section">
         <SectionHead icon="scroll" title={STR.labelsLoadYourGear} sub={STR.labelsImportSubtitle} />

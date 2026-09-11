@@ -61,6 +61,7 @@ export function Enquiry({
   onCopyReply,
   onCreateJob,
   onBook,
+  onAskMarket,
 }: {
   summary: AvailabilitySummary | null
   reply: string
@@ -70,6 +71,8 @@ export function Enquiry({
   onCreateJob: () => void
   /** Pencil these lines into the calendar instead of making a job today. */
   onBook?: () => void
+  /** --- network --- ask the partner houses for what is short (0025). */
+  onAskMarket?: () => void
 }) {
   const [text, setText] = useState('')
 
@@ -195,6 +198,13 @@ export function Enquiry({
         {onBook ? (
           <button className="btn btn-outline" onClick={onBook}>
             <Icon name="calendar" size={18} /> {STR.bookingNew}
+          </button>
+        ) : null}
+        {/* --- network --- only when a line is short or committed: a door
+            that appears with nothing to ask for is a dead button. */}
+        {onAskMarket && summary.lines.some((l) => l.state === 'short' || l.state === 'none') ? (
+          <button className="btn btn-outline" onClick={onAskMarket}>
+            <Icon name="handshake" size={18} /> {STR.networkAskMarket}
           </button>
         ) : null}
       </div>

@@ -10,6 +10,8 @@ import { ReversalNotices } from '../components/ReversalNotice.tsx'
 import { go, type View } from '../nav.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
+// --- network --- (0025): the thermal printer seam.
+import { printThermal } from '../print/thermal.ts'
 
 /**
  * The handover summary — live session or long finished.
@@ -29,6 +31,7 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
   const [sheet, setSheet] = useState<'charge' | 'latefee' | null>(null)
   const [written, setWritten] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
+  const [printed, setPrinted] = useState<string | null>(null) // --- network ---
 
   // The khata a dock charge would land in, and the overdue return's
   // late-fee draft — both null when the facts do not support them, and
@@ -102,6 +105,21 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
           const text = store.parchiText(jobId)
           if (text) setParchi(text)
         }}
+        onThermalPrint={() => {
+          // --- network --- the bytes are built here and now (stamped like
+          // the QR parchi); where they go is the seam's decision.
+          const bytes = store.thermalParchiBytes(jobId)
+          if (!bytes) return
+          void printThermal(bytes, `parchi-${jobId}.bin`).then((r) => {
+            setPrinted(
+              r.ok
+                ? (r.reason === 'dev_download' ? STR.networkThermalSaved : STR.networkThermalSent)
+                : r.reason === 'no_printer'
+                  ? STR.networkThermalNoPrinter
+                  : STR.networkThermalFailed(r.reason ?? ''),
+            )
+          })
+        }}
         onBackToScanning={() => go({ name: 'scan', jobId, mode: 'out' })}
         onDone={() => {
           store.endSession()
@@ -110,6 +128,13 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
         onChargeClient={() => setSheet('charge')}
         onDraftLateFee={() => setSheet('latefee')}
       />
+
+      {printed ? (
+        <div className="notice" role="status">
+          <Icon name="receipt" size={18} />
+          <div><strong>{printed}</strong></div>
+        </div>
+      ) : null}
 
       {margin.expenseCount > 0 ? (
         <p className="section-sub job-margin code">

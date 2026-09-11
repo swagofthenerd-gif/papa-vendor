@@ -13,6 +13,9 @@ import type { BookingRow } from '../demo/bookings.ts'
 import { BookingStamp } from '../demo/BookingRows.tsx'
 import { go } from '../nav.ts'
 import { SectionHead } from '../components/Shell.tsx'
+// --- network --- (0025 D7): the crew line on the card.
+import { CrewChips } from '../demo/CrewChips.tsx'
+import type { CrewMember } from '../demo/network.ts'
 import { STR } from '../strings.ts'
 
 /** One row on the board. A job is three free-text fields and a tally. */
@@ -36,6 +39,10 @@ export interface JobRow {
   /** The close rule's number: items still projecting onto this job. Zero
    *  means the Close button is live; anything else is its honest reason. */
   stillOut: number
+  // --- network --- (0025): who is going with the gear, and whether this
+  // job is gear lent to a partner house (the SUB-HIRE stamp, D4).
+  crew: CrewMember[]
+  subHire: boolean
 }
 
 /**
@@ -118,6 +125,8 @@ export function Today({
   onConvertBooking,
   onLateFee,
   onEscalate,
+  onAddCrew,
+  onRemoveCrew,
 }: {
   jobs: JobRow[]
   outJobs: OutRow[]
@@ -135,6 +144,9 @@ export function Today({
   onLateFee: (jobId: string) => void
   /** The ladder's day-14 rung: flag the job and share the manager text. */
   onEscalate: (jobId: string) => void
+  /** --- network --- open the crew picker for a job; take one person off. */
+  onAddCrew: (jobId: string) => void
+  onRemoveCrew: (jobId: string, userId: string) => void
 }) {
   const totalExpected = jobs.reduce((n, j) => n + j.expected, 0)
   const totalScanned = jobs.reduce((n, j) => n + j.scanned, 0)
@@ -245,6 +257,9 @@ export function Today({
                       <span className="job-main">
                         <span className="job-label">{job.label}</span>
                         <span className="job-tags">
+                          {job.subHire ? (
+                            <span className="stamp stamp-small">{STR.networkSubHireStamp}</span>
+                          ) : null}
                           {ready ? (
                             <span className="badge badge-green">
                               <Icon name="check" size={12} /> {STR.todayPacked}
@@ -294,6 +309,12 @@ export function Today({
                         onClose={() => onCloseJob(job.id)}
                       />
                     </div>
+                    {/* --- network --- the crew line (0025 D7). */}
+                    <CrewChips
+                      crew={job.crew}
+                      onAdd={() => onAddCrew(job.id)}
+                      onRemove={(userId) => onRemoveCrew(job.id, userId)}
+                    />
                   </div>
                 </li>
               )

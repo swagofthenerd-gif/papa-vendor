@@ -2,6 +2,9 @@ import { useCallback, useMemo, useState } from 'react'
 import type { AvailabilitySummary, CatalogueItem } from '@papa/core'
 import { Enquiry } from '../routes/Enquiry.tsx'
 import { NewJobSheet } from './NewJobSheet.tsx'
+// --- network --- (0025): the reply card's Ask-the-market door.
+import { AskTheMarketSheet, type Shortage } from './AskTheMarketSheet.tsx'
+import { DAY_MS } from '@papa/core'
 import { go } from '../nav.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
@@ -28,6 +31,7 @@ export function EnquiryScreen({
 }) {
   const [summary, setSummary] = useState<AvailabilitySummary | null>(null)
   const [creating, setCreating] = useState(false)
+  const [asking, setAsking] = useState<Shortage[] | null>(null) // --- network ---
   // The turned-away demand log records ONCE per answered list, at the
   // moment the answer is USED (reply copied, or a job made) — a pasted
   // list the owner abandons was a draft, not a turned-away client, and
@@ -95,11 +99,31 @@ export function EnquiryScreen({
       : base
   }, [summary])
 
+  // --- network --- the short lines as an ask: what the shelf minus the
+  // calendar cannot cover. A pasted list carries no dates, so the ask
+  // names today → tomorrow and the desk corrects it in the sub-hire sheet.
+  const askMarket = () => {
+    if (!summary) return
+    const now = Date.now()
+    setAsking(
+      summary.lines
+        .filter((l) => (l.state === 'short' || l.state === 'none') && l.productId)
+        .map((l) => ({
+          productId: l.productId as string,
+          productName: l.productName ?? l.raw,
+          qty: Math.max(1, l.wanted - Math.max(0, l.onHand - l.confirmedOverlap)),
+          fromMs: now,
+          untilMs: now + DAY_MS,
+        })),
+    )
+  }
+
   return (
     <>
       <Enquiry
         summary={summary}
         reply={summary ? store.replyText(summary) : ''}
+        onAskMarket={askMarket}
         onPaste={onPaste}
         onResolve={onResolve}
         onCopyReply={onCopyReply}
@@ -117,6 +141,9 @@ export function EnquiryScreen({
             : undefined
         }
       />
+      {asking && asking.length > 0 ? (
+        <AskTheMarketSheet store={store} shortage={asking} onClose={() => setAsking(null)} />
+      ) : null}
       {creating && summary ? (
         <NewJobSheet
           linesNote={linesNote}

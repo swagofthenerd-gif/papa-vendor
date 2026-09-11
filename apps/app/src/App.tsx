@@ -24,6 +24,10 @@ import { GintiScreen } from './demo/GintiScreen.tsx'
 import { SwapSheet } from './demo/SwapSheet.tsx'
 import { ServicedSheet } from './demo/ServicedSheet.tsx'
 import { SehatSection } from './demo/SehatSection.tsx'
+// --- network --- (0025)
+import { PartnerScreen } from './demo/PartnerScreen.tsx'
+import { LendOutSheet } from './demo/LendOutSheet.tsx'
+import { PartnerSendSheet } from './demo/PartnerSendSheet.tsx'
 
 /**
  * The app shell.
@@ -92,6 +96,9 @@ function AssetRoute({ store, assetId }: { store: DemoStore; assetId: string }) {
   const [repairing, setRepairing] = useState(false)
   const [swapping, setSwapping] = useState(false)
   const [servicing, setServicing] = useState(false)
+  // --- network --- the lend door and the partner broadcast (0025).
+  const [lending, setLending] = useState(false)
+  const [telling, setTelling] = useState(false)
   const bump = () => setTick((t) => t + 1)
 
   // tick is read so the lint stays honest that a re-render is the point — the
@@ -163,7 +170,34 @@ function AssetRoute({ store, assetId }: { store: DemoStore; assetId: string }) {
           if (!win) void navigator.clipboard?.writeText(text).catch(() => {})
         }}
         onSwap={() => setSwapping(true)}
+        // --- network --- (0025): lend an owned unit; tell the partner
+        // houses about a stolen one; name the house a borrowed one is from.
+        onLend={store.lendable(assetId) ? () => setLending(true) : undefined}
+        onTellPartners={store.stolenBroadcastFacts(assetId) ? () => setTelling(true) : undefined}
+        borrowedFrom={store.subHireForAsset(assetId)}
       />
+      {lending && asset ? (
+        <LendOutSheet
+          store={store}
+          asset={{ id: assetId, code: asset.code, productId: asset.productId, name: asset.name }}
+          onDone={() => { setLending(false); go({ name: 'jobs' }) }}
+          onClose={() => setLending(false)}
+        />
+      ) : null}
+      {telling && asset ? (
+        <PartnerSendSheet
+          title={STR.networkTellPartners}
+          hint={STR.networkTellPartnersHint}
+          partners={store.partners()}
+          text={store.stolenBroadcastText(assetId) ?? ''}
+          above={
+            store.stolenBroadcastFacts(assetId)?.publicUrl
+              ? null
+              : <p className="sheet-hint">{STR.networkTellPartnersNoPage}</p>
+          }
+          onClose={() => setTelling(false)}
+        />
+      ) : null}
       {repairing && asset ? (
         <KharchaSheet
           title={STR.kharchaRepairCost}
@@ -326,5 +360,10 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
 
     case 'settings':
       return <SettingsScreen store={store} />
+
+    // --- network --- (0025). KEYED like the customer page: the sheets and
+    // the tick live in instance state, and two partners must not share one.
+    case 'partner':
+      return <PartnerScreen key={view.partnerId} store={store} partnerId={view.partnerId} />
   }
 }

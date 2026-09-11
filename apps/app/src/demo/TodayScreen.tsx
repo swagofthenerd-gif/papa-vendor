@@ -7,6 +7,8 @@ import { Today } from '../routes/Today.tsx'
 import { go } from '../nav.ts'
 import { NewJobSheet } from './NewJobSheet.tsx'
 import { KhataChargeSheet } from './SessionScreen.tsx'
+// --- network --- (0025 D7): the crew picker.
+import { CrewPickerSheet } from './CrewChips.tsx'
 import { whatsAppShareUrl } from '@papa/core'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
@@ -25,6 +27,7 @@ export function TodayScreen({ store }: { store: DemoStore }) {
   const [newJobOpen, setNewJobOpen] = useState(false)
   const [dateFor, setDateFor] = useState<string | null>(null)
   const [lateFeeFor, setLateFeeFor] = useState<string | null>(null)
+  const [crewFor, setCrewFor] = useState<string | null>(null) // --- network ---
 
   const counts = store.outboxCounts()
   const now = Date.now()
@@ -73,6 +76,9 @@ export function TodayScreen({ store }: { store: DemoStore }) {
           hasSummary: store.hasSummary(j.id),
           customer: j.customer,
           stillOut: store.stillOut(j.id),
+          // --- network --- (0025)
+          crew: store.crewFor(j.id),
+          subHire: store.subHireForJob(j.id) !== null,
         }))}
         outJobs={store.outJobsDue(now)}
         stats={store.stats()}
@@ -103,7 +109,23 @@ export function TodayScreen({ store }: { store: DemoStore }) {
           const win = window.open(whatsAppShareUrl(text), '_blank', 'noopener')
           if (!win) void navigator.clipboard?.writeText(text).catch(() => {})
         }}
+        // --- network --- (0025 D7): crew on and off the card.
+        onAddCrew={(jobId) => setCrewFor(jobId)}
+        onRemoveCrew={(jobId, userId) => { store.unassignAttendant(jobId, userId); refresh() }}
       />
+
+      {crewFor ? (
+        <CrewPickerSheet
+          staff={store.staff()}
+          crew={store.crewFor(crewFor)}
+          onPick={(userId, role) => {
+            store.assignAttendant(crewFor, userId, role)
+            setCrewFor(null)
+            refresh()
+          }}
+          onClose={() => setCrewFor(null)}
+        />
+      ) : null}
 
       {lateFeeFor ? (
         <LateFeeFromBoard

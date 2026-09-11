@@ -128,6 +128,24 @@ describe('what the challan says', () => {
     assert.doesNotMatch(clean, /Value:/)
   })
 
+  // --- network (0025 D7): the crew line.
+  test('names the crew under the header, capped at three, and prints nothing for nobody', () => {
+    const text = buildParchi({ ...small(), attendants: ['Usman', 'Saqib'] })
+    assert.match(text, /OUT 2026-09-03 06:14\nWith: Usman, Saqib\n\nOUT \(2\):/)
+    assert.doesNotMatch(buildParchi(small()), /With:/)
+    assert.doesNotMatch(buildParchi({ ...small(), attendants: [] }), /With:/)
+    const crowd = buildParchi({
+      ...small(),
+      attendants: ['Usman', 'A Very Long Display Name', 'Saqib', 'Danish', 'Rizwan'],
+    })
+    assert.match(crowd, /With: Usman, A Very Long…, Saqib \+2\n/)
+  })
+
+  test('the worst case with a full crew still fits the QR budget', () => {
+    const text = buildParchi({ ...huge(), attendants: ['Usman', 'Saqib', 'Danish', 'Rizwan'] })
+    assert.ok(text.length <= PARCHI_MAX_CHARS, `${text.length} > ${PARCHI_MAX_CHARS}`)
+  })
+
   test('a return reads as a return', () => {
     const text = buildParchi({ ...small(), mode: 'in' })
     assert.match(text, /BACK 2026-09-03 06:14/)
