@@ -1409,7 +1409,11 @@ h2.stamp .h-ico { display: none; }
    stamp in the column the money would occupy on a khata row. */
 .booking-no { color: var(--muted); font-size: var(--fs-xs); margin-right: 2px; }
 .booking-line { min-height: var(--row-h-glove); }
-.booking-line-stamp { grid-row: 1 / span 2; align-self: center; }
+/* Grid auto-placement seats the row-spanning stamp FIRST, so without an
+   explicit column it lands on the left and pushes the name over; both
+   columns are pinned. */
+.booking-line .line-name, .booking-line .line-note { grid-column: 1; }
+.booking-line-stamp { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
 .booking-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
 .booking-head .asset-id { margin-right: auto; }
 .booking-note { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); font-weight: 600; white-space: pre-line; }
@@ -1418,9 +1422,9 @@ h2.stamp .h-ico { display: none; }
 /* The Today board's Promised rows: the tap band on the left, the stamp
    and the one door on the right, the glove gap between them. */
 .promised-line { grid-template-columns: 1fr auto; align-items: center; }
-.promised-main { display: grid; gap: var(--gap-hair); padding: 0; min-height: var(--tap); }
+.promised-main { grid-column: 1; display: grid; gap: var(--gap-hair); padding: 0; min-height: var(--tap); }
 .promised-side {
-  grid-row: 1 / span 2; display: flex; flex-direction: column; align-items: flex-end;
+  grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column; align-items: flex-end;
   gap: var(--sp-2); margin-left: var(--tap-gap-glove);
 }
 
@@ -1455,8 +1459,14 @@ h2.stamp .h-ico { display: none; }
 
 /* Sheet furniture the booking sheets add: a two-up field pair, the
    quantity stepper on a draft line, and a labelled toggle row. */
-.field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
-.field-pair .sheet-search { min-width: 0; font-size: var(--fs-sm); }
+.field-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-3); }
+.field-pair > div { min-width: 0; }
+.field-pair .sheet-search { min-width: 0; width: 100%; font-size: var(--fs-sm); padding-left: var(--sp-2); padding-right: var(--sp-2); }
+/* A stacked ledger line: name and every note in one column, for the
+   sheets whose notes are sentences (the three-layer answer) rather than
+   a figure that belongs in the money column. */
+.line-stack { grid-template-columns: 1fr; }
+.line-stack .line-name, .line-stack .line-note { grid-column: 1; }
 .booking-draft-line { grid-template-columns: 1fr auto; }
 .qty-stepper { display: inline-flex; align-items: center; gap: 2px; }
 .qty-n { min-width: 28px; text-align: center; font-size: var(--fs-md); font-weight: 700; }

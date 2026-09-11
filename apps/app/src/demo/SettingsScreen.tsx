@@ -29,8 +29,8 @@ export function SettingsScreen({ store }: { store: DemoStore }) {
       <BackedUpRow store={store} />
       <PaymentRow store={store} />
 
-      <section className="tag-shelf">
-        <h2 className="tag-shelf-name">{STR.labelsLoadYourGear}</h2>
+      <section className="section">
+        <SectionHead icon="scroll" title={STR.labelsLoadYourGear} sub={STR.labelsImportSubtitle} />
         <button className="btn btn-outline btn-block" onClick={() => go({ name: 'import' })}>
           <Icon name="scroll" size={18} /> {STR.labelsImportDoor}
         </button>

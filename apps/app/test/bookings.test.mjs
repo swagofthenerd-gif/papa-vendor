@@ -561,6 +561,15 @@ describe('the substitute door (reallocate_reservation)', () => {
     assert.equal(r.collision.assetCode, 'FX9-01')
     assert.deepEqual(substitutesForReservation(db, b5Reservation()), [], 'nothing free to offer')
     assert.equal(reallocateReservation(db, b5Reservation(), 'asset-fx6-1', NOW, ids).reason, 'different_product')
+    // A booking's own other claim: "give them the body they already have"
+    // is not a substitution, and the picker never offers it.
+    const two = createBooking(db, ORG, {
+      customerId: 'cust-hamza', startMs: atDays(50, 9), endMs: atDays(51, 9),
+      lines: [{ productId: 'prod-fx9', qty: 2 }], status: 'confirmed',
+    }, NOW, ids)
+    const [claimA, claimB] = db.all(`select id, asset_id from asset_reservations where booking_id = ? order by rowid`, [two.bookingId])
+    assert.equal(reallocateReservation(db, claimA.id, claimB.asset_id, NOW, ids).reason, 'already_held')
+    assert.ok(!substitutesForReservation(db, claimA.id).some((s) => s.id === claimB.asset_id))
     assert.equal(reallocateReservation(db, 'nope', 'asset-fx9-1', NOW, ids).reason, 'not_found')
     assert.deepEqual(bookingView(db, 'bk-5', NOW).lines[0].allocated.map((a) => a.assetCode), ['FX9-02'], 'nothing moved')
   })

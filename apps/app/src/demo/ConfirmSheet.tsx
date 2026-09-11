@@ -83,7 +83,7 @@ export function ConfirmSheet({
             const planned = plan.ok ? plan.plan.filter((p) => p.lineId === l.id) : []
             const bulk = plan.ok ? plan.bulkPlan.find((p) => p.lineId === l.id) : undefined
             return (
-              <li key={l.id} className="line">
+              <li key={l.id} className="line line-stack">
                 <span className="line-name">
                   {l.assetCode
                     ? STR.bookingLineDemanded(l.assetCode)

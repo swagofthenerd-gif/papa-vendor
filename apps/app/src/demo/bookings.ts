@@ -853,7 +853,7 @@ export function confirmBooking(
 
 export type ReallocateResult =
   | { ok: true; reservationId: string; assetId: string; assetCode: string }
-  | { ok: false; reason: 'not_found' | 'unknown_asset' | 'not_rentable' | 'different_product' | 'not_confirmed' }
+  | { ok: false; reason: 'not_found' | 'unknown_asset' | 'not_rentable' | 'different_product' | 'not_confirmed' | 'already_held' }
   | { ok: false; collision: Collision }
 
 /**
@@ -899,6 +899,10 @@ export function reallocateReservation(
   const until = msOf(r.blocked_until)
   const collision = winnerOnAsset(db, a.id, from, until, r.booking_id)
   if (collision) return { ok: false, collision }
+  // The booking's OWN other claim on that unit: the server's constraint
+  // would refuse it too (one unit, two overlapping confirmed claims), and
+  // "give them the body they already have" is not a substitution.
+  if (heldBySameBooking(db, r.booking_id, a.id, r.id)) return { ok: false, reason: 'already_held' }
 
   db.transaction(() => {
     db.exec(`update asset_reservations set asset_id = ? where id = ?`, [a.id, r.id])
@@ -912,6 +916,16 @@ export function reallocateReservation(
     enqueueBookingOp(db, ids, 'reallocate_reservation', r.booking_id, payload)
   })
   return { ok: true, reservationId: r.id, assetId: a.id, assetCode: a.asset_code ?? a.id }
+}
+
+/** Whether a booking already holds a unit through another of its own
+ *  confirmed claims. */
+function heldBySameBooking(db: SqlDriver, bookingId: string, assetId: string, exceptReservationId: string): boolean {
+  return !!db.get(
+    `select 1 as one from asset_reservations
+      where booking_id = ? and asset_id = ? and id <> ? and state = 'confirmed' limit 1`,
+    [bookingId, assetId, exceptReservationId],
+  )
 }
 
 export interface ReservationSubstitute {
@@ -952,6 +966,7 @@ export function substitutesForReservation(
       [product.product_id, r.asset_id],
     )
     .filter((a) => !winnerOnAsset(db, a.id, from, until, r.booking_id))
+    .filter((a) => !heldBySameBooking(db, r.booking_id, a.id, reservationId))
     .map((a) => ({ id: a.id, code: a.asset_code ?? a.id, name: product.name ?? '', sameProduct: true }))
 }
 
