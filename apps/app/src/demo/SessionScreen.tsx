@@ -232,7 +232,7 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
  * and stays fully editable; nothing writes until the one button at the
  * bottom, and closing the sheet writes nothing at all.
  */
-function KhataChargeSheet({
+export function KhataChargeSheet({
   title,
   hint,
   sub,

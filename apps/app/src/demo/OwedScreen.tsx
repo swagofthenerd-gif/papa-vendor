@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Icon } from '@papa/icons'
 import { formatRupees } from '@papa/core'
-import { Shell, SectionHead } from '../components/Shell.tsx'
+import { Shell, SectionHead, SettingsButton } from '../components/Shell.tsx'
 import { KharchaSheet } from './KharchaSheet.tsx'
 import { go, type View } from '../nav.ts'
 import type { DemoStore } from './store.ts'
@@ -44,16 +44,27 @@ export function OwedScreen({ store }: { store: DemoStore }) {
           >
             <Icon name="receipt" size={22} />
           </button>
-          <button
-            className="icon-btn"
-            onClick={() => go({ name: 'jobs' })}
-            aria-label={STR.commonBackToToday}
-          >
-            <Icon name="chevron-left" size={22} />
-          </button>
+          <SettingsButton />
         </>
       }
     >
+      {/* The two money doors that used to sit on Today's quick grid: the
+          day's account and the expense book. Khata is the money tab now,
+          so its home carries them; Today keeps only the money strip, which
+          deep-links in. */}
+      <div className="quick-grid">
+        <button className="quick pressable" onClick={() => go({ name: 'hisaab' })}>
+          <Icon name="clipboard" size={20} />
+          <span className="quick-t">{STR.todayDinKaHisaab}</span>
+          <span className="quick-s">{STR.todayWhatMovedToday}</span>
+        </button>
+        <button className="quick pressable" onClick={() => setAdding(true)}>
+          <Icon name="receipt" size={20} />
+          <span className="quick-t">{STR.kharchaAddExpense}</span>
+          <span className="quick-s">{STR.kharchaMonthHeading}</span>
+        </button>
+      </div>
+
       {owing.length === 0 ? (
         <div className="empty">
           <Icon name="clipboard-check" size={36} />

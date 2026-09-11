@@ -22,6 +22,14 @@ export interface ScanRow extends ScanResult {
    * few decodes the person meant.
    */
   tagCode?: string
+  /**
+   * The unit is CONFIRMED to a booking whose hold begins inside the
+   * scanner's horizon (0022 promisedSoon) — an annotation, never a
+   * refusal (CONTRIBUTING principle 3: the truck is already leaving).
+   * Carried as the booking number and the day the hold begins ('Thu 21'),
+   * computed at scan time.
+   */
+  promised?: { bookingNo: number; day: string }
 }
 
 /**

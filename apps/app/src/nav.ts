@@ -20,7 +20,9 @@ export type View =
   | { name: 'customer'; customerId: string }     // the khata page
   | { name: 'owed' }                             // customers by balance, owed first
   | { name: 'closed' }                           // finished jobs, off the boards
-  | { name: 'enquiry' }                          // the pasted kit list
+  | { name: 'desk' }                             // the client desk: kit list, calendar, bookings
+  | { name: 'calendar' }                         // the promise calendar, month by month
+  | { name: 'booking'; bookingId: string }       // one booking's page
   | { name: 'import' }                           // load the house's catalogue
   | { name: 'ginti' }                            // cycle count: shelf vs book
   | { name: 'settings' }
@@ -73,8 +75,15 @@ export function parseHash(hash: string): View {
       return { name: 'owed' }
     case 'closed':
       return { name: 'closed' }
+    case 'desk':
+    // The kit-list reader's old address. Links and tests that say
+    // #/enquiry land on the desk, which is where the reader lives now.
     case 'enquiry':
-      return { name: 'enquiry' }
+      return { name: 'desk' }
+    case 'calendar':
+      return { name: 'calendar' }
+    case 'booking':
+      return parts[1] ? { name: 'booking', bookingId: parts[1] } : { name: 'calendar' }
     case 'import':
       return { name: 'import' }
     case 'ginti':
@@ -106,8 +115,12 @@ export function viewToHash(view: View): string {
       return '#/owed'
     case 'closed':
       return '#/closed'
-    case 'enquiry':
-      return '#/enquiry'
+    case 'desk':
+      return '#/desk'
+    case 'calendar':
+      return '#/calendar'
+    case 'booking':
+      return `#/booking/${view.bookingId}`
     case 'import':
       return '#/import'
     case 'ginti':

@@ -60,6 +60,7 @@ export function Enquiry({
   onResolve,
   onCopyReply,
   onCreateJob,
+  onBook,
 }: {
   summary: AvailabilitySummary | null
   reply: string
@@ -67,6 +68,8 @@ export function Enquiry({
   onResolve: (lineIndex: number, item: CatalogueItem) => void
   onCopyReply: () => void
   onCreateJob: () => void
+  /** Pencil these lines into the calendar instead of making a job today. */
+  onBook?: () => void
 }) {
   const [text, setText] = useState('')
 
@@ -189,6 +192,11 @@ export function Enquiry({
         <button className="btn btn-primary" onClick={onCreateJob}>
           {STR.enquiryMakeAJobFromThis}
         </button>
+        {onBook ? (
+          <button className="btn btn-outline" onClick={onBook}>
+            <Icon name="calendar" size={18} /> {STR.bookingNew}
+          </button>
+        ) : null}
       </div>
     </div>
   )

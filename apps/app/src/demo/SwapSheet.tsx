@@ -17,12 +17,20 @@ import type { SubstituteRow } from './read-model.ts'
  * consequence plainly before any choice is made.
  */
 export function SwapSheet({
+  title = STR.fleetSwapTitle,
+  hint,
+  emptyText = STR.fleetSwapNoSubstitutes,
   brokenCode,
   jobLabel,
   substitutes,
   onPick,
   onClose,
 }: {
+  /** The booking world reuses this picker for the substitute door, with
+   *  its own words; the fleet's crisis-day words are the defaults. */
+  title?: string
+  hint?: string
+  emptyText?: string
   brokenCode: string
   jobLabel: string
   substitutes: SubstituteRow[]
@@ -33,21 +41,21 @@ export function SwapSheet({
   const other = substitutes.filter((s) => !s.sameProduct)
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label={STR.fleetSwapTitle}>
+    <div className="sheet-backdrop" role="dialog" aria-label={title}>
       <div className="sheet">
         <header className="sheet-head">
-          <span className="sheet-title">{STR.fleetSwapTitle}</span>
+          <span className="sheet-title">{title}</span>
           <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
             <Icon name="x" size={22} />
           </button>
         </header>
 
-        <p className="sheet-hint">{STR.fleetSwapBrokenLine(brokenCode, jobLabel)}</p>
+        <p className="sheet-hint">{hint ?? STR.fleetSwapBrokenLine(brokenCode, jobLabel)}</p>
 
         {substitutes.length === 0 ? (
           <div className="empty">
             <Icon name="search" size={32} />
-            <p>{STR.fleetSwapNoSubstitutes}</p>
+            <p>{emptyText}</p>
           </div>
         ) : (
           <>

@@ -165,31 +165,48 @@ REFUSE to close (the close rule was right; the cable had nowhere to go) —
 Wave 2's terminal states (§4 below) fixed the other half: the owner marks
 the cable `lost` and the job closes.
 
-### 2. No bookings, and its two sharp edges — SEP, NOV, DEC, APR (the whole season)
-`no-bookings`, `double-promise`, `turnaway-blind-to-commitments`
+### 2. No bookings, and its two sharp edges — SHIPPED as the promise calendar (0022 + the client wave)
 
-The known Phase C gap, but the year found its exact teeth:
+Was `no-bookings`, `double-promise`, `turnaway-blind-to-commitments` —
+the Phase C gap the year hit across the whole season. Shipped end to end:
+migration `0022_bookings` (four statuses, two periods, the exclusion
+constraint on confirmed claims, confirm-allocates, bulk capacity as a
+peak, pencils that expire by predicate, the extension-collision list as
+data, the job bridge) and its on-phone twin (`demo/bookings.ts`: the same
+rules over the local mirror, every write queued as the RPC op it
+replays as) with the screens on top — the Desk tab (kit-list reader,
+calendar, bookings), the month calendar, the booking page with its
+Confirm / Extend / Convert / Send / Cancel doors, the new-booking sheet,
+the extension-collision screen with its Substitute / Sub-rent / Call
+doors, the scanner's PROMISED stamp, and the Today board's Promised
+strip and overdue ladder.
 
-- **Double promise.** `createJob` allocates from `presence='here'` only —
-  it does not know what other open jobs promised. Two shaadi jobs for the
-  same weekend were handed the *same two FX9s* (NOV, pinned); the seed
-  itself promises V-Mounts 1–4 to two jobs at once (SEP, pinned). First
-  truck wins; the second job's scan session cries missing/unexpected on
-  the ordinary case — the exact wolf-crying the return flow was built to
-  avoid.
-- **The demand log is blind to commitment-driven refusals.** The
-  turned-away log only records *shelf* shortages. In NOV the shelf showed
-  3 FX9s "available" while two open jobs claimed them; the owner turned
-  the third client away and `recordTurnedAway` recorded **zero**. The buy
-  signal misses precisely the wedding-season demand it was built to
-  capture. (Cheap partial fix inside Phase B: count a line as turned away
-  when `onHand - committed < wanted`, flagged separately from true
-  shortage.)
+- **Double promise — IMPOSSIBLE.** SEP's wedding now confirms through
+  the calendar while the TVC's four batteries are held by name, and the
+  confirm allocates the OTHER four: the truck leaves with eleven accepted
+  rows, no wolf-crying. NOV's second shaadi booking, demanding a body
+  Bilal already holds, is refused BY NAME — 'already promised to booking
+  #N (Bilal Hussain)' — and the pencil stands; the desk moves Bilal's
+  claim onto the third FX9 through the substitute door
+  (`reallocate_reservation`), Sana confirms on the body she asked for,
+  and both trucks leave with different cameras. (Both pinned.)
+- **The demand log sees commitments.** An enquiry asked WITH dates
+  subtracts confirmed claims over the window (`checkAvailability`'s
+  `window`, `confirmedOverlap`, `shortReason: 'committed'`), and
+  `recordTurnedAway` counts the committed refusal separately from a true
+  shelf shortage (`turnedAwayByReason`). NOV's third client, DEC's
+  last-week ask and APR's Eid ask are all counted. (Pinned.)
+- **The extension-collision moment.** MAR: Hamza keeps the house's one
+  C500 two days longer; the preview names Sana, the unit and when her
+  hold begins, and changes nothing. No substitute exists, so the desk
+  records a sub-rent intent and the extension writes BEHIND it in the
+  outbox (ASSUMPTION #27 `#sub-rent-intent`) — her claim on the unit
+  stands until the partner's unit covers it. (Pinned.)
 
-*Plan check:* Phase C's ordering (bookings before pricing) is confirmed;
-the extension-collision preview will matter, but plain
-allocation-awareness in `createJob` is the bleeding edge and could ship
-device-side sooner.
+What remains for the calendar is the partner network itself (W7): the
+sub-rent intent has an op name and a chain position but no server
+realisation yet, and the manager escalation on day 14 is one local flag
+(ASSUMPTION #28 `#manager-flag`).
 
 ### 3. No expense side of the book — SHIPPED as the kharcha book (0019)
 

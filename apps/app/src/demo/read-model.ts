@@ -54,8 +54,12 @@ create table if not exists job_expected (
 create index if not exists job_expected_asset_idx on job_expected (asset_id);
 
 create table if not exists job_meta (
-  job_id     text primary key,
-  departs_at text
+  job_id             text primary key,
+  departs_at         text,
+  -- The overdue ladder's last rung (0022 escalationStep, day 14): the desk
+  -- handed this job to the manager, and when. A desk-side note like
+  -- departs_at — the jobs mirror keeps the server's shape.
+  manager_flagged_at text
 );
 
 create table if not exists scan_sessions (
@@ -1112,4 +1116,30 @@ export function itemsSummary(names: string[]): string {
   if (names.length === 0) return ''
   if (names.length === 1) return names[0]
   return `${names[0]} + ${names.length - 1} more`
+}
+
+// ----------------------------------------------------- the manager flag
+
+/**
+ * The escalation ladder's last rung: the desk marks an overdue job as
+ * handed to the manager. Idempotent — the first flag's time stands, so a
+ * second tap cannot rewrite when the escalation actually happened.
+ * ASSUMPTION: a local flag is the whole record of a manager escalation.
+ * See docs/assumptions.md#manager-flag
+ */
+export function flagForManager(db: SqlDriver, jobId: string, nowMs: number): boolean {
+  if (!db.get(`select 1 as one from jobs where id = ?`, [jobId])) return false
+  db.exec(`insert or ignore into job_meta (job_id, departs_at, manager_flagged_at) values (?, null, null)`, [jobId])
+  db.exec(
+    `update job_meta set manager_flagged_at = coalesce(manager_flagged_at, ?) where job_id = ?`,
+    [new Date(nowMs).toISOString(), jobId],
+  )
+  return true
+}
+
+/** When the desk escalated this job, or null. */
+export function managerFlaggedAt(db: SqlDriver, jobId: string): string | null {
+  return db.get<{ at: string | null }>(
+    `select manager_flagged_at as at from job_meta where job_id = ?`, [jobId],
+  )?.at ?? null
 }

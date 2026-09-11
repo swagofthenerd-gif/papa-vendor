@@ -71,17 +71,14 @@ export function Tags({ store }: { store: DemoStore }) {
   return (
     <div className="tags-screen">
       <div className="tags-bar">
+        <button className="btn btn-primary" disabled={waiting} onClick={onPrint}>
+          <Icon name="scroll" size={18} /> {waiting ? STR.labelsDrawingLabels : STR.labelsPrintTheLabels}
+        </button>
         <p className="tags-hint">
           {STR.labelsPrintTheseHint} <strong>{STR.labelsAttachThisLabel}</strong>{' '}
           {STR.labelsToSayWhatItIsOn}
         </p>
-        <button className="btn btn-primary" disabled={waiting} onClick={onPrint}>
-          <Icon name="scroll" size={18} /> {waiting ? STR.labelsDrawingLabels : STR.labelsPrintTheLabels}
-        </button>
       </div>
-      <LanguageRow />
-      <BackedUpRow store={store} />
-      <PaymentRow store={store} />
       {[...byShelf.entries()].map(([shelf, items]) => (
         <section key={shelf} className="tag-shelf">
           <h2 className="tag-shelf-name">{shelf}</h2>
@@ -111,7 +108,7 @@ export function Tags({ store }: { store: DemoStore }) {
  * rather than wearing a green tick it has not earned. On a real install the
  * same line reports the real outbox — the number is already the real queue.
  */
-function BackedUpRow({ store }: { store: DemoStore }) {
+export function BackedUpRow({ store }: { store: DemoStore }) {
   const counts = store.outboxCounts()
   return (
     <div className="tags-bar">
@@ -132,7 +129,7 @@ function BackedUpRow({ store }: { store: DemoStore }) {
  * statement ONCE SET (ledger.ts leaves it off a card that owes nothing);
  * the QR is stored on this device only, as the hint says out loud.
  */
-function PaymentRow({ store }: { store: DemoStore }) {
+export function PaymentRow({ store }: { store: DemoStore }) {
   const [line, setLine] = useState(store.paymentLine() ?? '')
   const [saved, setSaved] = useState(false)
   const [qr, setQr] = useState(store.paymentQr())
@@ -223,9 +220,8 @@ function PaymentRow({ store }: { store: DemoStore }) {
 
 /**
  * The language switch — English / Roman Urdu (docs/PLAN.md's Urdu decision;
- * assumptions #8–#9). It lives on this screen because the settings route IS
- * this screen, and it sits above the label grid so it is findable without
- * scrolling eighty QR codes.
+ * assumptions #8–#9). Rendered by the Settings screen above the label grid
+ * so it is findable without scrolling eighty QR codes.
  *
  * Both option names render in their own language deliberately: whichever
  * table is active, the way back is readable. Choosing persists ('papa-lang')
@@ -233,7 +229,7 @@ function PaymentRow({ store }: { store: DemoStore }) {
  * every screen. The chips are the family's pill toggles (.filter-chip), which
  * already carry the glove-sized hit targets.
  */
-function LanguageRow() {
+export function LanguageRow() {
   const lang = getLang()
   const choose = (next: Lang) => {
     if (next !== lang) setLang(next)
