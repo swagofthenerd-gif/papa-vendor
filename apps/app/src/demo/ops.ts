@@ -109,3 +109,24 @@ export const NAMES = {
     { key: 'client_ledger_entry_id', id }, { key: 'p_reversal_of', id },
   ],
 }
+
+/**
+ * The app's own tables a re-key must rewrite when the server renames a
+ * thing (core's REKEY_COLUMNS covers the mirrors; these are the demo-side
+ * tables read-model.ts, khata.ts, kharcha.ts and network.ts own). Passed to
+ * the SyncLoop by the store and by the pipe's proof alike — one list.
+ * The money book's own ids cross since W11 (record_ledger_entry /
+ * record_payment / record_expense / reverse_expense name them in their
+ * replies): the row, and every row that points at it, take the server's name.
+ */
+export const APP_REKEY_COLUMNS: Record<string, string[]> = {
+  job_expected: ['job_id', 'asset_id'],
+  job_meta: ['job_id'],
+  scan_sessions: ['job_id'],
+  customers: ['id'],
+  customer_ledger_entries: ['id', 'customer_id', 'job_id', 'asset_id', 'reversal_of'],
+  org_expenses: ['id', 'asset_id', 'job_id', 'booking_id', 'reversal_of'],
+  demand_log: ['product_id'],
+  partner_customer_links: ['partner_house_id', 'customer_id'],
+  product_rates: ['product_id'],
+}

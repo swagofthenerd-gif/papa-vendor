@@ -224,7 +224,6 @@ export function createCustomer(
         client_customer_id: id,
         p_name: name,
         p_phone: phone,
-        p_note: null,
       }, [])
     }
   })
@@ -660,6 +659,8 @@ export function isoDate(nowMs: number): string {
  * qty = the units that could NOT be offered. Called at the moment the
  * answer is USED (reply copied, or a job made from it), because a pasted
  * list the owner abandons was a draft, not a turned-away client.
+ * ASSUMPTION: local only — the server has no demand table. See
+ * docs/assumptions.md#local-only-writes
  */
 export function recordTurnedAway(
   db: SqlDriver,

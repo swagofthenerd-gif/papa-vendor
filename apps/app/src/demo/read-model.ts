@@ -418,6 +418,7 @@ export interface CreateJobInput {
  * reply names it — a second create would be a second job. The promised
  * set is the phone's (job_expected has no server twin; the server's job
  * knows its units from the scans that follow).
+ * ASSUMPTION: see docs/assumptions.md#local-only-writes
  */
 export function createJob(
   db: SqlDriver,

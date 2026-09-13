@@ -10,6 +10,14 @@
  * kills the network mid-flush to prove principle 3: nothing lost, only
  * delayed, exact row counts.
  *
+ * W11 adds the writes that never crossed before: a payment and a charge
+ * recorded offline land as ledger rows and the server's balance equals the
+ * phone's; a walk-in job created offline, scanned and closed offline, is
+ * closed on the server with the scan rows naming the server's job id; an
+ * expense and its reversal cross and job_margin agrees on both sides; a
+ * sub-hire borrowed against a pencil and converted lands its bill on the
+ * job's margin.
+ *
  * Deliberately NOT part of `npm test`: it needs containers. Run it with
  * `npm run test:pipe` (db/pipe-test.sh), or bring the pipe up yourself and
  * point PAPA_PIPE_URL / PAPA_PIPE_PG at it.
@@ -26,6 +34,11 @@ import {
 import { DEMO_SCHEMA } from '../../src/demo/read-model.ts'
 import { NETWORK_SCHEMA } from '../../src/demo/network.ts'
 import { createBooking, confirmBooking, convertBookingToJob, listBookings } from '../../src/demo/bookings.ts'
+import { createCustomer, customersByBalance, isoDate, recordEntry } from '../../src/demo/khata.ts'
+import { jobMargin, recordExpense, reverseExpense } from '../../src/demo/kharcha.ts'
+import { closeJob, createJob } from '../../src/demo/read-model.ts'
+import { recordSubHireIn, upsertPartner } from '../../src/demo/network.ts'
+import { APP_REKEY_COLUMNS, defaultIds } from '../../src/demo/ops.ts'
 
 const URL = process.env.PAPA_PIPE_URL ?? 'http://127.0.0.1:3050'
 const PG = process.env.PAPA_PIPE_PG ?? 'papa-pipe-pg'
@@ -33,6 +46,9 @@ const RUNTIME = process.env.PAPA_PIPE_RUNTIME ?? (which('podman') ? 'podman' : '
 
 const ORG = '11111111-1111-7111-8111-111111111111'
 const CUSTOMER = '50000000-0000-7000-8000-000000000001'
+const BILAL = 'aaaaaaaa-aaaa-7aaa-8aaa-aaaaaaaaaaaa'   // desk
+const IMRAN = 'bbbbbbbb-bbbb-7bbb-8bbb-bbbbbbbbbbbb'   // owner
+const FX9_PRODUCT = '20000000-0000-7000-8000-000000000001'
 const FX9_01 = '30000000-0000-7000-8000-000000000001'
 const FX9_02 = '30000000-0000-7000-8000-000000000002'
 const LNS_01 = '30000000-0000-7000-8000-000000000003'
@@ -53,6 +69,11 @@ function sql(statement, { all = false } = {}) {
   return all ? out.split('\n').filter(Boolean) : out
 }
 const count = (statement) => Number(sql(statement))
+
+/** A statement under a member's papa.* context — the money views
+ *  (customer_balances, job_margin) answer nothing to no one. */
+const asMember = (userId, statement) =>
+  sql(`set local papa.org_id = '${ORG}'; set local papa.user_id = '${userId}'; ${statement}`)
 
 /** The SMS transport's half: papa_auth mints the code and hands it over. */
 function otpFor(phone) {
@@ -84,7 +105,8 @@ function phone(label) {
       return res
     },
   })
-  const loop = new SyncLoop({ db, transport, deviceId, pollMs: 0, online: () => true })
+  // The app's own tables re-key beside core's — the store passes the same list.
+  const loop = new SyncLoop({ db, transport, deviceId, pollMs: 0, online: () => true, rekeyColumns: APP_REKEY_COLUMNS })
   return {
     label, db, deviceId, transport, loop,
     trap() { trapNextScanBatch = true },
@@ -330,4 +352,170 @@ test('(6) the network dies mid-flush after the server committed — nothing lost
   assert.equal(sql(`select presence from assets where id = '${LNS_01}'`), 'here')
   await A.sync()
   assert.equal(A.db.get(`select presence from assets where id = ?`, [LNS_01]).presence, 'here', 'and the mirror agrees')
+})
+
+// ---------------------------------------------------------------------------
+// W11 — every write crosses
+// ---------------------------------------------------------------------------
+
+test('(7) a charge and a payment recorded offline land as ledger rows; the server balance equals the phone\'s', async () => {
+  const charge = recordEntry(A.db, {
+    orgId: ORG, customerId: CUSTOMER, kind: 'charge', amountMinor: 4_500_000,
+    jobId: JOB, note: 'Zindagi promo, 3 days', createdAt: now,
+  })
+  const payment = recordEntry(A.db, {
+    orgId: ORG, customerId: CUSTOMER, kind: 'payment', amountMinor: -2_000_000,
+    jobId: JOB, note: 'Cash — Bilal', createdAt: now + 1,
+  })
+  assert.equal(isClientMinted(charge), true, 'the phone named the line first')
+  assert.equal(A.outbox.pendingCount(), 2)
+  const before = count(`select count(*) from customer_ledger_entries where customer_id = '${CUSTOMER}'`)
+
+  const report = await A.sync()
+  assert.equal(report.error, null, report.error)
+  assert.equal(A.outbox.pendingCount(), 0)
+  assert.equal(A.outbox.failures().length, 0, JSON.stringify(A.outbox.failures()))
+
+  const map = new IdMap(A.db)
+  const chargeServer = map.serverIdFor(charge)
+  const paymentServer = map.serverIdFor(payment)
+  assert.ok(chargeServer && !isClientMinted(chargeServer), 'the server minted the charge\'s id and the phone learned it')
+  assert.ok(paymentServer && !isClientMinted(paymentServer))
+  assert.equal(count(`select count(*) from customer_ledger_entries where customer_id = '${CUSTOMER}'`), before + 2)
+  assert.equal(sql(`select entry_kind || '|' || amount_minor || '|' || coalesce(job_id::text, '') || '|' || created_by from customer_ledger_entries where id = '${chargeServer}'`),
+    `charge|4500000|${JOB}|${BILAL}`, 'the charge, on the job, stamped with the session\'s user')
+  assert.equal(sql(`select entry_kind || '|' || amount_minor || '|' || note from customer_ledger_entries where id = '${paymentServer}'`),
+    'payment|-2000000|Cash — Bilal', 'record_payment stored the negative fact the phone holds')
+
+  // The phone's projection and the server's view name the same rupee.
+  const phone = customersByBalance(A.db).find((c) => c.id === CUSTOMER)
+  assert.equal(phone.balanceMinor, 2_500_000)
+  assert.equal(asMember(BILAL, `select balance_minor from customer_balances where customer_id = '${CUSTOMER}'`), '2500000')
+  // And the local rows now wear the server's names.
+  assert.equal(A.db.get(`select count(*) as n from customer_ledger_entries where id = ?`, [chargeServer]).n, 1)
+  assert.equal(A.db.get(`select count(*) as n from customer_ledger_entries where id = ?`, [charge]).n, 0)
+})
+
+test('(8) a walk-in job created offline, scanned out and back, closed offline → closed on the server, the scans naming the server\'s job', async () => {
+  const walkIn = createCustomer(A.db, { orgId: ORG, name: 'Hamza Walk-in', phone: '0301 5556677' }, defaultIds(now))
+  assert.ok(walkIn && isClientMinted(walkIn))
+  const jobId = `job-${crypto.randomUUID()}`
+  createJob(A.db, {
+    id: jobId, orgId: ORG, label: 'Lens test — walk-in', contact: null,
+    expectedBack: isoDate(now + DAY), customerId: walkIn, wants: [], expectedAssetIds: [LNS_01],
+  }, defaultIds(now))
+  assert.equal(A.scan(jobId, TAG_LNS_01).outcome, 'accepted')
+  assert.equal(A.scan(jobId, TAG_LNS_01, 'check_in').outcome, 'accepted')
+  assert.deepEqual(closeJob(A.db, jobId, now), { ok: true })
+  assert.equal(A.outbox.pendingCount(), 5, 'create_customer, create_job, two scans, close_job — queued, nothing sent')
+  const closeOp = A.db.get(`select depends_on from outbox where op = 'close_job'`)
+  const createOp = A.db.get(`select id from outbox where op = 'create_job'`)
+  assert.equal(closeOp.depends_on, createOp.id, 'the close chains behind the create')
+
+  const report = await A.sync()
+  assert.equal(report.error, null, report.error)
+  assert.equal(A.outbox.pendingCount(), 0)
+  assert.equal(A.outbox.failures().length, 0, JSON.stringify(A.outbox.failures()))
+
+  const map = new IdMap(A.db)
+  const serverCustomer = map.serverIdFor(walkIn)
+  const serverJob = map.serverIdFor(jobId)
+  assert.ok(serverJob && !isClientMinted(serverJob), 'the server named the job')
+  assert.ok(serverCustomer && !isClientMinted(serverCustomer), 'and the customer')
+  assert.equal(sql(`select status || '|' || label || '|' || customer_id || '|' || created_by from jobs where id = '${serverJob}'`),
+    `closed|Lens test — walk-in|${serverCustomer}|${BILAL}`, 'the walk-in is closed on the server, on its customer')
+  assert.equal(count(`select count(*) from scan_events where job_id = '${serverJob}' and device_id = '${A.deviceId}'`), 2,
+    'both scans point at the SERVER\'s job id')
+  assert.equal(count(`select count(*) from scan_events where job_id::text like 'job-%'`), 0)
+  assert.equal(sql(`select name from customers where id = '${serverCustomer}'`), 'Hamza Walk-in')
+  assert.equal(count(`select count(*) from audit_log where action = 'job_created' and subject_id = '${serverJob}'`), 1)
+  // Locally: one name for the job everywhere.
+  assert.equal(A.db.get(`select status from jobs where id = ?`, [serverJob]).status, 'closed')
+  assert.equal(A.db.get(`select count(*) as n from jobs where id = ?`, [jobId]).n, 0)
+  assert.equal(A.db.get(`select count(*) as n from job_expected where job_id = ? and asset_id = ?`, [serverJob, LNS_01]).n, 1,
+    'the promised set (an app table) was re-keyed with the job')
+  assert.equal(A.db.get(`select customer_id from jobs where id = ?`, [serverJob]).customer_id, serverCustomer)
+  await A.sync()
+  assert.equal(A.db.get(`select status from jobs where id = ?`, [serverJob]).status, 'closed', 'and the pull agrees')
+})
+
+test('(9) an expense and its reversal cross; job_margin on the server equals the phone\'s', async () => {
+  const kept = recordExpense(A.db, {
+    orgId: ORG, kind: 'transport', amountMinor: 500_000, jobId: JOB, counterparty: 'Rickshaw', createdAt: now,
+  })
+  const doubled = recordExpense(A.db, {
+    orgId: ORG, kind: 'misc', amountMinor: 200_000, jobId: JOB, note: 'entered twice', createdAt: now + 1,
+  })
+  assert.equal(reverseExpense(A.db, ORG, doubled, 'double entry', now + 2), true)
+  assert.equal(A.outbox.pendingCount(), 3)
+  const rev = A.db.get(`select depends_on, payload from outbox where op = 'reverse_expense'`)
+  assert.equal(rev.depends_on, A.db.get(`select id from outbox where op = 'record_expense' order by seq desc limit 1`).id,
+    'the reversal chains behind the expense it voids')
+
+  const report = await A.sync()
+  assert.equal(report.error, null, report.error)
+  assert.equal(A.outbox.pendingCount(), 0)
+  assert.equal(A.outbox.failures().length, 0, JSON.stringify(A.outbox.failures()))
+
+  const map = new IdMap(A.db)
+  const keptServer = map.serverIdFor(kept)
+  const doubledServer = map.serverIdFor(doubled)
+  assert.ok(keptServer && doubledServer)
+  assert.equal(count(`select count(*) from org_expenses where device_id = '${A.deviceId}'`), 3, 'two bills and one reversal row')
+  assert.equal(sql(`select kind || '|' || amount_minor || '|' || job_id from org_expenses where id = '${keptServer}'`), `transport|500000|${JOB}`)
+  assert.equal(sql(`select amount_minor || '|' || coalesce(note, '') from org_expenses where reversal_of = '${doubledServer}'`), '200000|double entry',
+    'the reversal names the server\'s id for the row it voids')
+
+  const phone = jobMargin(A.db, JOB)
+  assert.equal(phone.expenseMinor, 500_000)
+  assert.equal(phone.incomeMinor, 4_500_000, 'the charge from (7)')
+  assert.equal(asMember(BILAL, `select income_minor || '|' || expense_minor || '|' || margin_minor from job_margin where job_id = '${JOB}'`),
+    `${phone.incomeMinor}|${phone.expenseMinor}|${phone.marginMinor}`, 'the server\'s job_margin agrees to the rupee')
+  assert.equal(A.db.get(`select reversal_of from org_expenses where reversal_of is not null`).reversal_of, doubledServer,
+    'the local reversal was re-keyed to the server\'s name too')
+})
+
+test('(10) a sub-hire IN with a cost tagged to a pencil → confirm → convert → the server\'s job margin sees it', async () => {
+  // Phone B is the owner (partner houses are owner/manager work). Its two
+  // parked cards from (5c) are dismissed the way the screen would.
+  B.db.exec(`delete from outbox where state = 'failed'`)
+  const partner = upsertPartner(B.db, ORG, { name: 'Roshan Light House', phone: '0300 9988776' }, now)
+  assert.equal(partner.ok, true, JSON.stringify(partner))
+  const pencil = createBooking(B.db, ORG, {
+    customerId: CUSTOMER, startMs: now + 20 * DAY, endMs: now + 22 * DAY,
+    lines: [{ assetId: FX9_01 }], status: 'pencil',
+  }, now)
+  assert.equal(pencil.ok, true, JSON.stringify(pencil))
+  const loan = recordSubHireIn(B.db, ORG, {
+    partnerId: partner.id, productId: FX9_PRODUCT, startMs: now + 20 * DAY, endMs: now + 22 * DAY,
+    agreedCostMinor: 1_500_000, bookingId: pencil.bookingId, note: 'a second body for the promo',
+  }, now)
+  assert.equal(loan.ok, true, JSON.stringify(loan))
+  assert.equal(B.db.get(`select booking_id from org_expenses where id = ?`, [loan.expenseId]).booking_id, pencil.bookingId)
+  assert.equal(B.db.get(`select count(*) as n from outbox where op = 'record_expense'`).n, 0,
+    'no record_expense op of its own — record_sub_hire_in mints the bill')
+  const confirmed = confirmBooking(B.db, ORG, pencil.bookingId, {}, now)
+  assert.equal(confirmed.ok, true, JSON.stringify(confirmed))
+  const converted = convertBookingToJob(B.db, ORG, pencil.bookingId, now)
+  assert.equal(converted.ok, true, JSON.stringify(converted))
+  assert.equal(B.outbox.pendingCount(), 5, 'partner, pencil, sub-hire, confirm, convert — queued')
+  assert.equal(jobMargin(B.db, converted.jobId).expenseMinor, 1_500_000, 'the phone\'s margin sees the booking\'s bill before any network')
+
+  const report = await B.sync()
+  assert.equal(report.error, null, report.error)
+  assert.equal(B.outbox.pendingCount(), 0)
+  assert.equal(B.outbox.failures().length, 0, JSON.stringify(B.outbox.failures()))
+
+  const map = new IdMap(B.db)
+  const serverBooking = map.serverIdFor(pencil.bookingId)
+  const serverJob = map.serverIdFor(converted.jobId)
+  const serverExpense = map.serverIdFor(loan.expenseId)
+  assert.ok(serverBooking && serverJob && serverExpense, 'the booking, the job and the bill all wear the server\'s names')
+  assert.equal(sql(`select booking_id::text || '|' || coalesce(job_id::text, '') || '|' || amount_minor from org_expenses where id = '${serverExpense}'`),
+    `${serverBooking}||1500000`, 'the bill names the booking, no job — the enquiry order')
+  assert.equal(sql(`select booking_id from jobs where id = '${serverJob}'`), serverBooking)
+  assert.equal(asMember(IMRAN, `select expense_minor from job_margin where job_id = '${serverJob}'`), '1500000',
+    'the server\'s job_margin reads the bill through jobs.booking_id (0028)')
+  assert.equal(jobMargin(B.db, serverJob).expenseMinor, 1_500_000, 'and the phone\'s, under the server\'s name')
+  assert.equal(asMember(IMRAN, `select booking_sub_hire_cost('${serverBooking}')`), '1500000')
 })

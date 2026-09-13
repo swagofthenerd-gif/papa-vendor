@@ -71,7 +71,7 @@ import { DEMO_SCHEMA } from './read-model.ts'
 import { NETWORK_SCHEMA } from './network.ts'
 import { notifySync } from '../sync-tick.ts'
 import { SessionRegistry, type SessionMode } from './sessions.ts'
-import { NAMES, defaultIds, lastOpNaming } from './ops.ts'
+import { APP_REKEY_COLUMNS, NAMES, defaultIds, lastOpNaming } from './ops.ts'
 import {
   applyImport,
   assetFacts,
@@ -296,26 +296,6 @@ export type JobCustomerChoice =
  * outbox differs, and that is one field and one loop.
  */
 export type StoreMode = 'demo' | 'live'
-
-/**
- * The app's own tables a re-key must rewrite when the server renames a
- * thing (core's REKEY_COLUMNS covers the mirrors; these are the demo-side
- * tables read-model.ts and network.ts own).
- */
-const APP_REKEY_COLUMNS: Record<string, string[]> = {
-  job_expected: ['job_id', 'asset_id'],
-  job_meta: ['job_id'],
-  scan_sessions: ['job_id'],
-  customers: ['id'],
-  // The money book's own ids cross since W11 (record_ledger_entry /
-  // record_payment / record_expense / reverse_expense name them in their
-  // replies): the row, and every row that points at it, take the server's name.
-  customer_ledger_entries: ['id', 'customer_id', 'job_id', 'asset_id', 'reversal_of'],
-  org_expenses: ['id', 'asset_id', 'job_id', 'booking_id', 'reversal_of'],
-  demand_log: ['product_id'],
-  partner_customer_links: ['partner_house_id', 'customer_id'],
-  product_rates: ['product_id'],
-}
 
 /** One "needs attention" card: a parked op and everything parked behind it. */
 export interface AttentionCard {
