@@ -15,6 +15,8 @@ proof runs. The code is the law; this page is the map.
 | Upload seam | `packages/core/src/upload.ts` |
 | On-device migration | `packages/core/src/db/migrate.ts` |
 | Server: members mirror, `replay_op` | `db/migrations/0027_members_sync.sql` |
+| Server: the doors the money book and the walk-in needed, the org mirror | `db/migrations/0028_every_write_crosses.sql` |
+| The chain on the phone: `lastOpNaming` / `enqueueOp` / `APP_REKEY_COLUMNS` | `apps/app/src/demo/ops.ts` |
 | The proof | `db/pipe-up.sh`, `apps/app/test/pipe/pipe.pipe.mjs` |
 
 ## Headers
@@ -125,6 +127,51 @@ chain queued across a rename stays one chain.
 ASSUMPTION `#server-name-wins`: the phone adopts the server's id the moment
 the server accepts.
 
+## What crosses (W11)
+
+Until W11 the money book, the walk-in job, the customer and the due date
+were written to the mirror alone. Every store write was audited and
+classified: (a) already queues an op, (b) local by design, (c) local by
+omission — and every (c) now queues an op named after the server's RPC,
+its payload the RPC's own `p_*` arguments, the phone's id beside them as
+`client_*`, chained behind the op that mints what it names
+(`apps/app/src/demo/ops.ts`). Four doors the server did not have are 0028's.
+
+| Write (phone) | Op | RPC (migration) | Id the phone mints → reply field | Chained behind |
+|---|---|---|---|---|
+| `createCustomer` (khata.ts) | `create_customer` | `create_customer` (0028) | `cust-…` → `id` | — |
+| `recordEntry` kind `payment` | `record_payment` | `record_payment` (0017) | `led-…` → `id` | the customer's op, the job's op |
+| `recordEntry` charge / late_fee / damage_charge / write_off / adjustment / reversal | `record_ledger_entry` | `record_ledger_entry` (0018, with `p_reversal_of`) | `led-…` → `id` | the customer's, the job's, the line reversed |
+| `recordEntry` deposit kinds | — | hold/apply/refund_deposit (0017) | — | no phone door yet (`no-deposit-door`); only the seed writes them |
+| `recordExpense` (kharcha.ts) | `record_expense` | `record_expense` (0024 shape: `p_spent_at`, `p_booking_id`) | `exp-…` → `id` | the job's, the booking's, the unit's op |
+| `reverseExpense` | `reverse_expense` | `reverse_expense` (0024) | `exp-…` (the reversal row) → `id` | the expense's op |
+| `recordServiced` with a cost (store.ts) | `record_expense` **then** the `serviced` scan | `record_expense`, `submit_scan_batch` | the scan's `payload.expense_id` is rewritten to the server's | the scan depends on the expense op |
+| `createJob` from the desk (`createJobFromLines`) | `create_job` | `create_job` (0028) | `job-…` → `id` | the customer's op |
+| `createJob` inside convert / lend-out | — | `convert_booking_to_job`, `record_sub_hire_out` mint the job | reply `$` / `job_id` | (already crossed) |
+| `closeJob` / `reopenJob` | `close_job` / `reopen_job` | 0018 | — | the job's last op |
+| `setExpectedBack` | `set_job_expected_back` | `set_job_expected_back` (0028) | — | the job's last op |
+| `noteSubRent` (the sub-rent intent) | `set_booking_note` (`p_append: true`) | `set_booking_note` (0028) | — | the booking's last op; the extension chains behind it |
+| `recordSubHireIn` with a cost | `record_sub_hire_in` only | 0025 | `sh-…`, `asset-…`, `exp-…` → the reply's three ids | the local expense carries `booking_id` and queues **no** `record_expense` |
+| `recordSubHireOut` | `record_sub_hire_out` only | 0025 | `sh-…`, `job-…`, `cust-…`, `led-…` | the local job, customer and charge queue **no** ops of their own |
+| `ensurePartnerCustomer` | — | `ensure_partner_customer` inside 0025 | `cust-…` → `customer_id` | (the lend-out's op) |
+| bookings, rates, calendar, partners, crew, scans, tags, terminal/found/swap | (W5–W9, unchanged) | | | |
+| `recordTurnedAway` (demand_log) | — | **no server table** | | local by omission: noted, not built (ASSUMPTION `#local-only-writes`) |
+| photo / voice note metadata | — | the upload seam (`upload.ts`) is hosting-specific; no metadata RPC | | left, noted |
+| payment line / QR, language, the demo staff roster, `job_expected` (the promised set), `job_meta` | — | local by design | | |
+
+The app's own tables re-key by the same rule as the mirrors
+(`APP_REKEY_COLUMNS`): a ledger line, an expense, a customer and every
+row pointing at one take the server's name in the ack's transaction.
+`job_margin` on both sides (kharcha.ts; 0028's second edition of the
+view) counts a bill tagged to the booking a job was born from — the
+vendor borrows at the enquiry and tags the pencil; the job the pencil
+becomes sees it (was the year's wall `subhire-cost-unlinkable`).
+
+Known gap, on purpose: `record_ledger_entry` has no timestamp argument, so
+a backdated ledger line is stamped with the server's clock on the server
+(ASSUMPTION `#ledger-server-time`); `record_expense` takes `p_spent_at`
+and is backdated faithfully.
+
 ## The poison rule
 
 A verdict on an op parks it **and its entire `depends_on` closure**
@@ -161,7 +208,8 @@ database = fresh install: `LOCAL_SCHEMA` in one go, stamped
 `LOCAL_SCHEMA_VERSION`. Absent on a database with tables = **version 1**,
 the pre-0018 shape. `LOCAL_MIGRATIONS` is the ordered ladder (2: 0018
 columns · 3: disposition · 4: the meters and voice notes · 5: bookings ·
-6: rates · 7: the network · 8: `id_map` and `members`); each step runs in
+6: rates · 7: the network · 8: `id_map` and `members` · 9: the `org`
+mirror); each step runs in
 its own transaction and stamps inside it; add-column statements are skipped
 when the column exists, so an interrupted step finishes on the next open.
 `packages/core/test/migrate.test.mjs` migrates a v1 snapshot with queued
@@ -179,7 +227,7 @@ role per request.
 ## The local proof
 
 ```
-npm run test:pipe          # db/pipe-test.sh: up → six scenarios → down
+npm run test:pipe          # db/pipe-test.sh: up → ten scenarios → down
 KEEP=1 npm run test:pipe   # leave the containers up
 npm run pipe:up / pipe:down
 ```
@@ -190,7 +238,9 @@ user-defined network (podman or docker), migrates with `db/migrate.sh`
 `db/pipe-fixtures.sql` (one house, four people, three units with labels,
 one job, the authenticator role), and waits for PostgREST's root to answer.
 Ports 55450 (Postgres) and 3050 (PostgREST); names and ports are
-overridable so two checkouts can run side by side.
+overridable (`PAPA_PIPE_PG`, `PAPA_PIPE_REST`, `PAPA_PIPE_NET`,
+`PAPA_PIPE_PG_PORT`, `PAPA_PIPE_REST_PORT`) so two checkouts can run side
+by side.
 
 `apps/app/test/pipe/pipe.pipe.mjs` then drives two phone-side databases
 (node:sqlite, the app's own tables) through the real transport:
@@ -211,6 +261,20 @@ overridable so two checkouts can run side by side.
    card; the server holds one confirmed claim and one job;
 6. the fetch stub lets the server commit then throws: five scans stay
    queued (nothing lost, nothing parked), the retry is acked as five
-   duplicates, the server holds **exactly** five rows.
+   duplicates, the server holds **exactly** five rows;
+7. (W11) a charge and a payment recorded offline land as ledger rows
+   stamped with the session's user; `customer_balances` on the server
+   equals the phone's projection to the rupee; the local rows wear the
+   server's ids;
+8. a customer typed at the sheet and a walk-in job created offline,
+   scanned out and back, closed offline → `create_customer`, `create_job`,
+   two scans and `close_job` cross in seq; the server's job is closed on
+   its customer and the scan rows name the **server's** job id;
+9. an expense and its reversal cross; the reversal names the server's id
+   for the row it voids; `job_margin` on the server equals the phone's;
+10. the owner's phone borrows a body against a pencil (the bill tagged to
+    the booking, no expense op of its own), confirms, converts → the
+    server's `job_margin` reads the bill through `jobs.booking_id`, and
+    so does the phone's under the server's name.
 
 CI runs it as its own `pipe` job on `ubuntu-latest` with docker.

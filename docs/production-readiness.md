@@ -469,8 +469,8 @@ chip the dream plan wants cannot be shown honestly.
 | Outbox drain → RPC calls | Ops shaped and chained; never sent | **W9** |
 | Photo upload to R2 | Bucket exists; no path | **W9** |
 | On-device schema migration | None | **W9** |
-| `sub_rent_intent` has no RPC | The extension chained behind it would fail on replay (year finding) | **W9** |
-| Sub-hire cost attach-to-job | Link made only at record time (year finding) | **W9** (one door) |
+| `sub_rent_intent` has no RPC | Done in W11: crosses as `set_booking_note` (0028) | — |
+| Sub-hire cost attach-to-job | Done in W11: the bill is tagged to the pencil at the enquiry and `job_margin` reads the booking's bills (0028) | — |
 | SQLCipher | Type-enforced seam, no driver | W9/W10 — must land before the first real phone holds data |
 | Thermal printer transport | Bytes golden; Bluetooth SPP is the Capacitor wave; no paper fed | W10 + a human gate |
 | Deposit / reversal / write-off / blacklist / waiver doors | Schema and projections exist; no phone doors | B-polish week after W9 |

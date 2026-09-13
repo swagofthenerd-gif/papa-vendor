@@ -595,12 +595,17 @@ describe('the sub-rent door (intent, then the extension behind it)', () => {
     const ext = extendBooking(db, 'bk-1', b5.customerStartMs + HOUR_MS, NOW, ids, { acknowledged: [c] })
     assert.equal(ext.extended, true)
     const ops = db.all(`select id, op, payload, depends_on from outbox order by seq`)
-    assert.deepEqual(ops.map((o) => o.op), ['sub_rent_intent', 'extend_booking'])
+    // The intent crosses as set_booking_note (0028) — a real door, so the
+    // extension chained behind it replays instead of parking (was the
+    // year's wall `sub-rent-intent-unreplayable`).
+    assert.deepEqual(ops.map((o) => o.op), ['set_booking_note', 'extend_booking'])
     const intent = JSON.parse(ops[0].payload)
     assert.equal(intent.p_booking_id, 'bk-1')
-    assert.equal(intent.p_for_booking_id, 'bk-5')
-    assert.equal(intent.p_product_id, 'prod-fx9')
-    assert.equal(intent.p_qty, 1)
+    assert.equal(intent.p_append, true)
+    assert.match(intent.p_note, /^Sub-rent Sony FX9 ×1 for #5$/)
+    assert.equal(intent.for_booking_id, 'bk-5')
+    assert.equal(intent.product_id, 'prod-fx9')
+    assert.equal(intent.qty, 1)
     assert.equal(ops[1].depends_on, ops[0].id)
     // B#5's own claim on FX9-02 stands untouched — the intent moved nothing.
     assert.deepEqual(bookingView(db, 'bk-5', NOW).lines[0].allocated.map((a) => a.assetCode), ['FX9-02'])

@@ -271,6 +271,19 @@ export const LOCAL_MIGRATIONS: LocalMigration[] = [
       );
     `,
   },
+  {
+    // W11: every write crosses — the org mirror (0028), one row: the
+    // house's name for the letterhead.
+    version: 9,
+    sql: `
+      create table if not exists org (
+        id       text primary key,
+        name     text not null,
+        currency text,
+        timezone text
+      );
+    `,
+  },
 ]
 
 /** What a fresh install is stamped with, and what every phone must reach. */

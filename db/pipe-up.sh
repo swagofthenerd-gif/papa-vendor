@@ -12,7 +12,7 @@
 #
 #   ./db/pipe-up.sh            # bring it up; prints the URL
 #   ./db/pipe-down.sh          # take it down
-#   npm run test:pipe          # up → the six scenarios → down
+#   npm run test:pipe          # up → the ten scenarios → down
 #
 # podman or docker; a user-defined network so PostgREST reaches Postgres by
 # name in both. Ports and names are overridable so a second checkout can run

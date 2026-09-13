@@ -91,7 +91,7 @@ create temp table _p1 on commit drop as select pull_changes(0) as p;
 
 select is(
   (select count(*)::int from jsonb_object_keys(pull_changes(999999999) -> 'tables')),
-  17, 'the early-out names seventeen tables, members among them');
+  18, 'the early-out names eighteen tables, members among them');
 select is(
   (select jsonb_array_length(p -> 'tables' -> 'members') from _p1), 4,
   'org A''s four memberships arrive (the driver too — a crew name, not a session)');

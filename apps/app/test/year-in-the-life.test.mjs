@@ -1815,18 +1815,18 @@ describe('a year in the life of the rental house', () => {
     assert.equal(extended.extended, true)
     assert.equal(extended.customerEndMs, at(6, 12, 18))
     const chain = db.all(
-      `select op, depends_on, id from outbox
-        where op in ('sub_rent_intent', 'extend_booking') and payload like ? order by seq`,
+      `select op, depends_on, id, payload from outbox
+        where op in ('set_booking_note', 'extend_booking') and payload like ? order by seq`,
       [`%"${hamzaC500.bookingId}"%`],
     )
-    assert.deepEqual(chain.map((o) => o.op), ['sub_rent_intent', 'extend_booking'])
+    assert.deepEqual(chain.map((o) => o.op), ['set_booking_note', 'extend_booking'])
     assert.equal(chain[1].depends_on, chain[0].id, 'the extension replays only after the sub-rent lands')
-    // …and nothing on the server answers to that op yet: neither 0022 nor
-    // 0025 defines a sub_rent_intent RPC. When W9's pipe replays this
-    // queue the intent fails, and the extension chained behind it fails
-    // with it (the outbox poisons the subtree by design). Pinned as a
-    // finding, not a failing assert. Finding `sub-rent-intent-unreplayable`.
-    finding('sub-rent-intent-unreplayable')
+    // …and the server answers to that op now: the intent crosses as
+    // set_booking_note (0028, appending the line to the booking's note),
+    // so the extension chained behind it replays instead of parking with
+    // it. Was the wall `sub-rent-intent-unreplayable` (W11 retired it).
+    assert.equal(JSON.parse(chain[0].payload).p_append, true)
+    assert.match(JSON.parse(chain[0].payload).p_note, /^Sub-rent Canon C500 Mark II ×1 for #/)
     assert.equal(bookingView(db, sanaC500.bookingId, at(6, 10, 11)).assetReservations[0].assetId, 'asset-c500-1',
       'her claim on the unit stands until the partner unit covers it')
 
@@ -1864,15 +1864,27 @@ describe('a year in the life of the rental house', () => {
       times: 1, units: 1,
     })
 
+    // The desk pencils the Eid shoot for Ayesha FIRST — six lights and six
+    // stands over the holiday — so the borrow that follows has a booking to
+    // hang its cost on. A pencil holds no unit, so a short shelf does not
+    // refuse it; the shortage is what the market is asked about.
+    const eidPencil = createBooking(db, seed.orgId, {
+      customerId: 'cust-ayesha', startMs: at(7, -5, 9), endMs: at(7, -2, 18),
+      lines: [{ productId: 'prod-aputure600', qty: 6 }, { productId: 'prod-cstand', qty: 6 }],
+      status: 'pencil', note: 'Eid shoot — six lights',
+    }, at(7, -7, 9))
+    assert.equal(eidPencil.ok, true, JSON.stringify(eidPencil))
+
     // The vendor borrows two from a partner house — through the REAL door
     // now (0025; the first year imported them stamped 'owned' and noted
     // the intake flag as Phase E1 polish). Roshan is added to the partner
     // list, both lights come in with serials at Rs 15,000 each: they join
     // the shelf as sub_rented_in with local codes after the imported pair
     // (ASSUMPTION #local-asset-code), tagged like any unit, and the cost
-    // lands on the kharcha book in Roshan's name. No job exists yet — the
-    // desk borrows FIRST, then makes the job — so the two bills carry no
-    // job id (see the margin below).
+    // lands on the kharcha book in Roshan's name — TAGGED TO THE BOOKING.
+    // No job exists yet: the desk borrows first, then the pencil becomes
+    // the job, and the job's margin must still see these two bills (was
+    // the wall `subhire-cost-unlinkable`; W11 retired it, see the margin).
     const roshan = upsertPartner(db, seed.orgId, { name: 'Roshan Light House', phone: '0300 9988776' }, at(7, -7), netIds(at(7, -7)))
     assert.equal(roshan.ok, true)
     const loaners = [1, 2].map((i) => {
@@ -1880,6 +1892,7 @@ describe('a year in the life of the rental house', () => {
         partnerId: roshan.id, productId: 'prod-aputure600',
         startMs: at(7, -6, 8), endMs: at(7, 7, 18),
         serial: `RL-600D-00${i}`, agreedCostMinor: rs(15_000), note: 'Eid week',
+        bookingId: eidPencil.bookingId,
       }, at(7, -7, 11 + i), netIds(at(7, -7, 11 + i)))
       assert.equal(r.ok, true)
       monthSpent[7] += rs(15_000)
@@ -1903,13 +1916,22 @@ describe('a year in the life of the rental house', () => {
       at(7, -6),
     )
     assert.equal(again.lines[0].state, 'available')
+    assert.equal(db.get(`select booking_id from org_expenses where id = ?`, [loaners[0].expenseId]).booking_id,
+      eidPencil.bookingId, 'the bill names the booking, as the server\'s record_sub_hire_in writes it')
 
-    // Eid loops.
-    const e1 = jobOut('Eid shoot — six lights', 'cust-ayesha',
-      [{ productId: 'prod-aputure600', qty: 6 }, { productId: 'prod-cstand', qty: 6 }],
-      iso(7, -2), at(7, -5))
+    // Eid loops. The pencil is confirmed now that the shelf can cover it
+    // (the confirm binds units, loaners among them) and becomes the job
+    // through the bridge — the same path the desk's Confirm sheet takes.
+    const eidConfirm = confirmBooking(db, seed.orgId, eidPencil.bookingId,
+      { credentialOverrideNote: 'Regular — cheque held at the desk' }, at(7, -7, 14))
+    assert.equal(eidConfirm.ok, true, JSON.stringify(eidConfirm))
+    const eidJob = convertBookingToJob(db, seed.orgId, eidPencil.bookingId, at(7, -5, 8))
+    assert.equal(eidJob.ok, true, JSON.stringify(eidJob))
+    assert.equal(customerForJob(db, eidJob.jobId)?.id, 'cust-ayesha', 'born chargeable')
+    const e1 = { id: eidJob.jobId, expected: openJob(db, eidJob.jobId).expected }
     assert.equal(e1.expected.length, 12)
-    assert.ok(e1.expected.includes(loaners[0].assetId), 'one loaner rides the Eid truck')
+    assert.ok(loaners.some((l) => e1.expected.includes(l.assetId)), 'a loaner rides the Eid truck')
+    scanAll(openSession(e1.id, 'out', at(7, -5)), e1.expected, 'check_out')
 
     // --- The thermal parchi, bytes built for THIS job (0025 client wave) --
     // The gate pass the guard reads is the same text the handover screen
@@ -1945,20 +1967,19 @@ describe('a year in the life of the rental house', () => {
     assert.deepEqual([...buildParchiEscPos(parchiDocFromText(parchiText), { width: 32 })], [...parchiBytes], 'the same job prints the same bytes')
 
     jobBack(e1.id, 'cust-ayesha', at(7, -2), { k: 7, d: -2, chargeRs: 90_000, payRs: 90_000 })
-    // Margin at a glance — and the wall the real door exposes: the sub-hire
-    // sheet ties its cost to a job or a booking AT RECORD TIME, and the desk
-    // borrowed before the Eid job existed. The bills are on the book (the
-    // month's profit nets them, below), the partner's page says Rs 30,000
-    // — but the handover's margin for the job the lights rescued reads the
-    // full Rs 90,000, and no door attaches an expense to a job after the
-    // fact. NOV's loaner (job first, then the sub-hire with its id) shows
-    // the link working; this is the other order, the common one when the
-    // shortage is found at the enquiry. Finding `subhire-cost-unlinkable`.
+    // Margin at a glance — through the booking. The sub-hire sheet ties its
+    // cost to a job or a booking at record time, and the desk borrowed
+    // before the Eid job existed: the bills name the PENCIL, the job was
+    // born from it (jobs.booking_id), and the margin reads both links —
+    // the phone's jobMargin and the server's job_margin view (0028) alike,
+    // the way booking_sub_hire_cost always did from the booking's side.
+    // NOV's loaner (job first, then the sub-hire with its id) is the other
+    // order; both now land on the job. Was `subhire-cost-unlinkable`.
     const eidMargin = jobMargin(db, e1.id)
     assert.equal(eidMargin.incomeMinor, rs(90_000))
-    assert.equal(eidMargin.expenseMinor, 0)
-    assert.equal(eidMargin.expenseCount, 0)
-    finding('subhire-cost-unlinkable')
+    assert.equal(eidMargin.expenseMinor, rs(30_000), 'both loaner bills, through the booking the job came from')
+    assert.equal(eidMargin.expenseCount, 2)
+    assert.equal(eidMargin.marginMinor, rs(60_000))
     const e2 = jobOut('Eid day 2 — family films', 'cust-hamza',
       [{ productId: 'prod-fx6', qty: 2 }, { productId: 'prod-ronin', qty: 1 }],
       iso(7, 0), at(7, -1))
@@ -2419,10 +2440,12 @@ describe('a year in the life of the rental house', () => {
     // subtracts confirmed claims and the log counts the committed refusal.
     // The second year (W8) takes `import-apply-welded`: applyImport lives
     // in read-model.ts and the year drives the real routine twice. The
-    // eight that remain are Phase B polish doors the waves did not build,
-    // and the second year found two NEW walls on the shipped doors —
+    // eight that remain are Phase B polish doors the waves did not build.
+    // The second year had found two walls on the shipped doors —
     // `sub-rent-intent-unreplayable` (MAR) and `subhire-cost-unlinkable`
-    // (APR) — each explained in docs/year-in-the-life.md.
+    // (APR) — and W11 took both: the intent crosses as set_booking_note
+    // (0028) and a job's margin reads the bills tagged to the booking it
+    // came from. docs/year-in-the-life.md keeps the story.
     assert.deepEqual(
       [...FINDINGS].sort(),
       [
@@ -2433,8 +2456,6 @@ describe('a year in the life of the rental house', () => {
         'no-lifetime-value-view',
         'no-month-history-screen',
         'no-utilization-read',
-        'sub-rent-intent-unreplayable',
-        'subhire-cost-unlinkable',
         'waived-fee-invisible',
       ],
     )

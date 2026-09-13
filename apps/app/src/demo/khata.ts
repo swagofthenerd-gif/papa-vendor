@@ -14,6 +14,7 @@ import {
 } from '@papa/core'
 import { defaultCardRateSql, decodeScanOps, lastSessionRecord, openJob } from './read-model.ts'
 import { assetCosts } from './kharcha.ts'
+import { NAMES, defaultIds, enqueueOp, type QueueIds } from './ops.ts'
 import type { StrTable } from '../strings.ts'
 
 /**
@@ -26,8 +27,12 @@ import type { StrTable } from '../strings.ts'
  * balance on every screen is a projection over it via @papa/core's
  * projectLedger. Recording money received or a charge agreed at the dock
  * is a PAST FACT, so by the CONTRIBUTING offline rule everything in this
- * module works with no server; in the demo, as everywhere else, only the
- * server that would sync it is missing.
+ * module works with no server. Since W11 every insert here also queues
+ * the server's own door (`record_payment` / `record_ledger_entry`, 0017/
+ * 0018; `create_customer`, 0028) with the row's phone-minted id riding as
+ * `client_*`, chained behind whatever op last named the customer, the job
+ * or the line it reverses (ops.ts) — so a khata written in a basement
+ * lands on the server in the order the desk wrote it.
  */
 
 export interface CustomerListRow {
@@ -189,14 +194,30 @@ export interface CreateCustomerInput {
  * or null for a blank name: a khata with no name cannot be found again,
  * and a silent empty row is how one gets lost.
  */
-export function createCustomer(db: SqlDriver, input: CreateCustomerInput): string | null {
+export function createCustomer(
+  db: SqlDriver,
+  input: CreateCustomerInput,
+  ids: QueueIds = defaultIds(Date.now()),
+): string | null {
   const name = input.name.trim()
   if (name.length === 0) return null
   const id = input.id ?? `cust-${crypto.randomUUID()}`
-  db.exec(
-    `insert into customers (id, org_id, name, phone, note) values (?, ?, ?, ?, null)`,
-    [id, input.orgId, name, input.phone?.trim() || null],
-  )
+  const phone = input.phone?.trim() || null
+  db.transaction(() => {
+    db.exec(
+      `insert into customers (id, org_id, name, phone, note) values (?, ?, ?, ?, null)`,
+      [id, input.orgId, name, phone],
+    )
+    // The server's door (0028 create_customer) — nothing before it, so the
+    // op stands alone; the ledger lines and jobs that follow chain here.
+    if (ids) {
+      enqueueOp(db, ids, 'create_customer', {
+        client_customer_id: id,
+        p_name: name,
+        p_phone: phone,
+      }, [])
+    }
+  })
   return id
 }
 
@@ -214,21 +235,69 @@ export interface RecordEntryInput {
   createdAt: number
 }
 
-/** Append one line to the book. Insert-only — there is no update path;
- *  a mistake is corrected by a further entry (a 'reversal' naming it). */
-export function recordEntry(db: SqlDriver, input: RecordEntryInput): string {
+/** Deposit lines move only through the server's hold/apply/refund state
+ *  machine (0017 D4); the phone has no deposit door yet (year finding
+ *  `no-deposit-door`), so a deposit row here can only be the seed's. */
+const DEPOSIT_KINDS: ReadonlySet<string> = new Set(['deposit_hold', 'deposit_apply', 'deposit_refund'])
+
+/**
+ * Append one line to the book. Insert-only — there is no update path;
+ * a mistake is corrected by a further entry (a 'reversal' naming it).
+ *
+ * The op (W11): a payment goes to `record_payment` (the positive amount
+ * received — the server stores the negative fact, exactly as this row
+ * does); everything else to `record_ledger_entry` with the SIGNED amount
+ * the row carries and, for a reversal, `p_reversal_of`. The server's row
+ * is stamped with its own clock: a backdated `createdAt` stays the
+ * phone's day until the money lane syncs back (ASSUMPTION #ledger-server-time,
+ * docs/assumptions.md#ledger-server-time). Chained behind the last op
+ * naming the customer, the job, or the line reversed.
+ */
+export function recordEntry(
+  db: SqlDriver,
+  input: RecordEntryInput,
+  ids: QueueIds = defaultIds(input.createdAt),
+): string {
   const id = `led-${crypto.randomUUID()}`
-  db.exec(
-    `insert into customer_ledger_entries
-       (id, org_id, customer_id, kind, amount_minor, job_id, asset_id, note,
-        reversal_of, created_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id, input.orgId, input.customerId, input.kind, input.amountMinor,
-      input.jobId ?? null, input.assetId ?? null, input.note ?? null,
-      input.reversalOf ?? null, input.createdAt,
-    ],
-  )
+  db.transaction(() => {
+    db.exec(
+      `insert into customer_ledger_entries
+         (id, org_id, customer_id, kind, amount_minor, job_id, asset_id, note,
+          reversal_of, created_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id, input.orgId, input.customerId, input.kind, input.amountMinor,
+        input.jobId ?? null, input.assetId ?? null, input.note ?? null,
+        input.reversalOf ?? null, input.createdAt,
+      ],
+    )
+    if (!ids || DEPOSIT_KINDS.has(input.kind)) return
+    const named = [
+      ...NAMES.customer(input.customerId),
+      ...NAMES.job(input.jobId),
+      ...NAMES.ledgerEntry(input.reversalOf),
+    ]
+    if (input.kind === 'payment') {
+      enqueueOp(db, ids, 'record_payment', {
+        client_ledger_entry_id: id,
+        p_customer_id: input.customerId,
+        p_amount_minor: Math.abs(input.amountMinor),
+        p_job_id: input.jobId ?? null,
+        p_note: input.note ?? null,
+      }, named)
+      return
+    }
+    enqueueOp(db, ids, 'record_ledger_entry', {
+      client_ledger_entry_id: id,
+      p_customer_id: input.customerId,
+      p_entry_kind: input.kind,
+      p_amount_minor: input.amountMinor,
+      p_job_id: input.jobId ?? null,
+      p_asset_id: input.assetId ?? null,
+      p_note: input.note ?? null,
+      p_reversal_of: input.reversalOf ?? null,
+    }, named)
+  })
   return id
 }
 
@@ -490,7 +559,7 @@ export function recordReversalOf(
     note,
     reversalOf: entryId,
     createdAt: whenMs,
-  })
+  }, defaultIds(whenMs))
   return true
 }
 
@@ -581,6 +650,8 @@ export function isoDate(nowMs: number): string {
  * qty = the units that could NOT be offered. Called at the moment the
  * answer is USED (reply copied, or a job made from it), because a pasted
  * list the owner abandons was a draft, not a turned-away client.
+ * ASSUMPTION: local only — the server has no demand table. See
+ * docs/assumptions.md#local-only-writes
  */
 export function recordTurnedAway(
   db: SqlDriver,

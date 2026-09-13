@@ -34,6 +34,9 @@ export function pinSwitchSaid(r: PinSwitchResult, name: string): string | null {
  * Glove targets: every name is a full-width row; the PIN field is the
  * numeric keypad.
  */
+/** How long the "checked offline" notice stays on the gate before it opens. */
+export const OFFLINE_NOTICE_MS = 1_200
+
 export function PinGate({ store, onUnlocked }: { store: DemoStore; onUnlocked: () => void }) {
   const members = store.members().filter((m) => m.role !== 'driver')
   const [picked, setPicked] = useState<MemberRow | null>(
@@ -51,7 +54,14 @@ export function PinGate({ store, onUnlocked }: { store: DemoStore; onUnlocked: (
     const r = await store.pinSwitch(picked.id, pin)
     setBusy(false)
     setSaid(pinSwitchSaid(r, picked.name))
-    if (r.ok) { onUnlocked(); return }
+    if (r.ok) {
+      // An echo-verified unlock holds the gate long enough to READ that the
+      // PIN was checked offline — unmounting at once hid the notice the
+      // moment it was set. A server-verified unlock opens at once.
+      if (r.verifiedBy === 'echo') setTimeout(onUnlocked, OFFLINE_NOTICE_MS)
+      else onUnlocked()
+      return
+    }
     setPin('')
   }
 

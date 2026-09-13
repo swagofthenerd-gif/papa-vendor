@@ -555,29 +555,38 @@ comments; this is the ledger of what moved.
   clock), no lifetime column on the owed list, no earners leaderboard.
 - **New (2), found only by using the shipped doors in a vendor's order:**
 
-### New wall: `sub-rent-intent-unreplayable` — MAR
+### Wall retired in W11: `sub-rent-intent-unreplayable` — MAR
 
-The extension screen's Sub-rent door records an intent as a
-`sub_rent_intent` outbox op and chains the extension behind it
-(ASSUMPTION #27). **No RPC answers to that op** — neither 0022 nor 0025
-defines one. The moment W9's pipe replays the queue, the intent fails,
-and by the outbox's own rule the extension chained behind it fails with
-it, surfacing as one needs-attention card for a booking the desk
-believes it extended weeks ago. W9 must either give the op a server
-realisation (a sub-hire-in whose unit covers the other client's claim,
-then the extend) or take it out of the chain.
+The extension screen's Sub-rent door recorded an intent as a
+`sub_rent_intent` outbox op and chained the extension behind it
+(ASSUMPTION #27). **No RPC answered to that op** — neither 0022 nor 0025
+defined one — so the moment the pipe replayed the queue the intent
+would fail and the extension chained behind it would fail with it, one
+needs-attention card for a booking the desk believed it extended weeks
+ago. W11 gave the intent the smallest honest server realisation:
+`set_booking_note(p_booking_id, p_note, p_append)` (0028) appends the
+desk's line to the server's booking note, the op is named after it, and
+the extension replays behind it. The calendar meaning is unchanged — the
+other client's claim stands until a sub-hire IN covers it. The MAR
+scene now asserts the chain `set_booking_note → extend_booking`.
 
-### New wall: `subhire-cost-unlinkable` — APR
+### Wall retired in W11: `subhire-cost-unlinkable` — APR
 
 `recordSubHireIn` ties its expense to a job or a booking **at record
-time**. The common order at the enquiry is borrow first, make the job
-second — and then the bills sit on the kharcha book (the month's profit
-nets them, the partner's page says Rs 30,000) but the job's margin reads
-the full Rs 90,000, and no door attaches an expense to a job after the
-fact. NOV shows the link working in the other order. The fix is one
-door ("attach to job") on the expense row, or a booking-first flow on
-the enquiry screen; either is small, and the server's
-`booking_sub_hire_cost` already accepts both links.
+time**, and the common order at the enquiry is borrow first, make the
+job second — the bills sat on the kharcha book but the job's margin read
+the full Rs 90,000. Expenses are append-only on the server (0019 refuses
+an update), so "attach to job afterwards" was the wrong door. W11 took
+the vendor's real order instead: the desk **pencils the Eid shoot at the
+enquiry**, the borrow is tagged to the pencil (the phone's expense now
+carries `booking_id` exactly as the server's `record_sub_hire_in`
+writes it), the pencil is confirmed and converted, and the job's margin
+— `jobMargin` on the phone and the `job_margin` view on the server
+(0028, second edition) — reads bills tagged to the booking the job came
+from, the way `booking_sub_hire_cost` always did from the booking's
+side. The APR scene now runs that order and asserts Rs 30,000 of
+expense against the Rs 90,000 of income. NOV's job-first order still
+works as before.
 
 ### The stress suite (W8)
 

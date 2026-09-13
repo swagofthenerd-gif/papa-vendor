@@ -86,6 +86,9 @@ const MIRROR_COLUMNS: Record<string, string[]> = {
   // roles only — the server projects nothing else, and the PII guard
   // proves it.
   members: ['id', 'org_id', 'display_name', 'role', 'has_pin'],
+  // The house itself (0028, W11): one row, so the parchi letterhead and the
+  // money documents carry the org's name and never a person's.
+  org: ['id', 'name', 'currency', 'timezone'],
 }
 
 /**
@@ -121,6 +124,7 @@ const MIRROR_KEY: Record<string, string> = {
   rate_card_entries: 'id',
   org_calendar_days: 'id',
   members: 'id',
+  org: 'id',
 }
 
 export interface ApplyReport {

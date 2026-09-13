@@ -31,6 +31,7 @@ import {
 } from '@papa/core'
 import { createJob } from './read-model.ts'
 import { getSetting, isoDate, setSetting } from './khata.ts'
+import { NAMES, defaultIds, lastOpNaming, type OpIds } from './ops.ts'
 import type { StrTable } from '../strings.ts'
 
 /**
@@ -113,15 +114,10 @@ const iso = (ms: number): string => new Date(ms).toISOString()
 const tstzrange = (fromMs: number, untilMs: number): string =>
   `["${iso(fromMs)}","${iso(untilMs)}")`
 
-export interface BookingIds {
-  now: () => number
-  newId: () => string
-}
-
-export const defaultIds = (nowMs: number): BookingIds => ({
-  now: () => nowMs,
-  newId: () => crypto.randomUUID(),
-})
+/** The clock and id mint every write takes — ops.ts's, under the name
+ *  the booking wave gave it. */
+export type BookingIds = OpIds
+export { defaultIds }
 
 export interface BookingLineView extends BookingLine {
   productName: string
@@ -354,35 +350,10 @@ export function pruneExpiredPencils(db: SqlDriver, nowMs: number): number {
  * for network.ts: a sub-hire IN that rescues a booking chains here too.
  */
 export function lastBookingOp(db: SqlDriver, bookingId: string): string | null {
-  // Once the pipe has re-keyed a booking to the server's id (W9), earlier
-  // queued ops still carry the phone's id — look under both names so the
-  // chain stays one chain and a refused confirm parks its convert too.
-  const names = [bookingId, ...clientNamesFor(db, bookingId)]
-  const patterns = names.flatMap((n) => [
-    `%"client_booking_id":"${n}"%`,
-    `%"p_booking_id":"${n}"%`,
-    `%"for_booking_id":"${n}"%`,
-  ])
-  const row = db.get<{ id: string }>(
-    `select id from outbox
-      where state in ('pending', 'inflight')
-        and (${patterns.map(() => 'payload like ?').join(' or ')})
-      order by seq desc limit 1`,
-    patterns,
-  )
-  return row?.id ?? null
-}
-
-/** The phone's own earlier names for a server id, from the pipe's id map
- *  (empty when the table is absent or the id was never renamed). */
-export function clientNamesFor(db: SqlDriver, serverId: string): string[] {
-  try {
-    return db.all<{ client_id: string }>(
-      `select client_id from id_map where server_id = ?`, [serverId],
-    ).map((r) => r.client_id)
-  } catch {
-    return []
-  }
+  // ops.ts's match — under the phone's name and, once the pipe has re-keyed
+  // the booking (W9), the server's, so the chain stays one chain and a
+  // refused confirm parks its convert too — plus the sub-rent intent's key.
+  return lastOpNaming(db, [...NAMES.booking(bookingId), { key: 'for_booking_id', id: bookingId }])
 }
 
 export function enqueueBookingOp(
@@ -1151,10 +1122,14 @@ export interface SubRentIntent {
 
 /**
  * The sub-rent door records INTENT: a line on the extending booking's note
- * ('Sub-rent FX9 ×1 for #5') and a `sub_rent_intent` op chained under it,
- * so the extension queued next replays only after the pipe has honoured
- * the intent (W7 wires the partner network). Nothing on the calendar
- * moves — the other client's claim stands until a real unit covers it.
+ * ('Sub-rent FX9 ×1 for #5') and a `set_booking_note` op (0028, appending
+ * that line to the server's note) chained under it, so the extension
+ * queued next replays only after the intent is on the server's booking.
+ * Nothing on the calendar moves — the other client's claim stands until a
+ * real unit covers it (a sub-hire IN tagged to the booking chains behind
+ * this op too, network.ts). Was the year's wall
+ * `sub-rent-intent-unreplayable`: the old `sub_rent_intent` op had no RPC
+ * and would have parked the extension with it.
  */
 export function noteSubRent(
   db: SqlDriver,
@@ -1170,13 +1145,15 @@ export function noteSubRent(
   const note = b.note ? `${b.note}\n${line}` : line
   db.transaction(() => {
     db.exec(`update bookings set note = ?, updated_at = ? where id = ?`, [note, iso(nowMs), bookingId])
-    enqueueBookingOp(db, ids, 'sub_rent_intent', bookingId, {
-      client_booking_id: bookingId,
+    enqueueBookingOp(db, ids, 'set_booking_note', bookingId, {
       p_booking_id: bookingId,
-      p_product_id: intent.productId,
-      p_qty: intent.qty,
-      p_for_booking_id: intent.forBookingId,
       p_note: line,
+      p_append: true,
+      // Not RPC arguments (the dispatcher sends only `p_*`): the intent's
+      // facts, kept on the op so the queue can still say what was meant.
+      for_booking_id: intent.forBookingId,
+      product_id: intent.productId,
+      qty: intent.qty,
     })
   })
   return { ok: true, note }

@@ -9,6 +9,7 @@ import {
   type MoneyTotal,
   type SqlDriver,
 } from '@papa/core'
+import { NAMES, defaultIds, enqueueOp, type OpIds, type QueueIds } from './ops.ts'
 
 /**
  * The demo's read model — the pure part of store.ts.
@@ -408,10 +409,21 @@ export interface CreateJobInput {
  * the shelf than asked for, the job gets what exists and the shortfall is
  * REPORTED, never padded: promising a unit that is not there is the exact
  * lie the availability screen refuses to tell.
+ *
+ * THE OP (W11). With `ids`, the walk-in queues `create_job` (0028) with the
+ * phone's `job-…` id as `client_job_id`, chained behind the op that mints
+ * its customer when the desk typed one fresh. Without `ids` no op is
+ * queued: the bridge (convert_booking_to_job) and the lend-out
+ * (record_sub_hire_out) create the job INSIDE their own RPC and the
+ * reply names it — a second create would be a second job. The promised
+ * set is the phone's (job_expected has no server twin; the server's job
+ * knows its units from the scans that follow).
+ * ASSUMPTION: see docs/assumptions.md#local-only-writes
  */
 export function createJob(
   db: SqlDriver,
   input: CreateJobInput,
+  ids: QueueIds = null,
 ): { expected: string[]; requested: number } {
   const expected: string[] = []
   let requested = 0
@@ -426,6 +438,16 @@ export function createJob(
       ],
     )
     db.exec(`insert into job_meta (job_id, departs_at) values (?, null)`, [input.id])
+    if (ids) {
+      enqueueOp(db, ids, 'create_job', {
+        client_job_id: input.id,
+        p_label: input.label,
+        p_contact: input.contact,
+        p_expected_back: input.expectedBack,
+        p_customer_id: input.customerId ?? null,
+        p_note: null,
+      }, NAMES.customer(input.customerId))
+    }
 
     for (const assetId of input.expectedAssetIds ?? []) {
       requested++
@@ -456,16 +478,23 @@ export function createJob(
 }
 
 /**
- * Set or clear a job's due date. Nothing fancy on purpose — this is the demo
- * store, and expected_back is a mirror column the real product would round-
- * trip through an RPC. Clearing produces the honest 'no date', never a guess.
+ * Set or clear a job's due date. The mirror column moves at once and the
+ * op (`set_job_expected_back`, 0028) chains behind the last op naming the
+ * job. Clearing produces the honest 'no date', never a guess.
  */
 export function setExpectedBack(
   db: SqlDriver,
   jobId: string,
   value: string | null,
+  ids: OpIds = defaultIds(Date.now()),
 ): void {
-  db.exec(`update jobs set expected_back = ? where id = ?`, [value, jobId])
+  db.transaction(() => {
+    db.exec(`update jobs set expected_back = ? where id = ?`, [value, jobId])
+    enqueueOp(db, ids, 'set_job_expected_back', {
+      p_job_id: jobId,
+      p_expected_back: value,
+    }, NAMES.job(jobId))
+  })
 }
 
 /** How many assets the projection still puts on this job — the close rule's
@@ -492,7 +521,12 @@ export type CloseJobResult =
  * their jobs open and their board rows red, because that is the truth
  * until a terminal state for gear exists.
  */
-export function closeJob(db: SqlDriver, jobId: string, nowMs: number): CloseJobResult {
+export function closeJob(
+  db: SqlDriver,
+  jobId: string,
+  nowMs: number,
+  ids: OpIds = defaultIds(nowMs),
+): CloseJobResult {
   const job = db.get<{ status: string }>(
     `select status from jobs where id = ?`,
     [jobId],
@@ -502,23 +536,38 @@ export function closeJob(db: SqlDriver, jobId: string, nowMs: number): CloseJobR
   const stillOut = stillOutCount(db, jobId)
   if (stillOut > 0) return { ok: false, reason: 'still_out', stillOut }
 
-  db.exec(
-    `update jobs set status = 'closed', closed_at = ? where id = ?`,
-    [new Date(nowMs).toISOString(), jobId],
-  )
+  db.transaction(() => {
+    db.exec(
+      `update jobs set status = 'closed', closed_at = ? where id = ?`,
+      [new Date(nowMs).toISOString(), jobId],
+    )
+    // The server's close_job (0018 D3) re-runs the same rule under its own
+    // projection; queued behind the job's last op so a walk-in's create
+    // lands first, and behind nothing else — the scans that emptied the
+    // job are earlier in seq, and seq is the order the pipe keeps.
+    enqueueOp(db, ids, 'close_job', { p_job_id: jobId, p_note: null }, NAMES.job(jobId))
+  })
   return { ok: true }
 }
 
 /** The undo — the board resurrects the job, commitments and all. On the
- *  server this is owner/manager-only and audited (0018); the demo has one
- *  user, so the door is plain. */
-export function reopenJob(db: SqlDriver, jobId: string): boolean {
+ *  server this is owner/manager-only and audited (0018): the op parks as
+ *  a card if a desk phone tries it, which is the honest answer. */
+export function reopenJob(
+  db: SqlDriver,
+  jobId: string,
+  nowMs: number = Date.now(),
+  ids: OpIds = defaultIds(nowMs),
+): boolean {
   const job = db.get<{ status: string }>(
     `select status from jobs where id = ?`,
     [jobId],
   )
   if (!job || job.status !== 'closed') return false
-  db.exec(`update jobs set status = 'open', closed_at = null where id = ?`, [jobId])
+  db.transaction(() => {
+    db.exec(`update jobs set status = 'open', closed_at = null where id = ?`, [jobId])
+    enqueueOp(db, ids, 'reopen_job', { p_job_id: jobId, p_note: null }, NAMES.job(jobId))
+  })
   return true
 }
 

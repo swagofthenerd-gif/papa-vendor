@@ -92,10 +92,10 @@ set local role papa_app;
 
 select is(
   (select count(*)::int from jsonb_object_keys(pull_changes(0) -> 'tables')),
-  17, 'the full pull carries seventeen tables (sixteen as of 0026; members joined in 0027)');
+  18, 'the full pull carries eighteen tables (sixteen as of 0026; members joined in 0027, org in 0028)');
 select is(
   (select count(*)::int from jsonb_object_keys(pull_changes(999999999) -> 'tables')),
-  17, 'and the early-out names the same seventeen — the two lists are in step');
+  18, 'and the early-out names the same eighteen — the two lists are in step');
 select is(
   pull_changes(0) -> 'tables' -> 'rate_cards', '[]'::jsonb,
   'no card yet: an empty array, not a missing key');

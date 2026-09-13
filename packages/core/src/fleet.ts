@@ -75,7 +75,15 @@ export interface FleetOpResult {
  */
 function enqueueScanOp(
   db: SqlDriver,
-  base: { assetId: string; eventType: string; note?: string | null; extra?: Record<string, unknown> },
+  base: {
+    assetId: string
+    eventType: string
+    note?: string | null
+    extra?: Record<string, unknown>
+    /** The queued op this one must follow (W11: a serviced event waits for
+     *  the record_expense that mints the expense it names). */
+    dependsOn?: string | null
+  },
   ids: { now: () => number; newId: () => string },
 ): FleetOpResult {
   const id = ids.newId()
@@ -92,7 +100,7 @@ function enqueueScanOp(
   if (note) payload.note = note
 
   db.transaction(() => {
-    outbox.enqueue({ id, op: 'submit_scan_batch', payload })
+    outbox.enqueue({ id, op: 'submit_scan_batch', payload, dependsOn: base.dependsOn ?? null })
     projectOp(db, payload)
   })
 
@@ -151,6 +159,11 @@ export interface RecordServicedInput {
    *  in the same flow — the server validates the link (0021 D2: same org,
    *  kind=repair, this asset when the expense names one). */
   expenseId?: string | null
+  /** The outbox op that creates that expense server-side (W11): the serviced
+   *  scan is chained behind it, so the expense id it names has been renamed
+   *  to the server's by the time the scan goes — and a refused expense parks
+   *  the service note with it instead of sending a dangling link. */
+  dependsOn?: string | null
   now?: () => number
   newId?: () => string
 }
@@ -179,6 +192,7 @@ export function recordServiced(
       // Nested under `payload` because that is the key submit_scan_batch
       // files into scan_events.payload — where the log's view reads it.
       extra: input.expenseId ? { payload: { expense_id: input.expenseId } } : undefined,
+      dependsOn: input.dependsOn ?? null,
     },
     {
       now: input.now ?? Date.now,

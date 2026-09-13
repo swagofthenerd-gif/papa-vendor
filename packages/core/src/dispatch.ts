@@ -75,6 +75,16 @@ export const ID_REPLY_RULES: Record<string, IdReplyRule[]> = {
   ],
   upsert_rate_card: [{ client: 'client_card_id', reply: 'id', kind: 'rate_card' }],
   set_calendar_day: [{ client: 'client_day_id', reply: 'id', kind: 'calendar_day' }],
+  // W11 — every write crosses: the money book, expenses, the walk-in job and
+  // the khata's customer each mint one row the server names (0028 adds the
+  // three doors that had none: create_customer, create_job, set_booking_note).
+  create_customer: [{ client: 'client_customer_id', reply: 'id', kind: 'customer' }],
+  create_job: [{ client: 'client_job_id', reply: 'id', kind: 'job' }],
+  record_ledger_entry: [{ client: 'client_ledger_entry_id', reply: 'id', kind: 'ledger_entry' }],
+  record_payment: [{ client: 'client_ledger_entry_id', reply: 'id', kind: 'ledger_entry' }],
+  record_expense: [{ client: 'client_expense_id', reply: 'id', kind: 'expense' }],
+  // The reversal is its own row; the target is named in p_expense_id.
+  reverse_expense: [{ client: 'client_expense_id', reply: 'id', kind: 'expense' }],
 }
 
 /**
@@ -102,6 +112,8 @@ export const REKEY_COLUMNS: Record<string, string[]> = {
   job_attendants: ['job_id', 'user_id'],
   condition_photos: ['asset_id', 'job_id'],
   voice_notes: ['asset_id', 'job_id'],
+  // The app's own money tables (khata.ts, kharcha.ts) are re-keyed through
+  // SyncEngine's rekeyColumns — store.ts names them; core does not know them.
 }
 
 /**
@@ -206,11 +218,11 @@ export function rekeyLocal(
 ): number {
   let touched = 0
   for (const [table, cols] of Object.entries(columns)) {
+    // The table may not exist on this database (an app table on a bare
+    // core schema, or the reverse); asking sqlite_master first keeps the
+    // re-key from failing on a table it was told about but never saw.
+    if (!tableExists(db, table)) continue
     for (const col of cols) {
-      // The table may not exist on this database (an app table on a bare
-      // core schema, or the reverse); asking sqlite_master first keeps the
-      // re-key from failing on a table it was told about but never saw.
-      if (!tableExists(db, table)) break
       db.exec(`update ${table} set ${col} = ? where ${col} = ?`, [serverId, clientId] as SqlValue[])
       touched++
     }
