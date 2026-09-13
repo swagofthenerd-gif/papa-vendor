@@ -31,7 +31,7 @@ import {
 } from '@papa/core'
 import { createJob } from './read-model.ts'
 import { getSetting, isoDate, setSetting } from './khata.ts'
-import { clientNamesFor, defaultIds, type OpIds } from './ops.ts'
+import { NAMES, defaultIds, lastOpNaming, type OpIds } from './ops.ts'
 import type { StrTable } from '../strings.ts'
 
 /**
@@ -117,7 +117,7 @@ const tstzrange = (fromMs: number, untilMs: number): string =>
 /** The clock and id mint every write takes — ops.ts's, under the name
  *  the booking wave gave it. */
 export type BookingIds = OpIds
-export { defaultIds, clientNamesFor }
+export { defaultIds }
 
 export interface BookingLineView extends BookingLine {
   productName: string
@@ -350,23 +350,10 @@ export function pruneExpiredPencils(db: SqlDriver, nowMs: number): number {
  * for network.ts: a sub-hire IN that rescues a booking chains here too.
  */
 export function lastBookingOp(db: SqlDriver, bookingId: string): string | null {
-  // Once the pipe has re-keyed a booking to the server's id (W9), earlier
-  // queued ops still carry the phone's id — look under both names so the
-  // chain stays one chain and a refused confirm parks its convert too.
-  const names = [bookingId, ...clientNamesFor(db, bookingId)]
-  const patterns = names.flatMap((n) => [
-    `%"client_booking_id":"${n}"%`,
-    `%"p_booking_id":"${n}"%`,
-    `%"for_booking_id":"${n}"%`,
-  ])
-  const row = db.get<{ id: string }>(
-    `select id from outbox
-      where state in ('pending', 'inflight')
-        and (${patterns.map(() => 'payload like ?').join(' or ')})
-      order by seq desc limit 1`,
-    patterns,
-  )
-  return row?.id ?? null
+  // ops.ts's match — under the phone's name and, once the pipe has re-keyed
+  // the booking (W9), the server's, so the chain stays one chain and a
+  // refused confirm parks its convert too — plus the sub-rent intent's key.
+  return lastOpNaming(db, [...NAMES.booking(bookingId), { key: 'for_booking_id', id: bookingId }])
 }
 
 export function enqueueBookingOp(

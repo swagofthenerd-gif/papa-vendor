@@ -14,7 +14,7 @@ import {
 } from '@papa/core'
 import { defaultCardRateSql, decodeScanOps, lastSessionRecord, openJob } from './read-model.ts'
 import { assetCosts } from './kharcha.ts'
-import { NAMES, defaultIds, enqueueOp, type OpIds } from './ops.ts'
+import { NAMES, defaultIds, enqueueOp, type QueueIds } from './ops.ts'
 import type { StrTable } from '../strings.ts'
 
 /**
@@ -185,15 +185,6 @@ export interface CreateCustomerInput {
   name: string
   phone?: string | null
 }
-
-/**
- * Whether a write queues its op. `null` means the row is created
- * server-side by ANOTHER op that follows (a partner's customer row by
- * record_sub_hire_out, a borrowed unit's expense by record_sub_hire_in):
- * the phone mirrors it, the server mints it, and a second op would make
- * two. The default queues, on the caller's clock.
- */
-export type QueueIds = OpIds | null
 
 /**
  * The add-customer door the year simulation ran a whole pilot without

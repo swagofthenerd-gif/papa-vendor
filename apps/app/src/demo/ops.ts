@@ -20,7 +20,7 @@ import { Outbox, type SqlDriver } from '@papa/core'
  * Matched on the id JSON.stringify writes verbatim, under both the phone's
  * name and — once the pipe has re-keyed the row — the server's (id_map),
  * so a chain queued across a rename stays one chain. bookings.ts's
- * lastBookingOp is the same match with the booking's extra keys.
+ * lastBookingOp is this match with the booking's extra key.
  */
 
 export interface OpIds {
@@ -33,6 +33,16 @@ export const defaultIds = (nowMs: number): OpIds => ({
   now: () => nowMs,
   newId: () => crypto.randomUUID(),
 })
+
+/**
+ * Whether a write queues its op. `null` means the row is created
+ * server-side by ANOTHER op that follows (a partner's customer row by
+ * record_sub_hire_out, a borrowed unit's expense by record_sub_hire_in,
+ * a bridged or lent-out job by the op that bridges or lends): the phone
+ * mirrors it, the server mints it, and a second op would make two. The
+ * default at every write side queues, on the caller's clock.
+ */
+export type QueueIds = OpIds | null
 
 /** One thing an op may name: the payload key and the id under it. */
 export interface Named {

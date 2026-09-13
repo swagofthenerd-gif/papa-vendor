@@ -295,13 +295,13 @@ export function forgetSession(db: SqlDriver): void {
 const echoKey = (userId: string): string => `pin_echo:${userId}`
 
 /** sha256 hex of device:user:pin — WebCrypto, available in Node and the WebView. */
-export async function pinEcho(deviceId: string, userId: string, pin: string): Promise<string> {
+async function pinEcho(deviceId: string, userId: string, pin: string): Promise<string> {
   const bytes = new TextEncoder().encode(`${deviceId}:${userId}:${pin}`)
   const digest = await crypto.subtle.digest('SHA-256', bytes)
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-export async function rememberPinEcho(db: SqlDriver, deviceId: string, userId: string, pin: string): Promise<void> {
+async function rememberPinEcho(db: SqlDriver, deviceId: string, userId: string, pin: string): Promise<void> {
   metaSet(db, echoKey(userId), await pinEcho(deviceId, userId, pin))
 }
 

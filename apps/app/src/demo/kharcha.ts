@@ -6,7 +6,7 @@ import {
   type ExpenseView,
   type SqlDriver,
 } from '@papa/core'
-import { NAMES, defaultIds, enqueueOp, type OpIds } from './ops.ts'
+import { NAMES, defaultIds, enqueueOp, type OpIds, type QueueIds } from './ops.ts'
 
 /**
  * The expense book's read model — the kharcha queries, in a plain .ts
@@ -107,10 +107,6 @@ export interface RecordExpenseInput {
   /** Backdatable — "paid the workshop last Tuesday, recording it now". */
   createdAt: number
 }
-
-/** `null` = no op: the server mints this row inside ANOTHER op that
- *  follows (record_sub_hire_in's expense). See khata.ts QueueIds. */
-export type QueueIds = OpIds | null
 
 /** Append one line to the expense book. Returns the id, or null for a
  *  non-positive amount: a zero-rupee expense is a record of nothing, and

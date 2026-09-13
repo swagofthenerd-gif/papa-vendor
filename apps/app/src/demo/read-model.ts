@@ -9,7 +9,7 @@ import {
   type MoneyTotal,
   type SqlDriver,
 } from '@papa/core'
-import { NAMES, defaultIds, enqueueOp, type OpIds } from './ops.ts'
+import { NAMES, defaultIds, enqueueOp, type OpIds, type QueueIds } from './ops.ts'
 
 /**
  * The demo's read model — the pure part of store.ts.
@@ -423,7 +423,7 @@ export interface CreateJobInput {
 export function createJob(
   db: SqlDriver,
   input: CreateJobInput,
-  ids: OpIds | null = null,
+  ids: QueueIds = null,
 ): { expected: string[]; requested: number } {
   const expected: string[] = []
   let requested = 0

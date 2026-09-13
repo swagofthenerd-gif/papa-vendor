@@ -218,11 +218,11 @@ export function rekeyLocal(
 ): number {
   let touched = 0
   for (const [table, cols] of Object.entries(columns)) {
+    // The table may not exist on this database (an app table on a bare
+    // core schema, or the reverse); asking sqlite_master first keeps the
+    // re-key from failing on a table it was told about but never saw.
+    if (!tableExists(db, table)) continue
     for (const col of cols) {
-      // The table may not exist on this database (an app table on a bare
-      // core schema, or the reverse); asking sqlite_master first keeps the
-      // re-key from failing on a table it was told about but never saw.
-      if (!tableExists(db, table)) break
       db.exec(`update ${table} set ${col} = ? where ${col} = ?`, [serverId, clientId] as SqlValue[])
       touched++
     }

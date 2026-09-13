@@ -118,7 +118,7 @@ export { SyncLoop } from './engine.ts'
 export type { SyncLoopOptions, PullTransport, CycleReport, SyncStatusView } from './engine.ts'
 export {
   SESSION_KEYS, sessionOf, ensureDeviceId, enrol, pinSwitch, signOut, forgetSession,
-  pinEcho, rememberPinEcho, hasPinEcho, needsPinGate,
+  hasPinEcho, needsPinGate,
 } from './auth.ts'
 export type {
   AuthSessionResult, RpcCaller, Session, EnrolInput, EnrolResult, PinSwitchResult, SignOutResult,
