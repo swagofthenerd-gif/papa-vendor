@@ -110,6 +110,16 @@ const OP_EN: Record<string, string> = {
   set_calendar_day: 'a calendar day',
   clear_calendar_day: 'a calendar day',
   set_line_rate_override: 'a rate override',
+  create_customer: 'a new customer',
+  create_job: 'a walk-in job',
+  close_job: 'closing a job',
+  reopen_job: 'reopening a job',
+  set_job_expected_back: 'a due date',
+  set_booking_note: 'a booking note',
+  record_payment: 'a payment received',
+  record_ledger_entry: 'a khata line',
+  record_expense: 'a kharcha entry',
+  reverse_expense: 'reversing a kharcha entry',
 }
 
 /**

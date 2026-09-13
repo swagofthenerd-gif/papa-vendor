@@ -89,6 +89,16 @@ const OP_UR: Record<string, string> = {
   set_calendar_day: 'calendar ka din',
   clear_calendar_day: 'calendar ka din',
   set_line_rate_override: 'rate override',
+  create_customer: 'naya customer',
+  create_job: 'walk-in job',
+  close_job: 'job band karna',
+  reopen_job: 'job dobara kholna',
+  set_job_expected_back: 'wapsi ki tareekh',
+  set_booking_note: 'booking ka note',
+  record_payment: 'mili hui payment',
+  record_ledger_entry: 'khata ki line',
+  record_expense: 'kharcha ki entry',
+  reverse_expense: 'kharcha entry wapas lena',
 }
 
 export const STR_UR: StrTable = {
