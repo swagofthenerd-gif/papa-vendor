@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Icon } from '@papa/icons'
 import { STR } from '../strings.ts'
 import type { JobCustomerChoice } from './store.ts'
+import { Sheet, SheetClose } from '../components/Sheet.tsx'
 
 /**
  * The desk's "make a job" card — the same three fields, plus WHOSE job it is.
@@ -61,131 +62,127 @@ export function NewJobSheet({
   const customerReady = who !== 'new' || newName.trim().length > 0
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label={STR.todayNewJob}>
-      <div className="sheet">
-        <header className="sheet-head">
-          <span className="sheet-title">{STR.todayNewJob}</span>
-          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
-            <Icon name="x" size={22} />
-          </button>
-        </header>
+    <Sheet label={STR.todayNewJob} onClose={onClose}>
+      <header className="sheet-head">
+        <span className="sheet-title">{STR.todayNewJob}</span>
+        <SheetClose />
+      </header>
 
-        {linesNote ? <p className="sheet-hint">{linesNote}</p> : null}
+      {linesNote ? <p className="sheet-hint">{linesNote}</p> : null}
 
-        <label className="field-label" htmlFor="new-job-label">{STR.todayWhatIsTheJob}</label>
-        <input
-          id="new-job-label"
-          className="sheet-search"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder={STR.todayJobLabelPlaceholder}
-          autoFocus
-          autoCorrect="off"
-          spellCheck={false}
-        />
+      <label className="field-label" htmlFor="new-job-label">{STR.todayWhatIsTheJob}</label>
+      <input
+        id="new-job-label"
+        className="sheet-search"
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        placeholder={STR.todayJobLabelPlaceholder}
+        autoFocus
+        autoCorrect="off"
+        spellCheck={false}
+      />
 
-        <span className="field-label" id="new-job-customer-label">
-          {STR.todayCustomerOptional}
-        </span>
-        <div
-          className="chip-row"
-          role="group"
-          aria-labelledby="new-job-customer-label"
-        >
-          <button
-            className={`filter-chip${who === 'none' ? ' active' : ''}`}
-            aria-pressed={who === 'none'}
-            onClick={() => setWho('none')}
-          >
-            {STR.todayNoCustomer}
-          </button>
-          {customers.map((c) => (
-            <button
-              key={c.id}
-              className={`filter-chip${who === c.id ? ' active' : ''}`}
-              aria-pressed={who === c.id}
-              onClick={() => setWho(c.id)}
-            >
-              {c.name}
-            </button>
-          ))}
-          <button
-            className={`filter-chip${who === 'new' ? ' active' : ''}`}
-            aria-pressed={who === 'new'}
-            onClick={() => setWho('new')}
-          >
-            <Icon name="user" size={14} /> {STR.todayNewCustomer}
-          </button>
-        </div>
-        {who === 'none' ? (
-          /* The cost of the omission, said out loud — the choice stays. */
-          <p className="sheet-hint">{STR.todayNoCustomerHint}</p>
-        ) : null}
-
-        {who === 'new' ? (
-          <>
-            <label className="field-label" htmlFor="new-job-cust-name">
-              {STR.todayCustomerNameLabel}
-            </label>
-            <input
-              id="new-job-cust-name"
-              className="sheet-search"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder={STR.todayCustomerNamePlaceholder}
-              autoCorrect="off"
-              spellCheck={false}
-            />
-            <label className="field-label" htmlFor="new-job-cust-phone">
-              {STR.todayCustomerPhoneOptional}
-            </label>
-            <input
-              id="new-job-cust-phone"
-              className="sheet-search"
-              value={newPhone}
-              onChange={(e) => setNewPhone(e.target.value)}
-              inputMode="tel"
-              autoCorrect="off"
-              spellCheck={false}
-            />
-          </>
-        ) : null}
-
-        <label className="field-label" htmlFor="new-job-contact">{STR.todayContactOptional}</label>
-        <input
-          id="new-job-contact"
-          className="sheet-search"
-          value={contact}
-          onChange={(e) => setContact(e.target.value)}
-          placeholder={STR.todayContactPlaceholder}
-          autoCorrect="off"
-          spellCheck={false}
-        />
-
-        <label className="field-label" htmlFor="new-job-back">{STR.todayExpectedBackOptional}</label>
-        <input
-          id="new-job-back"
-          className="sheet-search"
-          type="date"
-          value={expectedBack}
-          onChange={(e) => setExpectedBack(e.target.value)}
-        />
-
+      <span className="field-label" id="new-job-customer-label">
+        {STR.todayCustomerOptional}
+      </span>
+      <div
+        className="chip-row"
+        role="group"
+        aria-labelledby="new-job-customer-label"
+      >
         <button
-          className="btn btn-primary btn-lg sheet-submit"
-          disabled={label.trim().length === 0 || !customerReady}
-          onClick={() =>
-            onCreate({
-              label: label.trim(),
-              contact: contact.trim() || null,
-              expectedBack: expectedBack || null,
-              customer,
-            })
-          }
+          className={`filter-chip${who === 'none' ? ' active' : ''}`}
+          aria-pressed={who === 'none'}
+          onClick={() => setWho('none')}
         >
-          {STR.todayCreateJob}
+          {STR.todayNoCustomer}
+        </button>
+        {customers.map((c) => (
+          <button
+            key={c.id}
+            className={`filter-chip${who === c.id ? ' active' : ''}`}
+            aria-pressed={who === c.id}
+            onClick={() => setWho(c.id)}
+          >
+            {c.name}
+          </button>
+        ))}
+        <button
+          className={`filter-chip${who === 'new' ? ' active' : ''}`}
+          aria-pressed={who === 'new'}
+          onClick={() => setWho('new')}
+        >
+          <Icon name="user" size={14} /> {STR.todayNewCustomer}
         </button>
       </div>
-    </div>
+      {who === 'none' ? (
+        /* The cost of the omission, said out loud — the choice stays. */
+        <p className="sheet-hint">{STR.todayNoCustomerHint}</p>
+      ) : null}
+
+      {who === 'new' ? (
+        <>
+          <label className="field-label" htmlFor="new-job-cust-name">
+            {STR.todayCustomerNameLabel}
+          </label>
+          <input
+            id="new-job-cust-name"
+            className="sheet-search"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder={STR.todayCustomerNamePlaceholder}
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <label className="field-label" htmlFor="new-job-cust-phone">
+            {STR.todayCustomerPhoneOptional}
+          </label>
+          <input
+            id="new-job-cust-phone"
+            className="sheet-search"
+            value={newPhone}
+            onChange={(e) => setNewPhone(e.target.value)}
+            inputMode="tel"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+        </>
+      ) : null}
+
+      <label className="field-label" htmlFor="new-job-contact">{STR.todayContactOptional}</label>
+      <input
+        id="new-job-contact"
+        className="sheet-search"
+        value={contact}
+        onChange={(e) => setContact(e.target.value)}
+        placeholder={STR.todayContactPlaceholder}
+        autoCorrect="off"
+        spellCheck={false}
+      />
+
+      <label className="field-label" htmlFor="new-job-back">{STR.todayExpectedBackOptional}</label>
+      <input
+        id="new-job-back"
+        className="sheet-search"
+        type="date"
+        value={expectedBack}
+        onChange={(e) => setExpectedBack(e.target.value)}
+      />
+
+      <button
+        className="btn btn-primary btn-lg sheet-submit"
+        disabled={label.trim().length === 0 || !customerReady}
+        onClick={() =>
+          onCreate({
+            label: label.trim(),
+            contact: contact.trim() || null,
+            expectedBack: expectedBack || null,
+            customer,
+          })
+        }
+      >
+        {STR.todayCreateJob}
+      </button>
+    </Sheet>
   )
 }

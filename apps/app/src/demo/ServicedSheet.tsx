@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Icon } from '@papa/icons'
 import { STR } from '../strings.ts'
+import { Sheet, SheetClose } from '../components/Sheet.tsx'
 
 /**
  * The Serviced sheet — the reset end of the usage nudge (0021 D2), one flow:
@@ -37,73 +37,69 @@ export function ServicedSheet({
       : null
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label={STR.sehatServicedTitle}>
-      <div className="sheet">
-        <header className="sheet-head">
-          <span className="sheet-title">{STR.sehatServicedTitle}</span>
-          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
-            <Icon name="x" size={22} />
-          </button>
-        </header>
+    <Sheet label={STR.sehatServicedTitle} onClose={onClose}>
+      <header className="sheet-head">
+        <span className="sheet-title">{STR.sehatServicedTitle}</span>
+        <SheetClose />
+      </header>
 
-        <p className="sheet-hint">{STR.sehatServicedHint(assetCode)}</p>
+      <p className="sheet-hint">{STR.sehatServicedHint(assetCode)}</p>
 
-        <label className="field-label" htmlFor="serviced-note">
-          {STR.sehatServicedNoteLabel}
-        </label>
-        <input
-          id="serviced-note"
-          className="sheet-search"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          autoCorrect="off"
-          spellCheck={false}
-          autoFocus
-        />
+      <label className="field-label" htmlFor="serviced-note">
+        {STR.sehatServicedNoteLabel}
+      </label>
+      <input
+        id="serviced-note"
+        className="sheet-search"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        autoCorrect="off"
+        spellCheck={false}
+        autoFocus
+      />
 
-        <label className="field-label" htmlFor="serviced-cost">
-          {STR.sehatServicedCostLabel}
-        </label>
-        <input
-          id="serviced-cost"
-          className="sheet-search code"
-          type="number"
-          inputMode="decimal"
-          min="0"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-        />
+      <label className="field-label" htmlFor="serviced-cost">
+        {STR.sehatServicedCostLabel}
+      </label>
+      <input
+        id="serviced-cost"
+        className="sheet-search code"
+        type="number"
+        inputMode="decimal"
+        min="0"
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+      />
 
-        {costMinor !== null ? (
-          <>
-            <label className="field-label" htmlFor="serviced-paid-to">
-              {STR.kharchaPaidToOptional}
-            </label>
-            <input
-              id="serviced-paid-to"
-              className="sheet-search"
-              placeholder={STR.kharchaPaidToPlaceholder}
-              value={counterparty}
-              onChange={(e) => setCounterparty(e.target.value)}
-              autoCorrect="off"
-              spellCheck={false}
-            />
-          </>
-        ) : null}
+      {costMinor !== null ? (
+        <>
+          <label className="field-label" htmlFor="serviced-paid-to">
+            {STR.kharchaPaidToOptional}
+          </label>
+          <input
+            id="serviced-paid-to"
+            className="sheet-search"
+            placeholder={STR.kharchaPaidToPlaceholder}
+            value={counterparty}
+            onChange={(e) => setCounterparty(e.target.value)}
+            autoCorrect="off"
+            spellCheck={false}
+          />
+        </>
+      ) : null}
 
-        <button
-          className="btn btn-primary btn-lg sheet-submit"
-          onClick={() =>
-            onSave({
-              note: note.trim() || null,
-              costMinor,
-              counterparty: counterparty.trim() || null,
-            })
-          }
-        >
-          {STR.sehatServicedConfirm}
-        </button>
-      </div>
-    </div>
+      <button
+        className="btn btn-primary btn-lg sheet-submit"
+        onClick={() =>
+          onSave({
+            note: note.trim() || null,
+            costMinor,
+            counterparty: counterparty.trim() || null,
+          })
+        }
+      >
+        {STR.sehatServicedConfirm}
+      </button>
+    </Sheet>
   )
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from '@papa/icons'
 import { STR } from '../strings.ts'
+import { Sheet, SheetClose } from '../components/Sheet.tsx'
 
 /**
  * Taking one condition photo.
@@ -116,38 +117,34 @@ export function PhotoCapture({
   }, [busy, onCaptured])
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label={STR.scanPhotographAria(itemName)}>
-      <div className="photo-sheet">
-        <header className="sheet-head">
-          <div>
-            <span className="sheet-title">{itemName}</span>
-            <p className="photo-side">
-              {side === 'out' ? STR.scanHowItLooksGoingOut : STR.scanHowItCameBack}
-            </p>
-          </div>
-          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
-            <Icon name="x" size={22} />
-          </button>
-        </header>
-
-        <div className="photo-view">
-          <video ref={videoRef} playsInline muted autoPlay className="qr-video" />
-          {state !== 'live' ? (
-            <div className="qr-camera-msg">
-              <p>{state === 'starting' ? STR.scanStartingCamera : detail}</p>
-            </div>
-          ) : null}
+    <Sheet label={STR.scanPhotographAria(itemName)} onClose={onClose} className="photo-sheet">
+      <header className="sheet-head">
+        <div>
+          <span className="sheet-title">{itemName}</span>
+          <p className="photo-side">
+            {side === 'out' ? STR.scanHowItLooksGoingOut : STR.scanHowItCameBack}
+          </p>
         </div>
+        <SheetClose />
+      </header>
 
-        <button
-          className="btn btn-primary btn-block btn-lg"
-          onClick={() => void take()}
-          disabled={state !== 'live' || busy}
-        >
-          <Icon name="camera" size={20} /> {busy ? STR.scanSaving : STR.scanTakeThePhoto}
-        </button>
-        <p className="photo-foot muted">{STR.scanTimedByThisPhone}</p>
+      <div className="photo-view">
+        <video ref={videoRef} playsInline muted autoPlay className="qr-video" />
+        {state !== 'live' ? (
+          <div className="qr-camera-msg">
+            <p>{state === 'starting' ? STR.scanStartingCamera : detail}</p>
+          </div>
+        ) : null}
       </div>
-    </div>
+
+      <button
+        className="btn btn-primary btn-block btn-lg"
+        onClick={() => void take()}
+        disabled={state !== 'live' || busy}
+      >
+        <Icon name="camera" size={20} /> {busy ? STR.scanSaving : STR.scanTakeThePhoto}
+      </button>
+      <p className="photo-foot muted">{STR.scanTimedByThisPhone}</p>
+    </Sheet>
   )
 }

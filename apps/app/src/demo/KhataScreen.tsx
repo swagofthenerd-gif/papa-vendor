@@ -13,6 +13,7 @@ import { shareText } from '../share.ts'
 import { DueBadge } from '../routes/Today.tsx'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
+import { Sheet, SheetClose } from '../components/Sheet.tsx'
 
 /**
  * One customer's khata — the page the whole money book opens to.
@@ -225,60 +226,56 @@ function PaymentSheet({
   const valid = Number.isFinite(rupees) && rupees > 0
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label={STR.customerRecordPayment}>
-      <div className="sheet">
-        <header className="sheet-head">
-          <span className="sheet-title">{STR.customerRecordPayment}</span>
-          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
-            <Icon name="x" size={22} />
+    <Sheet label={STR.customerRecordPayment} onClose={onClose}>
+      <header className="sheet-head">
+        <span className="sheet-title">{STR.customerRecordPayment}</span>
+        <SheetClose />
+      </header>
+
+      <p className="sheet-hint">{customerName}</p>
+
+      <label className="field-label" htmlFor="pay-amount">{STR.customerPaymentAmount}</label>
+      <input
+        id="pay-amount"
+        className="sheet-search code"
+        type="number"
+        inputMode="decimal"
+        min="0"
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        autoFocus
+      />
+
+      <div className="chip-row" role="group" aria-label={STR.customerRecordPayment}>
+        {methods.map((m) => (
+          <button
+            key={m}
+            className={`filter-chip${method === m ? ' active' : ''}`}
+            aria-pressed={method === m}
+            onClick={() => setMethod(m)}
+          >
+            {m}
           </button>
-        </header>
-
-        <p className="sheet-hint">{customerName}</p>
-
-        <label className="field-label" htmlFor="pay-amount">{STR.customerPaymentAmount}</label>
-        <input
-          id="pay-amount"
-          className="sheet-search code"
-          type="number"
-          inputMode="decimal"
-          min="0"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          autoFocus
-        />
-
-        <div className="chip-row" role="group" aria-label={STR.customerRecordPayment}>
-          {methods.map((m) => (
-            <button
-              key={m}
-              className={`filter-chip${method === m ? ' active' : ''}`}
-              aria-pressed={method === m}
-              onClick={() => setMethod(m)}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
-
-        <label className="field-label" htmlFor="pay-note">{STR.customerPaymentNoteOptional}</label>
-        <input
-          id="pay-note"
-          className="sheet-search"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          autoCorrect="off"
-          spellCheck={false}
-        />
-
-        <button
-          className="btn btn-primary btn-lg sheet-submit"
-          disabled={!valid}
-          onClick={() => onSave(Math.round(rupees * 100), method, note.trim() || null)}
-        >
-          {STR.customerSavePayment}
-        </button>
+        ))}
       </div>
-    </div>
+
+      <label className="field-label" htmlFor="pay-note">{STR.customerPaymentNoteOptional}</label>
+      <input
+        id="pay-note"
+        className="sheet-search"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        autoCorrect="off"
+        spellCheck={false}
+      />
+
+      <button
+        className="btn btn-primary btn-lg sheet-submit"
+        disabled={!valid}
+        onClick={() => onSave(Math.round(rupees * 100), method, note.trim() || null)}
+      >
+        {STR.customerSavePayment}
+      </button>
+    </Sheet>
   )
 }

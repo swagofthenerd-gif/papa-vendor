@@ -207,8 +207,8 @@ export function bookingView(db: SqlDriver, id: string, nowMs: number): BookingVi
       ? db.get<{ display_name: string | null }>(`select display_name from products where id = ?`, [l.productId])
       : null
     const asset = l.assetId
-      ? db.get<{ asset_code: string | null; display_name: string | null; product_name: string | null }>(
-          `select a.asset_code, a.display_name, p.display_name as product_name
+      ? db.get<{ asset_code: string | null; display_name: string | null; product_name: string | null; product_id: string | null }>(
+          `select a.asset_code, a.display_name, p.display_name as product_name, p.id as product_id
              from assets a left join products p on p.id = a.product_id where a.id = ?`,
           [l.assetId],
         )
@@ -223,6 +223,11 @@ export function bookingView(db: SqlDriver, id: string, nowMs: number): BookingVi
       }))
     return {
       ...l,
+      // A demanded unit's line names no product of its own; the view
+      // resolves it through the unit ONCE here, so every sheet that asks
+      // 'what product is this line' reads one field (the way quotes.ts
+      // does) instead of re-querying the asset.
+      productId: l.productId ?? asset?.product_id ?? null,
       productName: product?.display_name ?? asset?.product_name ?? asset?.display_name ?? '',
       assetCode: asset?.asset_code ?? null,
       allocated,

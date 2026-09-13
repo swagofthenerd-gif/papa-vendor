@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Icon } from '@papa/icons'
+import { go } from '../nav.ts'
 import { cycleCountDiff } from '@papa/core'
 import { SectionHead } from '../components/Shell.tsx'
 import { HoldToFinish } from '../components/HoldToFinish.tsx'
@@ -42,6 +43,15 @@ export function GintiScreen({ store }: { store: DemoStore }) {
     return (
       <>
         <SectionHead icon="shelf" title={STR.fleetGintiPickShelf} sub={STR.fleetGintiScanShelf} />
+        {shelves.length === 0 ? (
+          <div className="empty">
+            <Icon name="shelf" size={32} />
+            <p>{STR.fleetGintiNoShelves}</p>
+            <button className="btn btn-outline" onClick={() => go({ name: 'import' })}>
+              <Icon name="scroll" size={18} /> {STR.labelsImportDoor}
+            </button>
+          </div>
+        ) : null}
         <ul className="gear-units">
           {shelves.map((s) => (
             <li key={s.id}>

@@ -97,6 +97,7 @@ export function Enquiry({
         <div className="paste-zone">
           <textarea
             className="paste-box"
+            aria-label={STR.enquiryPasteAria}
             value={text}
             onChange={(e) => setText(e.target.value)}
             // Roman Urdu and English mix freely here, and autocorrect

@@ -61,7 +61,7 @@ export function DeskScreen({ store }: { store: DemoStore }) {
 
       <section className="section">
         <SectionHead icon="scroll" title={STR.bookingListHeading} sub={STR.bookingListSub(live.length)} />
-        <BookingList rows={live} />
+        <BookingList rows={live} onNew={() => setBooking({ lines: [] })} />
       </section>
 
       {booking ? (

@@ -4,6 +4,7 @@ import { parsePhoneNumber } from '@papa/core'
 import { shareText } from '../share.ts'
 import type { PartnerRow } from './network.ts'
 import { STR } from '../strings.ts'
+import { Sheet, SheetClose } from '../components/Sheet.tsx'
 
 /**
  * One message, many partner houses — the sheet both broadcasts share
@@ -65,64 +66,60 @@ export function PartnerSendSheet({
   }
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label={title}>
-      <div className="sheet sheet-tall">
-        <header className="sheet-head">
-          <span className="sheet-title">{title}</span>
-          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
-            <Icon name="x" size={22} />
-          </button>
-        </header>
-        <p className="sheet-hint">{hint}</p>
+    <Sheet label={title} onClose={onClose} tall>
+      <header className="sheet-head">
+        <span className="sheet-title">{title}</span>
+        <SheetClose />
+      </header>
+      <p className="sheet-hint">{hint}</p>
 
-        {above}
+      {above}
 
-        {partners.length === 0 ? (
-          <div className="notice notice-warn">
-            <Icon name="warning" size={18} />
-            <div><strong>{STR.networkAskMarketNoPartners}</strong></div>
-          </div>
-        ) : (
-          <ul className="send-list">
-            {partners.map((p) => {
-              const on = ticked.has(p.id)
-              const done = sent.has(p.id)
-              const phone = parsePhoneNumber(p.phone)
-              return (
-                <li key={p.id} className={`send-row${done ? ' is-sent' : ''}`}>
-                  <label className="send-tick">
-                    <input type="checkbox" checked={on} onChange={() => toggle(p.id)} />
-                    <span>
-                      <strong>{p.name}</strong>
-                      <span className="line-note">{phone ? p.phone : STR.networkAskMarketNoNumber}</span>
+      {partners.length === 0 ? (
+        <div className="notice notice-warn">
+          <Icon name="warning" size={18} />
+          <div><strong>{STR.networkAskMarketNoPartners}</strong></div>
+        </div>
+      ) : (
+        <ul className="send-list">
+          {partners.map((p) => {
+            const on = ticked.has(p.id)
+            const done = sent.has(p.id)
+            const phone = parsePhoneNumber(p.phone)
+            return (
+              <li key={p.id} className={`send-row${done ? ' is-sent' : ''}`}>
+                <label className="send-tick">
+                  <input type="checkbox" checked={on} onChange={() => toggle(p.id)} />
+                  <span>
+                    <strong>{p.name}</strong>
+                    <span className="line-note">{phone ? p.phone : STR.networkAskMarketNoNumber}</span>
+                  </span>
+                </label>
+                {on ? (
+                  done ? (
+                    <span className="badge badge-green">
+                      <Icon name="check" size={12} /> {STR.networkAskMarketSent}
                     </span>
-                  </label>
-                  {on ? (
-                    done ? (
-                      <span className="badge badge-green">
-                        <Icon name="check" size={12} /> {STR.networkAskMarketSent}
-                      </span>
-                    ) : (
-                      <button className="btn btn-sm btn-outline" onClick={() => send(p)}>
-                        <Icon name="send" size={16} /> {STR.networkAskMarketSendTo(p.name)}
-                      </button>
-                    )
-                  ) : null}
-                </li>
-              )
-            })}
-          </ul>
-        )}
+                  ) : (
+                    <button className="btn btn-sm btn-outline" onClick={() => send(p)}>
+                      <Icon name="send" size={16} /> {STR.networkAskMarketSendTo(p.name)}
+                    </button>
+                  )
+                ) : null}
+              </li>
+            )
+          })}
+        </ul>
+      )}
 
-        <p className="field-label">{STR.networkAskMarketPreview}</p>
-        <pre className="report-block">{text}</pre>
+      <p className="field-label">{STR.networkAskMarketPreview}</p>
+      <pre className="report-block">{text}</pre>
 
-        <button className="btn btn-ghost btn-block" onClick={copy}>
-          <Icon name="clipboard" size={18} /> {copied ? STR.networkAskMarketCopied : STR.networkAskMarketCopy}
-        </button>
+      <button className="btn btn-ghost btn-block" onClick={copy}>
+        <Icon name="clipboard" size={18} /> {copied ? STR.networkAskMarketCopied : STR.networkAskMarketCopy}
+      </button>
 
-        {foot}
-      </div>
-    </div>
+      {foot}
+    </Sheet>
   )
 }

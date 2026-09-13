@@ -11,6 +11,7 @@ import {
 import type { DemoStore } from './store.ts'
 import type { CreateBookingResult } from './bookings.ts'
 import { STR } from '../strings.ts'
+import { Sheet, SheetClose } from '../components/Sheet.tsx'
 
 export interface PrefillLine {
   productId: string
@@ -120,195 +121,191 @@ export function NewBookingSheet({
   }
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label={STR.bookingNewTitle}>
-      <div className="sheet">
-        <header className="sheet-head">
-          <span className="sheet-title">{STR.bookingNewTitle}</span>
-          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
-            <Icon name="x" size={22} />
-          </button>
-        </header>
+    <Sheet label={STR.bookingNewTitle} onClose={onClose}>
+      <header className="sheet-head">
+        <span className="sheet-title">{STR.bookingNewTitle}</span>
+        <SheetClose />
+      </header>
 
-        {prefill.length > 0 ? (
-          <p className="sheet-hint">{STR.bookingNewFromKitList(prefill.length)}</p>
-        ) : null}
+      {prefill.length > 0 ? (
+        <p className="sheet-hint">{STR.bookingNewFromKitList(prefill.length)}</p>
+      ) : null}
 
-        <span className="field-label" id="new-booking-customer">{STR.bookingNewCustomerLabel}</span>
-        <div className="chip-row" role="group" aria-labelledby="new-booking-customer">
-          {customers.map((c) => (
-            <button
-              key={c.id}
-              className={`filter-chip${who === c.id ? ' active' : ''}`}
-              aria-pressed={who === c.id}
-              onClick={() => setWho(c.id)}
-            >
-              {c.name}
-            </button>
-          ))}
+      <span className="field-label" id="new-booking-customer">{STR.bookingNewCustomerLabel}</span>
+      <div className="chip-row" role="group" aria-labelledby="new-booking-customer">
+        {customers.map((c) => (
           <button
-            className={`filter-chip${who === 'new' ? ' active' : ''}`}
-            aria-pressed={who === 'new'}
-            onClick={() => setWho('new')}
+            key={c.id}
+            className={`filter-chip${who === c.id ? ' active' : ''}`}
+            aria-pressed={who === c.id}
+            onClick={() => setWho(c.id)}
           >
-            <Icon name="user" size={14} /> {STR.todayNewCustomer}
+            {c.name}
           </button>
-        </div>
-        {who === '' ? <p className="sheet-hint">{STR.bookingNewCustomerNeeded}</p> : null}
-        {who === 'new' ? (
-          <>
-            <label className="field-label" htmlFor="new-booking-cust-name">{STR.bookingNewCustomerNameLabel}</label>
-            <input
-              id="new-booking-cust-name"
-              className="sheet-search"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder={STR.todayCustomerNamePlaceholder}
-              autoCorrect="off"
-              spellCheck={false}
-            />
-            <label className="field-label" htmlFor="new-booking-cust-phone">{STR.bookingNewCustomerPhoneOptional}</label>
-            <input
-              id="new-booking-cust-phone"
-              className="sheet-search"
-              value={newPhone}
-              onChange={(e) => setNewPhone(e.target.value)}
-              inputMode="tel"
-              autoCorrect="off"
-              spellCheck={false}
-            />
-          </>
-        ) : null}
-
-        <div className="field-pair">
-          <div>
-            <label className="field-label" htmlFor="new-booking-start">{STR.bookingNewStartLabel}</label>
-            <input
-              id="new-booking-start"
-              className="sheet-search"
-              type="datetime-local"
-              value={start}
-              onChange={(e) => setStart(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="field-label" htmlFor="new-booking-end">{STR.bookingNewEndLabel}</label>
-            <input
-              id="new-booking-end"
-              className="sheet-search"
-              type="datetime-local"
-              value={end}
-              onChange={(e) => setEnd(e.target.value)}
-            />
-          </div>
-        </div>
-        {startMs !== null && endMs !== null && endMs <= startMs ? (
-          <p className="sheet-hint">{STR.bookingNewBadPeriod}</p>
-        ) : null}
-
-        <span className="field-label">{STR.bookingNewLinesLabel}</span>
-        {lines.length === 0 ? <p className="sheet-hint">{STR.bookingNewNoLines}</p> : null}
-        <ul className="line-list">
-          {lines.map((l) => (
-            <li key={l.productId} className="line booking-draft-line">
-              <span className="line-name">{l.name}</span>
-              <span className="qty-stepper">
-                <button
-                  className="icon-btn"
-                  onClick={() => bump(l.productId, -1)}
-                  aria-label={l.qty === 1 ? STR.bookingNewRemoveLineAria(l.name) : STR.bookingNewFewerAria(l.name)}
-                >
-                  <Icon name={l.qty === 1 ? 'trash' : 'chevron-down'} size={20} />
-                </button>
-                <span className="code qty-n">{l.qty}</span>
-                <button
-                  className="icon-btn"
-                  onClick={() => bump(l.productId, 1)}
-                  aria-label={STR.bookingNewMoreAria(l.name)}
-                >
-                  <Icon name="arrow-up-right" size={20} />
-                </button>
-              </span>
-            </li>
-          ))}
-        </ul>
-        <input
-          className="sheet-search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={STR.bookingNewSearchGear}
-          aria-label={STR.bookingNewAddLine}
-          autoCorrect="off"
-          spellCheck={false}
-        />
-        {query.trim().length > 0 ? (
-          results.length === 0 ? (
-            <p className="sheet-hint">{STR.bookingNewNothingMatches(query.trim())}</p>
-          ) : (
-            <ul className="sheet-list">
-              {results.map((c) => (
-                <li key={c.id}>
-                  <button
-                    className="sheet-row"
-                    onClick={() => {
-                      setLines((prev) => [...prev, { productId: c.id, name: c.name, qty: 1 }])
-                      setQuery('')
-                    }}
-                  >
-                    <span className="sheet-row-name">{c.name}</span>
-                    <Icon name="check" size={16} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )
-        ) : null}
-
-        <span className="field-label" id="new-booking-kind">{STR.bookingNewKindLabel}</span>
-        <div className="chip-row" role="group" aria-labelledby="new-booking-kind">
-          <button
-            className={`filter-chip${kind === 'pencil' ? ' active' : ''}`}
-            aria-pressed={kind === 'pencil'}
-            onClick={() => setKind('pencil')}
-          >
-            {STR.bookingNewPencil}
-          </button>
-          <button
-            className={`filter-chip${kind === 'confirmed' ? ' active' : ''}`}
-            aria-pressed={kind === 'confirmed'}
-            onClick={() => setKind('confirmed')}
-          >
-            {STR.bookingNewConfirm}
-          </button>
-        </div>
-        <p className="sheet-hint">
-          {kind === 'pencil' ? STR.bookingNewPencilHint(settings.pencilTtlHours) : STR.bookingNewConfirmHint}
-        </p>
-
-        <label className="field-label" htmlFor="new-booking-note">{STR.bookingNewNoteLabel}</label>
-        <input
-          id="new-booking-note"
-          className="sheet-search"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder={STR.bookingNewNotePlaceholder}
-          autoCorrect="off"
-          spellCheck={false}
-        />
-
-        {problem ? (
-          <div className="notice notice-warn" role="alert">
-            <Icon name="warning" size={18} />
-            <div>
-              {problem.map((p, i) => (i === 0 ? <strong key={i}>{p}</strong> : <p key={i}>{p}</p>))}
-            </div>
-          </div>
-        ) : null}
-
-        <button className="btn btn-primary btn-lg sheet-submit" disabled={!ready} onClick={create}>
-          {kind === 'pencil' ? STR.bookingNewCreate : STR.bookingNewCreateConfirmed}
+        ))}
+        <button
+          className={`filter-chip${who === 'new' ? ' active' : ''}`}
+          aria-pressed={who === 'new'}
+          onClick={() => setWho('new')}
+        >
+          <Icon name="user" size={14} /> {STR.todayNewCustomer}
         </button>
       </div>
-    </div>
+      {who === '' ? <p className="sheet-hint">{STR.bookingNewCustomerNeeded}</p> : null}
+      {who === 'new' ? (
+        <>
+          <label className="field-label" htmlFor="new-booking-cust-name">{STR.bookingNewCustomerNameLabel}</label>
+          <input
+            id="new-booking-cust-name"
+            className="sheet-search"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder={STR.todayCustomerNamePlaceholder}
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <label className="field-label" htmlFor="new-booking-cust-phone">{STR.bookingNewCustomerPhoneOptional}</label>
+          <input
+            id="new-booking-cust-phone"
+            className="sheet-search"
+            value={newPhone}
+            onChange={(e) => setNewPhone(e.target.value)}
+            inputMode="tel"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+        </>
+      ) : null}
+
+      <div className="field-pair">
+        <div>
+          <label className="field-label" htmlFor="new-booking-start">{STR.bookingNewStartLabel}</label>
+          <input
+            id="new-booking-start"
+            className="sheet-search"
+            type="datetime-local"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="field-label" htmlFor="new-booking-end">{STR.bookingNewEndLabel}</label>
+          <input
+            id="new-booking-end"
+            className="sheet-search"
+            type="datetime-local"
+            value={end}
+            onChange={(e) => setEnd(e.target.value)}
+          />
+        </div>
+      </div>
+      {startMs !== null && endMs !== null && endMs <= startMs ? (
+        <p className="sheet-hint">{STR.bookingNewBadPeriod}</p>
+      ) : null}
+
+      <span className="field-label">{STR.bookingNewLinesLabel}</span>
+      {lines.length === 0 ? <p className="sheet-hint">{STR.bookingNewNoLines}</p> : null}
+      <ul className="line-list">
+        {lines.map((l) => (
+          <li key={l.productId} className="line booking-draft-line">
+            <span className="line-name">{l.name}</span>
+            <span className="qty-stepper">
+              <button
+                className="icon-btn"
+                onClick={() => bump(l.productId, -1)}
+                aria-label={l.qty === 1 ? STR.bookingNewRemoveLineAria(l.name) : STR.bookingNewFewerAria(l.name)}
+              >
+                <Icon name={l.qty === 1 ? 'trash' : 'chevron-down'} size={20} />
+              </button>
+              <span className="code qty-n">{l.qty}</span>
+              <button
+                className="icon-btn"
+                onClick={() => bump(l.productId, 1)}
+                aria-label={STR.bookingNewMoreAria(l.name)}
+              >
+                <Icon name="arrow-up-right" size={20} />
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <input
+        className="sheet-search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={STR.bookingNewSearchGear}
+        aria-label={STR.bookingNewAddLine}
+        autoCorrect="off"
+        spellCheck={false}
+      />
+      {query.trim().length > 0 ? (
+        results.length === 0 ? (
+          <p className="sheet-hint">{STR.bookingNewNothingMatches(query.trim())}</p>
+        ) : (
+          <ul className="sheet-list">
+            {results.map((c) => (
+              <li key={c.id}>
+                <button
+                  className="sheet-row"
+                  onClick={() => {
+                    setLines((prev) => [...prev, { productId: c.id, name: c.name, qty: 1 }])
+                    setQuery('')
+                  }}
+                >
+                  <span className="sheet-row-name">{c.name}</span>
+                  <Icon name="check" size={16} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : null}
+
+      <span className="field-label" id="new-booking-kind">{STR.bookingNewKindLabel}</span>
+      <div className="chip-row" role="group" aria-labelledby="new-booking-kind">
+        <button
+          className={`filter-chip${kind === 'pencil' ? ' active' : ''}`}
+          aria-pressed={kind === 'pencil'}
+          onClick={() => setKind('pencil')}
+        >
+          {STR.bookingNewPencil}
+        </button>
+        <button
+          className={`filter-chip${kind === 'confirmed' ? ' active' : ''}`}
+          aria-pressed={kind === 'confirmed'}
+          onClick={() => setKind('confirmed')}
+        >
+          {STR.bookingNewConfirm}
+        </button>
+      </div>
+      <p className="sheet-hint">
+        {kind === 'pencil' ? STR.bookingNewPencilHint(settings.pencilTtlHours) : STR.bookingNewConfirmHint}
+      </p>
+
+      <label className="field-label" htmlFor="new-booking-note">{STR.bookingNewNoteLabel}</label>
+      <input
+        id="new-booking-note"
+        className="sheet-search"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder={STR.bookingNewNotePlaceholder}
+        autoCorrect="off"
+        spellCheck={false}
+      />
+
+      {problem ? (
+        <div className="notice notice-warn" role="alert">
+          <Icon name="warning" size={18} />
+          <div>
+            {problem.map((p, i) => (i === 0 ? <strong key={i}>{p}</strong> : <p key={i}>{p}</p>))}
+          </div>
+        </div>
+      ) : null}
+
+      <button className="btn btn-primary btn-lg sheet-submit" disabled={!ready} onClick={create}>
+        {kind === 'pencil' ? STR.bookingNewCreate : STR.bookingNewCreateConfirmed}
+      </button>
+    </Sheet>
   )
 }
 

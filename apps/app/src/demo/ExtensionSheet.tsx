@@ -8,6 +8,7 @@ import { collisionKey, type BookingView } from './bookings.ts'
 import { collisionSentence, collisionStarts, collisionSubject, fromLocalInput, toLocalInput } from '../booking-view.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
+import { Sheet, SheetClose } from '../components/Sheet.tsx'
 
 /**
  * The extension-collision screen — the highest-value single screen in the
@@ -114,118 +115,114 @@ export function ExtensionSheet({
   }
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label={STR.bookingExtendTitle(booking.bookingNo)}>
-      <div className="sheet">
-        <header className="sheet-head">
-          <span className="sheet-title">{STR.bookingExtendTitle(booking.bookingNo)}</span>
-          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
-            <Icon name="x" size={22} />
-          </button>
-        </header>
-        <p className="sheet-hint">{STR.bookingExtendHint}</p>
+    <Sheet label={STR.bookingExtendTitle(booking.bookingNo)} onClose={onClose}>
+      <header className="sheet-head">
+        <span className="sheet-title">{STR.bookingExtendTitle(booking.bookingNo)}</span>
+        <SheetClose />
+      </header>
+      <p className="sheet-hint">{STR.bookingExtendHint}</p>
 
-        <label className="field-label" htmlFor="extend-end">{STR.bookingExtendNewEndLabel}</label>
-        <input
-          id="extend-end"
-          className="sheet-search"
-          type="datetime-local"
-          value={end}
-          onChange={(e) => { setEnd(e.target.value); setProblem(null) }}
-        />
-        <p className="sheet-hint code">
-          {STR.bookingUntilLabel} {bookingDateLabel(booking.customerEndMs)}
-          {preview ? ` → ${bookingDateLabel(preview.customerEndMs)}` : ''}
-        </p>
-        {endsBeforeStart ? <p className="sheet-hint">{STR.bookingExtendEndsBeforeStart}</p> : null}
+      <label className="field-label" htmlFor="extend-end">{STR.bookingExtendNewEndLabel}</label>
+      <input
+        id="extend-end"
+        className="sheet-search"
+        type="datetime-local"
+        value={end}
+        onChange={(e) => { setEnd(e.target.value); setProblem(null) }}
+      />
+      <p className="sheet-hint code">
+        {STR.bookingUntilLabel} {bookingDateLabel(booking.customerEndMs)}
+        {preview ? ` → ${bookingDateLabel(preview.customerEndMs)}` : ''}
+      </p>
+      {endsBeforeStart ? <p className="sheet-hint">{STR.bookingExtendEndsBeforeStart}</p> : null}
 
-        {!endsBeforeStart && endMs !== null && collisions.length === 0 ? (
-          <div className="notice notice-ok">
-            <Icon name="check-circle" size={18} />
-            <div><strong>{STR.bookingExtendClean}</strong></div>
-          </div>
-        ) : null}
+      {!endsBeforeStart && endMs !== null && collisions.length === 0 ? (
+        <div className="notice notice-ok">
+          <Icon name="check-circle" size={18} />
+          <div><strong>{STR.bookingExtendClean}</strong></div>
+        </div>
+      ) : null}
 
-        {collisions.length > 0 ? (
-          <ul className="collision-list">
-            {collisions.map((c) => {
-              const key = collisionKey(c)
-              const done = settled.has(key)
-              const phone = store.customerPhone(bookingCustomer(store, c.bookingId))
-              return (
-                <li key={key} className={`collision-card${done ? ' is-settled' : ''}`}>
-                  <div className="collision-head">
-                    <span className="code collision-subject">{collisionSubject(c)}</span>
-                    {done ? <span className="stamp stamp-pencil">{STR.bookingCardSettled}</span> : <span className="stamp">{STR.bookingStatusConfirmed}</span>}
-                  </div>
-                  <p className="collision-line">
-                    {STR.bookingCollisionCard(c.bookingNo, c.customerName, collisionStarts(c))}
-                  </p>
-                  {c.kind === 'bulk' ? (
-                    <p className="collision-line">{STR.bookingCollisionBulk(c.shortBy, c.productName)}</p>
-                  ) : null}
-                  {done ? (
-                    <p className="sheet-hint">{STR.bookingSubRentNoted}</p>
-                  ) : (
-                    <div className="collision-doors">
-                      <button className="btn btn-sm btn-outline" onClick={() => subRent(c)}>
-                        <Icon name="handshake" size={16} /> {STR.bookingDoorSubRent}
+      {collisions.length > 0 ? (
+        <ul className="collision-list">
+          {collisions.map((c) => {
+            const key = collisionKey(c)
+            const done = settled.has(key)
+            const phone = store.customerPhone(bookingCustomer(store, c.bookingId))
+            return (
+              <li key={key} className={`collision-card${done ? ' is-settled' : ''}`}>
+                <div className="collision-head">
+                  <span className="code collision-subject">{collisionSubject(c)}</span>
+                  {done ? <span className="stamp stamp-pencil">{STR.bookingCardSettled}</span> : <span className="stamp">{STR.bookingStatusConfirmed}</span>}
+                </div>
+                <p className="collision-line">
+                  {STR.bookingCollisionCard(c.bookingNo, c.customerName, collisionStarts(c))}
+                </p>
+                {c.kind === 'bulk' ? (
+                  <p className="collision-line">{STR.bookingCollisionBulk(c.shortBy, c.productName)}</p>
+                ) : null}
+                {done ? (
+                  <p className="sheet-hint">{STR.bookingSubRentNoted}</p>
+                ) : (
+                  <div className="collision-doors">
+                    <button className="btn btn-sm btn-outline" onClick={() => subRent(c)}>
+                      <Icon name="handshake" size={16} /> {STR.bookingDoorSubRent}
+                    </button>
+                    {c.kind === 'asset' ? (
+                      <button className="btn btn-sm btn-outline" onClick={() => setSubstituting(c)}>
+                        <Icon name="repeat" size={16} /> {STR.bookingDoorSubstitute}
                       </button>
-                      {c.kind === 'asset' ? (
-                        <button className="btn btn-sm btn-outline" onClick={() => setSubstituting(c)}>
-                          <Icon name="repeat" size={16} /> {STR.bookingDoorSubstitute}
-                        </button>
-                      ) : null}
-                      {phone ? (
-                        <a className="btn btn-sm btn-ghost" href={telUrl(phone)}>
-                          <Icon name="phone" size={16} /> {STR.bookingDoorCall}
-                        </a>
-                      ) : (
-                        <button className="btn btn-sm btn-ghost" onClick={() => copyName(c)}>
-                          <Icon name="clipboard" size={16} />{' '}
-                          {copied === key ? STR.bookingCopied : STR.bookingCopyName}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-        ) : null}
-
-        {settled.size > 0 ? <p className="sheet-hint">{STR.bookingSubRentHint}</p> : null}
-
-        {problem ? (
-          <div className="notice notice-warn" role="alert">
-            <Icon name="warning" size={18} />
-            <div><strong>{problem}</strong></div>
-          </div>
-        ) : null}
-
-        <button className="btn btn-primary btn-lg sheet-submit" disabled={!canExtend} onClick={extend}>
-          <Icon name="calendar" size={18} />{' '}
-          {open.length > 0 ? STR.bookingExtendBlocked(open.length) : STR.bookingExtendNow}
-        </button>
-      </div>
-
-      {asking ? (
-        <AskTheMarketSheet
-          store={store}
-          shortage={asking}
-          onClose={() => setAsking(null)}
-        />
+                    ) : null}
+                    {phone ? (
+                      <a className="btn btn-sm btn-ghost" href={telUrl(phone)}>
+                        <Icon name="phone" size={16} /> {STR.bookingDoorCall}
+                      </a>
+                    ) : (
+                      <button className="btn btn-sm btn-ghost" onClick={() => copyName(c)}>
+                        <Icon name="clipboard" size={16} />{' '}
+                        {copied === key ? STR.bookingCopied : STR.bookingCopyName}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </li>
+            )
+          })}
+        </ul>
       ) : null}
 
-      {substituting && substituting.kind === 'asset' ? (
-        <SubstituteSheet
-          store={store}
-          collision={substituting}
-          forBookingId={booking.id}
-          onDone={() => { setSubstituting(null); setTick((t) => t + 1) }}
-          onClose={() => setSubstituting(null)}
-        />
+      {settled.size > 0 ? <p className="sheet-hint">{STR.bookingSubRentHint}</p> : null}
+
+      {problem ? (
+        <div className="notice notice-warn" role="alert">
+          <Icon name="warning" size={18} />
+          <div><strong>{problem}</strong></div>
+        </div>
       ) : null}
-    </div>
+
+      <button className="btn btn-primary btn-lg sheet-submit" disabled={!canExtend} onClick={extend}>
+        <Icon name="calendar" size={18} />{' '}
+        {open.length > 0 ? STR.bookingExtendBlocked(open.length) : STR.bookingExtendNow}
+      </button>
+
+    {asking ? (
+      <AskTheMarketSheet
+        store={store}
+        shortage={asking}
+        onClose={() => setAsking(null)}
+      />
+    ) : null}
+
+    {substituting && substituting.kind === 'asset' ? (
+      <SubstituteSheet
+        store={store}
+        collision={substituting}
+        forBookingId={booking.id}
+        onDone={() => { setSubstituting(null); setTick((t) => t + 1) }}
+        onClose={() => setSubstituting(null)}
+      />
+    ) : null}
+    </Sheet>
   )
 }
 
@@ -257,20 +254,16 @@ function SubstituteSheet({
 
   if (problem) {
     return (
-      <div className="sheet-backdrop" role="dialog" aria-label={STR.bookingDoorSubstitute}>
-        <div className="sheet">
-          <header className="sheet-head">
-            <span className="sheet-title">{STR.bookingDoorSubstitute}</span>
-            <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
-              <Icon name="x" size={22} />
-            </button>
-          </header>
-          <div className="notice notice-warn" role="alert">
-            <Icon name="warning" size={18} />
-            <div><strong>{problem}</strong></div>
-          </div>
+      <Sheet label={STR.bookingDoorSubstitute} onClose={onClose}>
+        <header className="sheet-head">
+          <span className="sheet-title">{STR.bookingDoorSubstitute}</span>
+          <SheetClose />
+        </header>
+        <div className="notice notice-warn" role="alert">
+          <Icon name="warning" size={18} />
+          <div><strong>{problem}</strong></div>
         </div>
-      </div>
+      </Sheet>
     )
   }
 

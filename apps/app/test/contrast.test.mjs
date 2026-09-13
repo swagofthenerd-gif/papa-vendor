@@ -182,3 +182,36 @@ describe('truck mode — a dark van at 05:00', () => {
     assert.equal(declared(SEL, 'status-ink'), '#0f0d0b')
   })
 })
+
+describe('W10 — the pairs the route walk found under AA', () => {
+  // The audit script (docs/ui-audit-2026-09.md) measured every text
+  // element's computed colour against its composited background on every
+  // route in both themes. Two token pairs failed; both are pinned here so
+  // the next colour tweak is told, not discovered on a loading dock.
+  test('dark --muted passes AA on --card-2, where the badge and the group count sit', () => {
+    const SEL = ":root[data-theme='dark']"
+    const ratio = contrast(declared(SEL, 'muted'), declared(SEL, 'card-2'))
+    assert.ok(ratio >= AA_NORMAL, `dark --muted on --card-2 is ${round(ratio)}:1, needs ${AA_NORMAL}:1`)
+  })
+
+  test('the primary button’s ink passes AA on its fill in every theme', () => {
+    // The fill is --accent-strong; the ink is --btn-primary-ink (white on
+    // the light and sun aliases, the dark status ink on the light-orange
+    // dark alias). Tokens are resolved by hand here: `declared` reads one
+    // block, and the dark block inherits its fill from :root.
+    const light = ':root {'
+    const cases = [
+      ['light', declared(light, 'accent-strong'), declared(light, 'btn-primary-ink')],
+      ['dark', declared(":root[data-theme='dark']", 'accent-strong'), declared(":root[data-theme='dark']", 'status-ink')],
+      ['sun', declared(":root[data-theme='sun']", 'accent-strong'), declared(light, 'btn-primary-ink')],
+    ]
+    for (const [theme, fill, ink] of cases) {
+      const ratio = contrast(fill, ink)
+      assert.ok(ratio >= AA_NORMAL, `${theme}: ${ink} on ${fill} is ${round(ratio)}:1, needs ${AA_NORMAL}:1`)
+    }
+  })
+
+  test('the dark theme’s primary ink IS the status ink (the token aliases it)', () => {
+    assert.equal(declared(":root[data-theme='dark']", 'btn-primary-ink'), 'var(--status-ink)')
+  })
+})

@@ -7,6 +7,7 @@ import type { BookingView, ConfirmPlan } from './bookings.ts'
 import { STR } from '../strings.ts'
 // --- network --- (0025): the `short` refusal's door.
 import { AskTheMarketSheet, type Shortage } from './AskTheMarketSheet.tsx'
+import { Sheet, SheetClose } from '../components/Sheet.tsx'
 
 /**
  * The Confirm sheet — what confirming WOULD do, then the one button.
@@ -54,8 +55,8 @@ export function ConfirmSheet({
 
   const layers = useMemo(
     () => booking.lines.map((l) => {
-      const productId = l.productId ?? productOfAsset(store, l.assetId)
-      return productId ? store.availabilityFor(productId, holdStart, holdEnd, nowMs) : null
+      // The view already resolved a demanded unit's product (bookings.ts).
+      return l.productId ? store.availabilityFor(l.productId, holdStart, holdEnd, nowMs) : null
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [store, booking, holdStart, holdEnd],
@@ -76,125 +77,116 @@ export function ConfirmSheet({
   }
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label={STR.bookingConfirmSheetTitle(booking.bookingNo)}>
-      <div className="sheet">
-        <header className="sheet-head">
-          <span className="sheet-title">{STR.bookingConfirmSheetTitle(booking.bookingNo)}</span>
-          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
-            <Icon name="x" size={22} />
-          </button>
-        </header>
-        <p className="sheet-hint">{STR.bookingConfirmSheetHint}</p>
+    <Sheet label={STR.bookingConfirmSheetTitle(booking.bookingNo)} onClose={onClose}>
+      <header className="sheet-head">
+        <span className="sheet-title">{STR.bookingConfirmSheetTitle(booking.bookingNo)}</span>
+        <SheetClose />
+      </header>
+      <p className="sheet-hint">{STR.bookingConfirmSheetHint}</p>
 
-        <ul className="line-list">
-          {booking.lines.map((l, i) => {
-            const layer = layers[i]
-            const planned = plan.ok ? plan.plan.filter((p) => p.lineId === l.id) : []
-            const bulk = plan.ok ? plan.bulkPlan.find((p) => p.lineId === l.id) : undefined
-            return (
-              <li key={l.id} className="line line-stack">
-                <span className="line-name">
-                  {l.assetCode
-                    ? STR.bookingLineDemanded(l.assetCode)
-                    : STR.bookingLineQty(l.qty, l.productName)}
+      <ul className="line-list">
+        {booking.lines.map((l, i) => {
+          const layer = layers[i]
+          const planned = plan.ok ? plan.plan.filter((p) => p.lineId === l.id) : []
+          const bulk = plan.ok ? plan.bulkPlan.find((p) => p.lineId === l.id) : undefined
+          return (
+            <li key={l.id} className="line line-stack">
+              <span className="line-name">
+                {l.assetCode
+                  ? STR.bookingLineDemanded(l.assetCode)
+                  : STR.bookingLineQty(l.qty, l.productName)}
+              </span>
+              {layer ? (
+                <span className="line-note">
+                  {STR.bookingLayerLine(layer.hereNow, layer.pencilledOverlap, layer.confirmedOverlap)}
                 </span>
-                {layer ? (
-                  <span className="line-note">
-                    {STR.bookingLayerLine(layer.hereNow, layer.pencilledOverlap, layer.confirmedOverlap)}
-                  </span>
-                ) : null}
-                {planned.length > 0 ? (
-                  <span className="line-note code">
-                    {STR.bookingWillTake(planned.map((p) => p.assetCode).join(', '))}
-                  </span>
-                ) : bulk ? (
-                  <span className="line-note">{STR.bookingWillHold(bulk.qty)}</span>
-                ) : null}
-              </li>
-            )
-          })}
-        </ul>
+              ) : null}
+              {planned.length > 0 ? (
+                <span className="line-note code">
+                  {STR.bookingWillTake(planned.map((p) => p.assetCode).join(', '))}
+                </span>
+              ) : bulk ? (
+                <span className="line-note">{STR.bookingWillHold(bulk.qty)}</span>
+              ) : null}
+            </li>
+          )
+        })}
+      </ul>
 
-        <label className="toggle-row">
-          <input
-            type="checkbox"
-            checked={sameDay}
-            onChange={(e) => setSameDay(e.target.checked)}
-          />
-          <span>
-            <strong>{STR.bookingSameDayTurnaround}</strong>
-            <span className="sheet-hint">{STR.bookingSameDayHint}</span>
-          </span>
-        </label>
-        <p className="sheet-hint code">
-          {STR.bookingHoldWindow(bookingDateLabel(holdStart), bookingDateLabel(holdEnd))}
-        </p>
-        {unpriced > 0 ? (
-          <div className="notice notice-warn">
-            <Icon name="receipt" size={18} />
-            <div><strong>{STR.quoteConfirmUnpriced(unpriced)}</strong></div>
-          </div>
-        ) : null}
-
-        {gate ? (
-          <>
-            <div className="notice notice-warn">
-              <Icon name="shield" size={18} />
-              <div>
-                <strong>{STR.bookingNeedsCredentials(formatRupees(gate.exposureMinor))}</strong>
-              </div>
-            </div>
-            <label className="field-label" htmlFor="confirm-override">{STR.bookingOverrideNoteLabel}</label>
-            <input
-              id="confirm-override"
-              className="sheet-search"
-              value={overrideNote}
-              onChange={(e) => setOverrideNote(e.target.value)}
-              placeholder={STR.bookingOverrideNotePlaceholder}
-              autoCorrect="off"
-              spellCheck={false}
-            />
-          </>
-        ) : null}
-
-        {refusal || problem ? (
-          <div className="notice notice-warn" role="alert">
-            <Icon name="warning" size={18} />
-            <div><strong>{problem ?? refusal}</strong></div>
-          </div>
-        ) : null}
-        {short ? (
-          <button
-            className="btn btn-outline btn-block"
-            onClick={() => setAsking([{
-              productId: short.productId,
-              productName: short.productName,
-              qty: Math.max(1, short.wanted - short.available),
-              fromMs: holdStart,
-              untilMs: holdEnd,
-              bookingId: booking.id,
-            }])}
-          >
-            <Icon name="handshake" size={18} /> {STR.networkAskMarket}
-          </button>
-        ) : null}
-
-        <button
-          className="btn btn-primary btn-lg sheet-submit"
-          disabled={!plan.ok}
-          onClick={confirm}
-        >
-          <Icon name="check" size={18} /> {STR.bookingConfirmNow}
-        </button>
-      </div>
-      {asking ? (
-        <AskTheMarketSheet store={store} shortage={asking} onClose={() => setAsking(null)} />
+      <label className="toggle-row">
+        <input
+          type="checkbox"
+          checked={sameDay}
+          onChange={(e) => setSameDay(e.target.checked)}
+        />
+        <span>
+          <strong>{STR.bookingSameDayTurnaround}</strong>
+          <span className="sheet-hint">{STR.bookingSameDayHint}</span>
+        </span>
+      </label>
+      <p className="sheet-hint code">
+        {STR.bookingHoldWindow(bookingDateLabel(holdStart), bookingDateLabel(holdEnd))}
+      </p>
+      {unpriced > 0 ? (
+        <div className="notice notice-warn">
+          <Icon name="receipt" size={18} />
+          <div><strong>{STR.quoteConfirmUnpriced(unpriced)}</strong></div>
+        </div>
       ) : null}
-    </div>
-  )
-}
 
-function productOfAsset(store: DemoStore, assetId: string | null): string | null {
-  if (!assetId) return null
-  return store.assetView(assetId)?.productId ?? null
+      {gate ? (
+        <>
+          <div className="notice notice-warn">
+            <Icon name="shield" size={18} />
+            <div>
+              <strong>{STR.bookingNeedsCredentials(formatRupees(gate.exposureMinor))}</strong>
+            </div>
+          </div>
+          <label className="field-label" htmlFor="confirm-override">{STR.bookingOverrideNoteLabel}</label>
+          <input
+            id="confirm-override"
+            className="sheet-search"
+            value={overrideNote}
+            onChange={(e) => setOverrideNote(e.target.value)}
+            placeholder={STR.bookingOverrideNotePlaceholder}
+            autoCorrect="off"
+            spellCheck={false}
+          />
+        </>
+      ) : null}
+
+      {refusal || problem ? (
+        <div className="notice notice-warn" role="alert">
+          <Icon name="warning" size={18} />
+          <div><strong>{problem ?? refusal}</strong></div>
+        </div>
+      ) : null}
+      {short ? (
+        <button
+          className="btn btn-outline btn-block"
+          onClick={() => setAsking([{
+            productId: short.productId,
+            productName: short.productName,
+            qty: Math.max(1, short.wanted - short.available),
+            fromMs: holdStart,
+            untilMs: holdEnd,
+            bookingId: booking.id,
+          }])}
+        >
+          <Icon name="handshake" size={18} /> {STR.networkAskMarket}
+        </button>
+      ) : null}
+
+      <button
+        className="btn btn-primary btn-lg sheet-submit"
+        disabled={!plan.ok}
+        onClick={confirm}
+      >
+        <Icon name="check" size={18} /> {STR.bookingConfirmNow}
+      </button>
+    {asking ? (
+      <AskTheMarketSheet store={store} shortage={asking} onClose={() => setAsking(null)} />
+    ) : null}
+    </Sheet>
+  )
 }
