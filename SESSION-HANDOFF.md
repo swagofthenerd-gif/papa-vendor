@@ -1,12 +1,13 @@
-# Session handoff — for the next Claude (written by Fable 5.1, 2026-09-13, after W8)
+# Session handoff — for the next Claude (written by Fable 5.1, 2026-09-13, after W11)
 
 You are picking up a long autonomous engineering run on **Papa Vendor**
-at the end of its eighth wave. Read this file top to bottom before doing
+after its eleventh wave. Read this file top to bottom before doing
 anything. The working copy is `/mnt/windows/papa-vendor-work/papa-vendor`
 (a clone made for this effort; the user's original at
 `~/Scrrenplay-papa/papa-vendor` was deliberately never touched). Crew
-worktrees live under `/mnt/windows/papa-vendor-work/wt-*` — do not touch
-them. Everything below is true as of the head of branch `second-year`.
+worktrees live under `/mnt/windows/papa-vendor-work/wt-*` (`wt-network`
+has `node_modules`; `wt-quoting` does not). Everything below is true as
+of the head of branch `every-write-crosses` (PR #24 → main).
 
 ## Who you work for, and how to talk
 
@@ -15,10 +16,12 @@ The owner (Shaharyar, GitHub `swagofthenerd-gif`) is smart and
 a plain-English account — no jargon, bad news first, numbers given
 meaning, end with where things stand. This is codified in
 `~/.claude/skills/no-bullshit/SKILL.md` and the repo's own
-`.claude/skills/be-straight-up/SKILL.md`. Honor both. He has standing
-orders: **"do not stop until all the phases are completed and tested
-completely"** — the feature phases are complete; what remains is the
-pipe, polish, and the human gates.
+`.claude/skills/be-straight-up/SKILL.md`. Honor both. His standing order
+was **"do not stop until all the phases are completed and tested
+completely"** and, on resume, **"go as big as you want — any idea that
+makes the experience better is welcome"**. The feature phases, the pipe
+and the polish are complete; what remains is hosting setup, the Android
+device wave, and the human gates.
 
 ## The project in one paragraph
 
@@ -26,196 +29,152 @@ Papa Vendor is an offline-first inventory + operations app for film-gear
 rental houses in Lahore. QR tags on gear, a thumb-driven scanner, a
 WhatsApp-centric desk, an append-only evidence log, a full money book
 (udhaar ledger + kharcha), a promise calendar with an exclusion
-constraint, a pricing pipeline, and a partner network. Design identity:
-**the challan book** — ledger-cream light theme (the default), carbon-copy
-dark, rubber-stamp statuses, red margin rule, accountant's double
-underlines, mono "typewritten" voice for codes/times/money. Master plan:
-`docs/vendor-dream-plan.md` (phases now carry status marks). Lived
-evidence: `docs/year-in-the-life.md` — a 12-month simulated vendor year
-that runs as a permanent regression test
-(`apps/app/test/year-in-the-life.test.mjs`), re-lived in W8 against every
-shipped door. Honest gap ledger: `docs/production-readiness.md`.
+constraint, a pricing pipeline, a partner network — and, since W9, a
+real pipe to the server (enrol, PIN gate, sync loop, exactly-once
+replay). Design identity: **the challan book** — ledger-cream light
+theme, carbon-copy dark, rubber-stamp statuses, red margin rule, mono
+"typewritten" voice for codes/times/money; W10 added purposeful motion
+(sheets with drag-to-dismiss, a sliding tab pill, stamps that land once).
+Master plan: `docs/vendor-dream-plan.md`. Lived evidence:
+`docs/year-in-the-life.md` (a 12-month simulated year, re-lived on every
+door; permanent regression test). Honest gap ledger:
+`docs/production-readiness.md`. The pipe's contract: `docs/the-pipe.md`;
+the PostgREST contract: `docs/hosting-decision.md`. UI audit:
+`docs/ui-audit-2026-09.md`.
 
-## What has shipped (PRs #2–#20, all merged to main; 0001–0026 live)
+## What has shipped (PRs #2–#24; migrations 0001–0028)
 
-- **Security hardening** (0015), **auth server side** (0016 — client NOT
-  built), **money book** (0017), **jobs meet customers** (0018),
-  **expenses / true profit** (0019), **fleet lifecycle** (0020),
-  **living fleet** (0021).
-- **W4/W5 bookings** (0022 server: exclusion constraint, gapless numbers,
-  24h pencils, least-utilised allocation, credential gate,
-  extension-collision list, convert-to-job; 0023 reservations sync; the
-  client: Desk tab, calendar, booking page doors, extension sheet with
-  Substitute / Sub-rent / Call, PROMISED stamp, overdue ladder).
-- **W6 quoting** (0024 rate cards, org calendar with multipliers, weekend
-  mask opt-in, logged overrides; 0026 rates sync; the client: Quote
-  sheet, priced enquiry reply, Settings → Rates, golden text EN+UR).
-- **W7 the network** (0025: partner houses, sub-hire in/out on the right
-  books, crew on jobs, stolen broadcast, quote flags; the client: partner
-  screens, Ask the market, sub-hire sheets, lend-out, thermal parchi
-  bytes — golden-tested, hardware unverified).
-- **W8 the second year** (this wave, branch `second-year`): the year test
-  re-lived on the finished doors (pencil→confirm→convert, quotes with
-  overrides and the season multiplier, substitute on extension collision,
-  the real sub-hire door, thermal bytes, the day-14 rung, a stolen unit
-  from the ginti with the broadcast); `applyImport` lifted out of
-  `store.ts` (finding `import-apply-welded` retired; a duplicate-id
-  rollback on a second import fixed); three stress files
-  (`stress-bookings`, `stress-quoting`, `stress-network`); all docs
-  refreshed. **No migration** — 0026 is still the last.
-- **Also along the way**: challan-book UI, Roman Urdu string table with
-  type-enforced parity, Capacitor Android APK with native ML Kit
-  scanning, lookup mode, multi-session registry, parchi QR gate pass,
-  Din ka hisaab, kit-list reader → job, WhatsApp nudges, scan void/undo,
-  five steadiness principles (`docs/principles.md`).
+- Security hardening (0015), auth server (0016), money book (0017), jobs
+  meet customers (0018), expenses / true profit (0019), fleet lifecycle
+  (0020), living fleet (0021).
+- **W4/W5 bookings** (0022 server; 0023 reservations sync; the Desk tab,
+  calendar, booking page, extension-collision sheet, PROMISED stamp,
+  overdue ladder). Nav is **Today · Gear · Desk · Khata** with Settings
+  behind the top-bar glyph.
+- **W6 quoting** (0024 rate cards + org calendar + logged overrides,
+  weekend mask opt-in; 0026 rates sync; Quote sheet, priced enquiry
+  reply, Settings → Rates).
+- **W7 the network** (0025 partner houses, sub-hire in/out on the right
+  books, crew on jobs, stolen broadcast, quote flags; partner screens,
+  Ask the market, sub-hire sheets, thermal parchi bytes golden-tested).
+- **W8 the second year** (year re-lived, stress suites for bookings /
+  quoting / network, docs, the vendor-afternoon checklist).
+- **W9 the pipe** (0027 members sync + `replay_op` receipts:
+  PostgREST transport with `x-papa-session`, strict-order dispatcher with
+  id mapping, poison rule as one card per refusal, `SyncLoop`, Enrol /
+  PIN gate / This phone screens, on-device schema migration ladder,
+  upload seam, `npm run test:pipe` against real containers).
+- **W10 polish** (sheet motion + drag-to-dismiss, tab pill, stamp
+  landing, 512 touch targets to the 48px floor, 80 contrast fixes,
+  overflow root cause, empty states everywhere, seven papercuts).
+- **W11 every write crosses** (0028: `create_customer`, `create_job`,
+  `set_job_expected_back`, `set_booking_note`, `orgs` mirror, `job_margin`
+  second edition; every ledger/expense/job write enqueues an op; the two
+  W8 walls closed; 14 pipe scenarios).
 
 ## Current state — exactly
 
-- Branch `second-year`, off `main` at `cb9ebfc` (every wave merged). Four
-  W8 commits on top: the year + applyImport lift; the stress suite; the
-  April sub-hire door with two new findings; the docs. **Pushed if the
-  network allowed** — check `git status -sb`; if it says ahead of origin,
-  push it (`git push -u origin second-year`). No PR was opened for W8
-  (the lead decides).
-- Gates at last full run (2026-09-13, on `second-year`): typecheck
-  silent · **808 JS** · **31 e2e** (real Chromium, fake camera) ·
-  **1,173 pgTAP** across 28 files (`==> all green`) · migrate harness
-  `20 passed, 0 failed`. Run the db suites with your own container
-  name/port: `PAPA_PG_CONTAINER=<name> PAPA_PG_PORT=<port>
-  ./db/run-tests.sh` and `PAPA_PG_CONTAINER=<name>-migrate
-  PAPA_PG_PORT=<other port> ./db/test-migrate.sh`. "postgres did not
-  become ready" is a known flake — retry once.
+- Gates at last full lead run (2026-09-13, `every-write-crosses` merged
+  with `main`): typecheck silent · **900 JS** · **36 e2e** · **14 pipe**
+  scenarios · **1,249 pgTAP** (30 files) · migrate `20 passed`.
 - **Live Supabase DB** (project `evknfbkcszjdasjjwstw`, ap-southeast-1)
-  has `0001`–`0026` applied. Every merge to main auto-deploys
-  (`deploy.yml` + `SUPABASE_DB_URL`, the **session pooler** URL — the
-  direct host is IPv6-only from GitHub runners) and re-proves tenancy.
-- **Year findings** (the contract: ids live in the doc, never as failing
-  asserts): 8 kept — `no-adjustment-door`, `no-deposit-door`,
-  `no-blacklist`, `no-health-door`, `waived-fee-invisible`,
-  `no-month-history-screen`, `no-lifetime-value-view`,
-  `no-utilization-read` — all Phase B polish doors; 2 new —
-  `sub-rent-intent-unreplayable` (the op has no RPC), `subhire-cost-
-  unlinkable` (the cost link is made only at record time).
+  has `0001`–`0027` applied; `0028` deploys with PR #24's merge. Every
+  merge to main auto-deploys (`deploy.yml` + `SUPABASE_DB_URL`, the
+  **session pooler** URL) and re-proves tenancy.
+- **Live PostgREST is NOT configured on Supabase yet.** The pipe is
+  proven against local containers only. To go live the host needs:
+  `db-pre-request = public.auth_pre_request`, `db-anon-role = papa_app`,
+  the `papa_authenticator` login role, and an SMS transport for
+  `request_otp` (papa_auth-only). See `docs/hosting-decision.md`, "The
+  PostgREST contract (W9)". On Supabase this may need their support or a
+  self-hosted PostgREST in front of the pooler — decide with the owner.
+- **Year findings kept** (all Phase-B polish doors, explained in the doc):
+  `no-adjustment-door`, `no-deposit-door`, `no-blacklist`,
+  `no-health-door`, `waived-fee-invisible`, `no-month-history-screen`,
+  `no-lifetime-value-view`, `no-utilization-read`.
+- No phone has run live mode over a real network. The browser build keeps
+  the session token in memory (sql.js); the Capacitor SQLite + SQLCipher
+  driver is the device wave.
 
-## THE ONE THING TO KNOW: the phone has no server connection
+## The remaining pipeline (proposed; the owner decides)
 
-Say it to the owner exactly this plainly. There is **no auth client, no
-sync, and no RPC call** in the app. Every feature — scans, bookings,
-quotes, sub-hires — runs on the local demo store: an optimistic row in
-the on-device mirror plus an outbox op *named after* the server RPC, with
-the RPC's `p_*` arguments, chained in dependency order. The outbox has
-never drained. The server side of all of it exists and is proven by
-pgTAP; the two have never met. Until they do, the product is a
-one-phone demo with no backup, not a pilot. `docs/production-readiness.md`
-("the pipe — said plainly") is the reference.
+- **W12 the device wave**: Capacitor SQLite driver behind `SqlDriver`,
+  SQLCipher key via `device-key.ts` (type-enforced), session token at
+  rest, Bluetooth SPP for the thermal parchi behind `ThermalPrinter`,
+  the APK rebuilt, the 30-minute scan test on a cheap Android in
+  live mode.
+- **Hosting setup** (non-code, with the owner): PostgREST config, SMS
+  transport (edge function calling `request_otp`), R2 signed-URL
+  provider behind `Uploader`, PITR at first revenue.
+- **The money doors** (kept findings): deposit door on the phone,
+  adjustment/write-off door, blacklist toggle, health toggle, waived-fee
+  rendering, month history, lifetime value, utilisation read — each a
+  small screen on existing server doors.
+- **Ledger backdating on the server**: `record_ledger_entry` has no
+  timestamp argument (ASSUMPTION `#ledger-server-time`); a 0029 signature
+  edition if the vendor afternoon says backdating matters.
 
-## The remaining pipeline
-
-Process for every wave: fresh branch off pulled main → background crew
-with **commit-as-you-go** (host crashes and usage limits have hit this
-run repeatedly; incremental commits are what saved it) → your own
-verification → push → PR (a hook then REQUIRES a cdd-code-simplifier
-agent pass over the PR diff before merge) → `gh pr merge N --merge` →
-watch the "Deploy migrations" workflow → next wave. Crew briefs must
-demand: strings in BOTH `strings.ts` and `strings-ur.ts`, challan-book
-styling, glove targets/adjacency rules, no new deps, `packages/core`
-untranspiled (no enums/decorators/namespaces), tests for everything,
-year-test finding ids retired per the doc's contract when a gap closes,
-injectable clocks (`Date.now` only as a default argument).
-
-**W9 — the pipe.** In order, each verified before the next:
-1. **Login**: OTP at enrolment → device session (0016's hashed session)
-   → per-user PIN gate on the phone; wire `rate_limit_check` on the PIN
-   path. A session store on the device; `papa.*` identity set per request.
-2. **Pull sync**: the loop over `pull_changes` into `LOCAL_SCHEMA`'s
-   mirror tables (the 0023 reservations and 0026 rates projections were
-   built for exactly this; `buildPullList`/the read models already read
-   the mirror's shape). Cursor persistence; the settle-lag semantics of
-   0015; the PII guard means the phone never sees what it must not.
-3. **Outbox drain**: send ops in `depends_on` order to the RPCs they are
-   named after; map the server's minted ids back onto the mirror
-   (`client_booking_id`, `client_job_id`, `client_sub_hire_id` ride in
-   every payload for this); failure poisons the subtree as
-   `packages/core/outbox.ts` already does. **Two year findings ride
-   here**: give `sub_rent_intent` an RPC (a sub-hire-in that covers the
-   other client's claim, then the extend) or take it out of the chain;
-   add an attach-to-job door for a sub-hire's expense.
-4. **Photo upload** to R2 (opaque keys, never signed URLs — CONTRIBUTING);
-   the 24-month lifecycle rule is decided and not yet applied.
-5. **On-device schema migration** for phones that already hold data.
-6. **SQLCipher** must land before the first real phone holds real data
-   (`device-key.ts` is the type-enforced seam).
-Verify against the live project with a throwaway org; then the e2e
-suite gains a "sync round-trip" test.
-
-**W10 — polish.** Motion (`design-motion-principles`), the web-interface-
-guidelines audit, the dark-theme pass, the conflict-row undo button
-(`voidScan` exists), the payment sheet's date field, batch statements.
-
-**B-polish week (after W9, before or inside W10).** The four money doors
-the year still fakes — deposit hold/apply/refund, a general reversal /
-write-off sheet with the double-tap guard, the blacklist toggle, a
-waived-fee line — plus the month picker on the Hisaab, the lifetime
-column on the owed list, and an earners leaderboard. Each is a sheet;
-each retires a finding id.
-
-**Human gates (owner; parallel with W9).** The 30-minute APK scan test on
-a cheap Android; one rack of printed labels; the vendor afternoon
-(`docs/assumptions.md` opens with the ten questions in order); one
-parchi through the pilot house's receipt printer. Remind, don't nag.
+Process for every wave: fresh branch off pulled main → crew with
+commit-as-you-go (a session usage limit killed a crew once; the scratchpad
+is wiped on restart, so briefs must be re-creatable from the vault) →
+the lead's OWN gate run (typecheck, `npm test`, `build:app && test:e2e`,
+db suites with your own `PAPA_PG_CONTAINER`/`PAPA_PG_PORT`, `test:pipe`
+when the pipe is touched) and a look at the crew's Playwright screenshots
+→ push → PR → a simplification pass over the diff → merge → watch the
+deploy → vault entry → plain-English account.
 
 ## Standing decisions and traps (do not relearn these)
 
-- PRs: never self-merge without authorization — the owner gave a
-  standing "merge whatever" for this pipeline. Direct pushes to main are
-  blocked by policy; always branch+PR.
-- `db/fixtures.sql` disables RLS — TEST ONLY. Migrations 0001–0026 are
+- PRs: the owner gave a standing "merge whatever" for this pipeline.
+  Direct pushes to main are blocked by policy; always branch+PR.
+- `db/fixtures.sql` disables RLS — TEST ONLY. Migrations 0001–0028 are
   applied history — never edit; new work = new migration, idempotent,
   RLS wrapped `(select current_org_id())`, writes only via SECURITY
   DEFINER RPCs with pinned `search_path`, pgTAP in `db/tests`,
-  `db/test-migrate.sh`'s table count bumped if tables are added (47
-  today, including the ledger table).
+  `db/test-migrate.sh`'s table count bumped if tables are added.
+  `pull_changes` is at its ELEVENTH edition (0028): a new edition is the
+  previous one verbatim plus the addition, and the key-count assertions
+  in 0023/0026/0027 tests move with it.
 - The year test and the stress tests are deterministic (seeded,
   injectable clocks); never alter seeds. The year test clears the demo's
-  placeholder Eid on day one so its quotes cannot depend on the run
-  month; keep that.
+  placeholder Eid on day one; keep that.
 - Money honesty: unpriced items are counted, never zero-priced; damage
-  charges are khata money, never asset earnings; balances are
-  projections of append-only entries; a sub-hire with no number writes
-  no money row.
-- One home per rule (`docs/principles.md` #4): pricing lives in
-  `packages/core/pricing.ts` and mirrors 0024's `price_booking` step for
-  step; booking rules in `packages/core/bookings.ts` + `demo/bookings.ts`;
-  the status buckets in `status.ts`. Grep before adding a second copy.
-- `applyImport` lives in `demo/read-model.ts` now; `store.ts` is a thin
-  wiring layer and must stay one — new queries land in the read-model
-  modules so they run under Node.
-- Every booking write reads every booking (`pruneExpiredPencils`) and
-  scans every pending outbox payload (`lastBookingOp`) — fine on a desk,
-  noted in the year doc's papercuts; the pipe draining the outbox
-  removes the second.
-- ASSUMPTION-flagged guesses (42 rows) await the vendor afternoon;
-  reference anchors in code, never numbers.
+  charges are khata money, never asset earnings; balances are projections
+  of append-only entries; a sub-hire with no number writes no money row;
+  every day bills unless a card opts the weekend out.
+- One home per rule (`docs/principles.md` #4): pricing in
+  `packages/core/pricing.ts` mirrors 0024 step for step; booking rules in
+  `packages/core/bookings.ts` + `demo/bookings.ts`; share-to-WhatsApp in
+  `apps/app/src/share.ts`; ops/re-key columns in `demo/ops.ts`; the
+  sheet in `components/Sheet.tsx`. Grep before adding a second copy.
+- The pipe: every write that leaves the phone is an outbox op named
+  after its RPC with `p_*` args and `client_*` ids; the dispatcher strips,
+  rewrites and replays through `replay_op` (exactly-once per device); a
+  refusal parks the op and its dependants as ONE card. Never bypass it.
+- `store.ts` is a thin wiring layer; new queries land in the read-model
+  modules (`demo/*.ts`) so they run under Node.
+- ASSUMPTION-flagged guesses (49 rows) await the vendor afternoon; the
+  checklist is at the top of `docs/assumptions.md`; reference anchors in
+  code, never numbers.
 - The Papa Vendor vault (`~/PapaVendor-Vault`) is the thinking layer —
-  `07-History/Session-Log.md` has an entry for every milestone including
-  this one; write back on milestones. `~/.claude/skills/` has the design
-  skills used for the challan identity.
-- Dev demo: `cd apps/app && npx vite --port 5205` (localhost only;
-  `xdg-open` for the user). Playwright is in-repo for screenshots —
-  write temp .mjs in the repo root, delete after.
-- Internet on this machine is intermittent: if `git push` fails, keep
-  committing locally and say so.
+  `07-History/Session-Log.md` has an entry for every milestone; write
+  back on milestones.
+- Dev demo: `cd apps/app && npx vite --port 5205`. Playwright is in-repo
+  for screenshots — temp .mjs in the repo root, deleted after. Pipe proof:
+  `npm run test:pipe` (podman; `./db/pipe-down.sh` clears a stale pod).
+- Internet on this machine is intermittent: if `git push` or `gh` fails,
+  keep committing locally and retry.
+- Test scripts honour `PAPA_PG_CONTAINER` / `PAPA_PG_PORT`; two suites at
+  once on the defaults collide. "postgres did not become ready" is a
+  known flake — retry once on a fresh name/port.
 
 ## First moves on resume
 
-1. `cd /mnt/windows/papa-vendor-work/papa-vendor && git checkout
-   second-year && git status -sb` — push if ahead; verify gates
-   (typecheck, `npm test`, db suites with your own container names).
-2. Decide with the lead: PR `second-year` → simplifier pass → merge (no
-   migration, so no deploy risk).
-3. Brief the W9 crew from the "W9 — the pipe" list above and
-   `docs/production-readiness.md`; give them a throwaway org on the live
-   project.
-4. Tell the owner where things stand, plainly: every feature is built and
-   tested on the phone; the phone does not yet talk to the server; that
-   is the next wave, and the three human gates can run alongside it.
+1. `cd /mnt/windows/papa-vendor-work/papa-vendor && git checkout main &&
+   git pull` — verify PR #24 merged and `0028` deployed (`gh run list
+   --workflow "Deploy migrations" --limit 1`).
+2. Run the gates once on main (own container names; `test:pipe` too).
+3. Read the vault's last session-log entry and `docs/production-readiness.md`'s
+   final sections; then propose the next wave to the owner in plain
+   English (the device wave and the hosting setup are the ones that make
+   a pilot possible) and wait for the human gates' results.
