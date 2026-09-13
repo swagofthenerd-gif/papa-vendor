@@ -48,6 +48,9 @@ export function ClosedJobsScreen({ store }: { store: DemoStore }) {
           <Icon name="clipboard-check" size={36} />
           <p>{STR.closedJobsEmpty}</p>
           <p className="muted">{STR.closedJobsEmptyHint}</p>
+          <button className="btn btn-outline" onClick={() => go({ name: 'jobs' })}>
+            <Icon name="home" size={18} /> {STR.closedJobsDoorToday}
+          </button>
         </div>
       ) : (
         <section className="section">

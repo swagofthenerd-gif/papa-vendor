@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Icon } from '@papa/icons'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
+import { Sheet, SheetClose } from '../components/Sheet.tsx'
 
 /**
  * The manual path — search by code or name, tap to add.
@@ -32,43 +32,39 @@ export function ManualAdd({
   )
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label={title}>
-      <div className="sheet">
-        <header className="sheet-head">
-          <span className="sheet-title">{title}</span>
-          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
-            <Icon name="x" size={22} />
-          </button>
-        </header>
+    <Sheet label={title} onClose={onClose}>
+      <header className="sheet-head">
+        <span className="sheet-title">{title}</span>
+        <SheetClose />
+      </header>
 
-        <input
-          className="sheet-search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={STR.scanManualPlaceholder}
-          autoFocus
-          autoCorrect="off"
-          autoCapitalize="characters"
-          spellCheck={false}
-        />
+      <input
+        className="sheet-search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={STR.scanManualPlaceholder}
+        autoFocus
+        autoCorrect="off"
+        autoCapitalize="characters"
+        spellCheck={false}
+      />
 
-        {query.trim().length === 0 ? (
-          <p className="sheet-hint">{STR.scanTypeAFewLetters}</p>
-        ) : results.length === 0 ? (
-          <p className="sheet-hint">{STR.scanNothingMatchesQuery(query)}</p>
-        ) : (
-          <ul className="sheet-list">
-            {results.map((r) => (
-              <li key={r.id}>
-                <button className="sheet-row" onClick={() => onPick(r.id)}>
-                  <span className="sheet-row-name">{r.name}</span>
-                  <span className="sheet-row-code code">{r.code}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
+      {query.trim().length === 0 ? (
+        <p className="sheet-hint">{STR.scanTypeAFewLetters}</p>
+      ) : results.length === 0 ? (
+        <p className="sheet-hint">{STR.scanNothingMatchesQuery(query)}</p>
+      ) : (
+        <ul className="sheet-list">
+          {results.map((r) => (
+            <li key={r.id}>
+              <button className="sheet-row" onClick={() => onPick(r.id)}>
+                <span className="sheet-row-name">{r.name}</span>
+                <span className="sheet-row-code code">{r.code}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Sheet>
   )
 }

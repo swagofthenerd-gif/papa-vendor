@@ -13,6 +13,7 @@ import { shareText } from '../share.ts'
 import { useSyncTick } from '../sync-tick.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
+import { Sheet, SheetClose } from '../components/Sheet.tsx'
 
 /**
  * The Today board, wired to the demo store.
@@ -192,45 +193,41 @@ function DueDateSheet({
   const [value, setValue] = useState(/^\d{4}-\d{2}-\d{2}$/.test(current ?? '') ? current! : '')
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label={STR.todayExpectedBack}>
-      <div className="sheet">
-        <header className="sheet-head">
-          <span className="sheet-title">{STR.todayExpectedBack}</span>
-          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
-            <Icon name="x" size={22} />
-          </button>
-        </header>
+    <Sheet label={STR.todayExpectedBack} onClose={onClose}>
+      <header className="sheet-head">
+        <span className="sheet-title">{STR.todayExpectedBack}</span>
+        <SheetClose />
+      </header>
 
-        {current && !/^\d{4}-\d{2}-\d{2}/.test(current) ? (
-          <p className="sheet-hint">{STR.todayCurrentlyANote(current)}</p>
-        ) : null}
+      {current && !/^\d{4}-\d{2}-\d{2}/.test(current) ? (
+        <p className="sheet-hint">{STR.todayCurrentlyANote(current)}</p>
+      ) : null}
 
-        <input
-          className="sheet-search"
-          type="date"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          aria-label={STR.todayExpectedBackDateAria}
-        />
+      <input
+        className="sheet-search"
+        type="date"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        aria-label={STR.todayExpectedBackDateAria}
+      />
 
-        <div className="sheet-foot-split">
-          <button
-            className="btn btn-ghost"
-            onClick={() => onSave(null)}
-            disabled={current === null}
-          >
-            {STR.todayClearDate}
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={() => onSave(value || null)}
-            disabled={value.length === 0}
-          >
-            {STR.todaySave}
-          </button>
-        </div>
+      <div className="sheet-foot-split">
+        <button
+          className="btn btn-ghost"
+          onClick={() => onSave(null)}
+          disabled={current === null}
+        >
+          {STR.todayClearDate}
+        </button>
+        <button
+          className="btn btn-primary"
+          onClick={() => onSave(value || null)}
+          disabled={value.length === 0}
+        >
+          {STR.todaySave}
+        </button>
       </div>
-    </div>
+    </Sheet>
   )
 }
 

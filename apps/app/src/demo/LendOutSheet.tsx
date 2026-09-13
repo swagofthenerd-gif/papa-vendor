@@ -5,6 +5,7 @@ import { fromLocalInput, toLocalInput } from '../booking-view.ts'
 import { PartnerChips, PeriodFields, ProductPicker, optionalRupeesMinor } from './SubHireFields.tsx'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
+import { Sheet, SheetClose } from '../components/Sheet.tsx'
 
 /**
  * Lend gear to a partner — sub-hire OUT (0025 D3/D4/D6).
@@ -67,113 +68,109 @@ export function LendOutSheet({
   }
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label={STR.networkLendTitle}>
-      <div className="sheet sheet-tall">
-        <header className="sheet-head">
-          <span className="sheet-title">{STR.networkLendTitle}</span>
-          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
-            <Icon name="x" size={22} />
-          </button>
-        </header>
-        <p className="sheet-hint">{STR.networkLendHint}</p>
+    <Sheet label={STR.networkLendTitle} onClose={onClose} tall>
+      <header className="sheet-head">
+        <span className="sheet-title">{STR.networkLendTitle}</span>
+        <SheetClose />
+      </header>
+      <p className="sheet-hint">{STR.networkLendHint}</p>
 
-        <PartnerChips
-          id="lend-partner"
-          label={STR.networkLendPartnerLabel}
-          partners={partners}
-          value={partnerId}
-          onChange={setPartnerId}
+      <PartnerChips
+        id="lend-partner"
+        label={STR.networkLendPartnerLabel}
+        partners={partners}
+        value={partnerId}
+        onChange={setPartnerId}
+      />
+
+      {asset ? (
+        <>
+          <label className="field-label" htmlFor="lend-product">{STR.networkSubHireProductLabel}</label>
+          <p className="sheet-hint code">{asset.code} · {asset.name}</p>
+        </>
+      ) : (
+        <ProductPicker
+          id="lend-product"
+          catalogue={store.catalogue}
+          productName={productName}
+          onPick={setProductId}
+          onClear={() => { setProductId(null); setAssetId(null) }}
         />
+      )}
 
-        {asset ? (
-          <>
-            <label className="field-label" htmlFor="lend-product">{STR.networkSubHireProductLabel}</label>
-            <p className="sheet-hint code">{asset.code} · {asset.name}</p>
-          </>
-        ) : (
-          <ProductPicker
-            id="lend-product"
-            catalogue={store.catalogue}
-            productName={productName}
-            onPick={setProductId}
-            onClear={() => { setProductId(null); setAssetId(null) }}
-          />
-        )}
-
-        {productId && !asset ? (
-          <>
-            <span className="field-label" id="lend-unit">{STR.networkSubHireUnitLabel}</span>
-            <div className="chip-row" role="group" aria-labelledby="lend-unit">
+      {productId && !asset ? (
+        <>
+          <span className="field-label" id="lend-unit">{STR.networkSubHireUnitLabel}</span>
+          <div className="chip-row" role="group" aria-labelledby="lend-unit">
+            <button
+              className={`filter-chip${assetId === null ? ' active' : ''}`}
+              aria-pressed={assetId === null}
+              onClick={() => setAssetId(null)}
+            >
+              {STR.networkSubHireAnyUnit(Number(qty) || 1, productName ?? '')}
+            </button>
+            {units.map((u) => (
               <button
-                className={`filter-chip${assetId === null ? ' active' : ''}`}
-                aria-pressed={assetId === null}
-                onClick={() => setAssetId(null)}
+                key={u.id}
+                className={`filter-chip code${assetId === u.id ? ' active' : ''}`}
+                aria-pressed={assetId === u.id}
+                onClick={() => { setAssetId(u.id); setQty('1') }}
               >
-                {STR.networkSubHireAnyUnit(Number(qty) || 1, productName ?? '')}
+                {u.code}
               </button>
-              {units.map((u) => (
-                <button
-                  key={u.id}
-                  className={`filter-chip code${assetId === u.id ? ' active' : ''}`}
-                  aria-pressed={assetId === u.id}
-                  onClick={() => { setAssetId(u.id); setQty('1') }}
-                >
-                  {u.code}
-                </button>
-              ))}
-            </div>
-            {assetId === null ? (
-              <>
-                <label className="field-label" htmlFor="lend-qty">{STR.networkSubHireQtyLabel}</label>
-                <input
-                  id="lend-qty"
-                  className="sheet-search code"
-                  type="number"
-                  inputMode="numeric"
-                  min="1"
-                  value={qty}
-                  onChange={(e) => setQty(e.target.value)}
-                />
-              </>
-            ) : null}
-          </>
-        ) : null}
-
-        <PeriodFields idPrefix="lend" start={start} end={end} onStart={setStart} onEnd={setEnd} />
-
-        <label className="field-label" htmlFor="lend-charge">{STR.networkSubHireChargeLabel}</label>
-        <input
-          id="lend-charge"
-          className="sheet-search code"
-          type="number"
-          inputMode="decimal"
-          min="0"
-          value={charge}
-          onChange={(e) => setCharge(e.target.value)}
-        />
-        <p className="sheet-hint">{STR.networkSubHireChargeHint}</p>
-
-        <label className="field-label" htmlFor="lend-note">{STR.networkSubHireNoteLabel}</label>
-        <input
-          id="lend-note"
-          className="sheet-search"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          autoCorrect="off"
-          spellCheck={false}
-        />
-
-        {problem ? (
-          <div className="notice notice-warn" role="alert">
-            <Icon name="warning" size={18} />
-            <div><strong>{problem}</strong></div>
+            ))}
           </div>
-        ) : null}
+          {assetId === null ? (
+            <>
+              <label className="field-label" htmlFor="lend-qty">{STR.networkSubHireQtyLabel}</label>
+              <input
+                id="lend-qty"
+                className="sheet-search code"
+                type="number"
+                inputMode="numeric"
+                min="1"
+                value={qty}
+                onChange={(e) => setQty(e.target.value)}
+              />
+            </>
+          ) : null}
+        </>
+      ) : null}
 
-        <button className="btn btn-primary btn-lg sheet-submit" disabled={!ready} onClick={lend}>
-          <Icon name="truck" size={18} /> {STR.networkLendRecord}
-        </button>
-      </div>
-    </div>
+      <PeriodFields idPrefix="lend" start={start} end={end} onStart={setStart} onEnd={setEnd} />
+
+      <label className="field-label" htmlFor="lend-charge">{STR.networkSubHireChargeLabel}</label>
+      <input
+        id="lend-charge"
+        className="sheet-search code"
+        type="number"
+        inputMode="decimal"
+        min="0"
+        value={charge}
+        onChange={(e) => setCharge(e.target.value)}
+      />
+      <p className="sheet-hint">{STR.networkSubHireChargeHint}</p>
+
+      <label className="field-label" htmlFor="lend-note">{STR.networkSubHireNoteLabel}</label>
+      <input
+        id="lend-note"
+        className="sheet-search"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        autoCorrect="off"
+        spellCheck={false}
+      />
+
+      {problem ? (
+        <div className="notice notice-warn" role="alert">
+          <Icon name="warning" size={18} />
+          <div><strong>{problem}</strong></div>
+        </div>
+      ) : null}
+
+      <button className="btn btn-primary btn-lg sheet-submit" disabled={!ready} onClick={lend}>
+        <Icon name="truck" size={18} /> {STR.networkLendRecord}
+      </button>
+    </Sheet>
   )
 }

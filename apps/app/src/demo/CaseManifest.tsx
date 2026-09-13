@@ -3,6 +3,7 @@ import { Icon } from '@papa/icons'
 import type { CaseManifest as Manifest, ContainedChild } from '@papa/core'
 import { confirmRest, toggleNotInHere } from '../case-confirm.ts'
 import { STR } from '../strings.ts'
+import { Sheet, SheetClose } from '../components/Sheet.tsx'
 
 /**
  * What a case says it contains.
@@ -57,77 +58,73 @@ export function CaseManifestSheet({
   }
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label={STR.scanWhatIsInThisCase}>
-      <div className="sheet">
-        <header className="sheet-head">
-          <div>
-            <span className="sheet-title">{manifest.parentName ?? STR.scanCaseFallback}</span>
-            <p className="photo-side">
-              {STR.scanBelievedInside(manifest.packed.length)}
-            </p>
-          </div>
-          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
-            <Icon name="x" size={22} />
-          </button>
-        </header>
-
-        {manifest.permanent.length > 0 ? (
-          <div className="manifest-fixed">
-            <span className="compare-label">{STR.scanPartOfTheCase}</span>
-            <ul className="manifest-list">
-              {manifest.permanent.map((c) => (
-                <Row key={c.assetId} child={c} state="fixed" />
-              ))}
-            </ul>
-            <p className="sheet-hint">{STR.scanCannotLeaveWithoutIt}</p>
-          </div>
-        ) : null}
-
-        <span className="compare-label">{STR.scanPackedInside}</span>
-        <ul className="manifest-list">
-          {manifest.packed.map((c) => {
-            const state = rowState(c)
-            return (
-              <Row
-                key={c.assetId}
-                child={c}
-                state={state}
-                onToggle={
-                  state === 'scanned'
-                    ? undefined
-                    : () => setNotInHere((prev) => toggleNotInHere(prev, c.assetId))
-                }
-              />
-            )
-          })}
-        </ul>
-
-        <div className="session-actions">
-          <button className="btn btn-primary btn-block" onClick={onScanIndividually}>
-            <Icon name="camera" size={18} /> {STR.scanThemOneByOne}
-          </button>
-          <button
-            className="btn btn-ghost btn-block"
-            disabled={outstanding.length === 0}
-            onClick={() => onConfirmAll(outstanding)}
-          >
-            {excluded > 0
-              ? STR.scanTakeTheRestAsPacked(outstanding.length)
-              : STR.scanTakeTheCaseAsPacked(outstanding.length)}
-          </button>
-          <p className="session-foot muted">
-            {STR.scanTakingAsPackedRecords} <strong>{STR.scanAssumedWord}</strong>
-            {STR.scanCountedSeparately}
-            {excluded > 0 ? (
-              <>
-                {' '}
-                {STR.scanMarkedNotInHere(excluded)}
-              </>
-            ) : null}
+    <Sheet label={STR.scanWhatIsInThisCase} onClose={onClose}>
+      <header className="sheet-head">
+        <div>
+          <span className="sheet-title">{manifest.parentName ?? STR.scanCaseFallback}</span>
+          <p className="photo-side">
+            {STR.scanBelievedInside(manifest.packed.length)}
           </p>
         </div>
+        <SheetClose />
+      </header>
+
+      {manifest.permanent.length > 0 ? (
+        <div className="manifest-fixed">
+          <span className="compare-label">{STR.scanPartOfTheCase}</span>
+          <ul className="manifest-list">
+            {manifest.permanent.map((c) => (
+              <Row key={c.assetId} child={c} state="fixed" />
+            ))}
+          </ul>
+          <p className="sheet-hint">{STR.scanCannotLeaveWithoutIt}</p>
+        </div>
+      ) : null}
+
+      <span className="compare-label">{STR.scanPackedInside}</span>
+      <ul className="manifest-list">
+        {manifest.packed.map((c) => {
+          const state = rowState(c)
+          return (
+            <Row
+              key={c.assetId}
+              child={c}
+              state={state}
+              onToggle={
+                state === 'scanned'
+                  ? undefined
+                  : () => setNotInHere((prev) => toggleNotInHere(prev, c.assetId))
+              }
+            />
+          )
+        })}
+      </ul>
+
+      <div className="session-actions">
+        <button className="btn btn-primary btn-block" onClick={onScanIndividually}>
+          <Icon name="camera" size={18} /> {STR.scanThemOneByOne}
+        </button>
+        <button
+          className="btn btn-ghost btn-block"
+          disabled={outstanding.length === 0}
+          onClick={() => onConfirmAll(outstanding)}
+        >
+          {excluded > 0
+            ? STR.scanTakeTheRestAsPacked(outstanding.length)
+            : STR.scanTakeTheCaseAsPacked(outstanding.length)}
+        </button>
+        <p className="session-foot muted">
+          {STR.scanTakingAsPackedRecords} <strong>{STR.scanAssumedWord}</strong>
+          {STR.scanCountedSeparately}
+          {excluded > 0 ? (
+            <>
+              {' '}
+              {STR.scanMarkedNotInHere(excluded)}
+            </>
+          ) : null}
+        </p>
       </div>
-    </div>
+    </Sheet>
   )
 }
 

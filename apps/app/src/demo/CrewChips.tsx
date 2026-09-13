@@ -3,6 +3,7 @@ import { Icon } from '@papa/icons'
 import { useHold } from '../components/HoldToFinish.tsx'
 import type { CrewMember, StaffRow } from './network.ts'
 import { STR } from '../strings.ts'
+import { Sheet, SheetClose } from '../components/Sheet.tsx'
 
 /**
  * The crew line on a job card (0025 D7): who is going out with the gear,
@@ -79,44 +80,40 @@ export function CrewPickerSheet({
   const on = new Set(crew.map((c) => c.userId))
   const left = staff.filter((s) => !on.has(s.id))
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label={STR.networkCrewPickTitle}>
-      <div className="sheet sheet-tall">
-        <header className="sheet-head">
-          <span className="sheet-title">{STR.networkCrewPickTitle}</span>
-          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
-            <Icon name="x" size={22} />
+    <Sheet label={STR.networkCrewPickTitle} onClose={onClose} tall>
+      <header className="sheet-head">
+        <span className="sheet-title">{STR.networkCrewPickTitle}</span>
+        <SheetClose />
+      </header>
+      <p className="sheet-hint">{STR.networkCrewPickHint}</p>
+
+      <div className="chip-row" role="group" aria-label={STR.networkCrewPickTitle}>
+        {(['attendant', 'driver'] as const).map((r) => (
+          <button
+            key={r}
+            className={`filter-chip${role === r ? ' active' : ''}`}
+            aria-pressed={role === r}
+            onClick={() => setRole(r)}
+          >
+            {r === 'driver' ? STR.networkCrewRoleDriver : STR.networkCrewRoleAttendant}
           </button>
-        </header>
-        <p className="sheet-hint">{STR.networkCrewPickHint}</p>
-
-        <div className="chip-row" role="group" aria-label={STR.networkCrewPickTitle}>
-          {(['attendant', 'driver'] as const).map((r) => (
-            <button
-              key={r}
-              className={`filter-chip${role === r ? ' active' : ''}`}
-              aria-pressed={role === r}
-              onClick={() => setRole(r)}
-            >
-              {r === 'driver' ? STR.networkCrewRoleDriver : STR.networkCrewRoleAttendant}
-            </button>
-          ))}
-        </div>
-
-        {left.length === 0 ? (
-          <p className="sheet-hint">{STR.networkCrewNobodyLeft}</p>
-        ) : (
-          <ul className="sheet-list">
-            {left.map((s) => (
-              <li key={s.id}>
-                <button className="sheet-row" onClick={() => onPick(s.id, role)}>
-                  <span>{s.name}</span>
-                  <span className="sheet-row-code">{s.role}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        ))}
       </div>
-    </div>
+
+      {left.length === 0 ? (
+        <p className="sheet-hint">{STR.networkCrewNobodyLeft}</p>
+      ) : (
+        <ul className="sheet-list">
+          {left.map((s) => (
+            <li key={s.id}>
+              <button className="sheet-row" onClick={() => onPick(s.id, role)}>
+                <span>{s.name}</span>
+                <span className="sheet-row-code">{s.role}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Sheet>
   )
 }

@@ -130,14 +130,20 @@ export function CalendarScreen({ store, initialDayMs }: { store: DemoStore; init
             </button>
           }
         />
+        {/* An empty day and an empty month both open the new-booking
+            sheet, prefilled with the day when one is picked. */}
         {dayMs !== null ? (
-          selected && selected.confirmed.length + selected.pencilled.length > 0 ? (
-            <BookingList rows={[...selected.confirmed, ...selected.pencilled]} />
-          ) : (
-            <p className="section-sub">{STR.bookingNothingThatDay}</p>
-          )
+          <BookingList
+            rows={selected ? [...selected.confirmed, ...selected.pencilled] : []}
+            emptyText={STR.bookingNothingThatDay}
+            onNew={() => setCreating(true)}
+          />
         ) : (
-          <BookingList rows={store.bookings({ status: 'live', fromMs: monthMs, untilMs: shiftMonth(monthMs, 1) }, nowMs)} />
+          <BookingList
+            rows={store.bookings({ status: 'live', fromMs: monthMs, untilMs: shiftMonth(monthMs, 1) }, nowMs)}
+            emptyText={STR.bookingNoneThisMonth}
+            onNew={() => setCreating(true)}
+          />
         )}
       </section>
 

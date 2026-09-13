@@ -1,6 +1,7 @@
 import { Icon } from '@papa/icons'
 import { STR } from '../strings.ts'
 import type { SubstituteRow } from './read-model.ts'
+import { Sheet, SheetClose } from '../components/Sheet.tsx'
 
 /**
  * The crisis-day swap sheet.
@@ -41,48 +42,44 @@ export function SwapSheet({
   const other = substitutes.filter((s) => !s.sameProduct)
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label={title}>
-      <div className="sheet">
-        <header className="sheet-head">
-          <span className="sheet-title">{title}</span>
-          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
-            <Icon name="x" size={22} />
-          </button>
-        </header>
+    <Sheet label={title} onClose={onClose}>
+      <header className="sheet-head">
+        <span className="sheet-title">{title}</span>
+        <SheetClose />
+      </header>
 
-        <p className="sheet-hint">{hint ?? STR.fleetSwapBrokenLine(brokenCode, jobLabel)}</p>
+      <p className="sheet-hint">{hint ?? STR.fleetSwapBrokenLine(brokenCode, jobLabel)}</p>
 
-        {substitutes.length === 0 ? (
-          <div className="empty">
-            <Icon name="search" size={32} />
-            <p>{emptyText}</p>
-          </div>
-        ) : (
-          <>
-            {same.length > 0 ? (
-              <>
-                <p className="field-label">{STR.fleetSwapSamePreferred}</p>
-                <ul className="gear-units">
-                  {same.map((s) => (
-                    <SubRow key={s.id} sub={s} onPick={onPick} />
-                  ))}
-                </ul>
-              </>
-            ) : null}
-            {other.length > 0 ? (
-              <>
-                <p className="field-label">{STR.fleetSwapOther}</p>
-                <ul className="gear-units">
-                  {other.map((s) => (
-                    <SubRow key={s.id} sub={s} onPick={onPick} />
-                  ))}
-                </ul>
-              </>
-            ) : null}
-          </>
-        )}
-      </div>
-    </div>
+      {substitutes.length === 0 ? (
+        <div className="empty">
+          <Icon name="search" size={32} />
+          <p>{emptyText}</p>
+        </div>
+      ) : (
+        <>
+          {same.length > 0 ? (
+            <>
+              <p className="field-label">{STR.fleetSwapSamePreferred}</p>
+              <ul className="gear-units">
+                {same.map((s) => (
+                  <SubRow key={s.id} sub={s} onPick={onPick} />
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {other.length > 0 ? (
+            <>
+              <p className="field-label">{STR.fleetSwapOther}</p>
+              <ul className="gear-units">
+                {other.map((s) => (
+                  <SubRow key={s.id} sub={s} onPick={onPick} />
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </>
+      )}
+    </Sheet>
   )
 }
 

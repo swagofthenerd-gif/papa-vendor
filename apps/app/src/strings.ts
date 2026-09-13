@@ -62,6 +62,14 @@ const KIND_EN: Record<string, string> = {
   write_off: 'write-off',
 }
 
+/** The overdue ladder's rungs, by the action each day asks for. */
+const ESCALATION_EN: Record<string, string> = {
+  whatsapp_nudge: 'first nudge',
+  call: 'time to call',
+  late_fee_draft: 'late fee due',
+  manager_escalation: 'with the manager',
+}
+
 /**
  * The expense book's row vocabulary (0019) — same lookup shape as KIND_EN:
  * the kind arrives as data and the fallback must be the kind itself.
@@ -136,6 +144,7 @@ const STR_EN = {
   commonLanguage: 'Language',
   commonLanguageEnglish: 'English',
   commonLanguageRomanUrdu: 'Roman Urdu',
+  commonLanguageSub: 'Choose once — the app reopens in that language',
 
   // ---------------------------------------------------------------- today
   // The board: counters, the going-out list, coming back, the quick grid,
@@ -429,6 +438,7 @@ const STR_EN = {
   enquirySubtitle: 'Paste what the client sent',
   enquiryPastePlaceholder:
     'Paste the client’s message here…\n\nGreetings and “please confirm” are ignored automatically.',
+  enquiryPasteAria: 'The client’s message',
   enquiryCheckAvailability: 'Check availability',
   enquiryNewList: 'New list',
   enquiryEverythingIsAvailable: 'Everything is available',
@@ -452,7 +462,7 @@ const STR_EN = {
   hisaabStatOnTrust: 'on trust',
   hisaabStatPhotos: 'photos',
   hisaabCopied: 'Copied — paste it in WhatsApp',
-  hisaabCopyTheDaysAccount: "Copy the day's account",
+  hisaabCopyTheDaysAccount: 'Copy the day’s account',
   hisaabUnknownLabelsScanned: (n: number): string =>
     `${n} unknown label${s(n)} scanned today.`,
   hisaabLabelsNeverSeen:
@@ -489,6 +499,7 @@ const STR_EN = {
   labelsImportLead:
     'Paste your gear list — straight out of Excel, Google Sheets, or a CSV. Nothing is saved until you have seen what it would do.',
   labelsImportPlaceholder: 'Item Description,Qty,Asset Code,Shelf\nSony FX9,2,FX9,Rack A\n…',
+  labelsImportAria: 'Your gear list',
   labelsTryASampleList: 'Try it with a sample list',
   labelsStartAgain: 'Start again',
   labelsCheckTheColumns: 'Check the columns',
@@ -534,6 +545,7 @@ const STR_EN = {
       ? 'Queue empty · demo mode — nothing leaves this device'
       : `${n} scan${s(n)} queued · demo mode — nothing leaves this device`,
   labelsPaymentHeading: 'Getting paid',
+  labelsPaymentSub: 'The line and the QR every statement carries',
   labelsPaymentLineLabel: 'Payment line for statements',
   labelsPaymentLinePlaceholder: 'e.g. JazzCash: 0300 1234567',
   labelsPaymentLineHint:
@@ -572,6 +584,7 @@ const STR_EN = {
   customerOwedTitle: 'Owed to me',
   customerOwedSubtitle: (n: number): string => `${n} customer${s(n)} owing`,
   customerNobodyOwes: 'Nobody owes anything right now.',
+  customerOwedDoorToday: 'Today’s jobs',
   customerOwedTapOne: 'Tap a name to open the khata',
   customerCardTitle: (name: string): string => `Hisaab — ${name}`,
   customerStatementTitle: (name: string, month: string): string =>
@@ -644,6 +657,7 @@ const STR_EN = {
   closedJobsSubtitle: (n: number): string => `${n} job${s(n)} finished`,
   closedJobsEmpty: 'No closed jobs yet.',
   closedJobsEmptyHint: 'Close a job from its card once everything is back.',
+  closedJobsDoorToday: 'Today’s jobs',
   closedJobsDoor: 'Closed jobs',
   closedJobsReopen: 'Reopen',
   closedJobsClosedOn: (date: string): string => `Closed ${date}`,
@@ -722,6 +736,7 @@ const STR_EN = {
   fleetGintiSubtitle: 'Count a shelf against the book',
   fleetGintiScanShelf: 'Scan a shelf tag, or pick a shelf, to start',
   fleetGintiPickShelf: 'Pick a shelf',
+  fleetGintiNoShelves: 'No shelves yet — they arrive with the gear list you load.',
   fleetGintiCounting: (shelf: string): string => `Counting ${shelf}`,
   fleetGintiSeen: (n: number): string => `${n} seen`,
   fleetGintiOk: (n: number): string => `${n} matched`,
@@ -856,6 +871,7 @@ const STR_EN = {
   bookingLegendPencilled: 'pencilled',
   bookingDayHeading: (day: string): string => `On ${day}`,
   bookingNothingThatDay: 'Nothing promised that day.',
+  bookingNoneThisMonth: 'Nothing promised this month yet.',
   bookingTapADay: 'Tap a day to see what is promised on it.',
   bookingMonthCounts: (confirmed: number, pencilled: number): string =>
     `${confirmed} confirmed · ${pencilled} pencilled`,
@@ -974,8 +990,12 @@ const STR_EN = {
   todayPromisedHeading: 'Promised',
   todayPromisedSub: 'Starting in the next two days, and pencils dying today',
   todayStartsAt: (when: string): string => `Starts ${when}`,
-  todayPencilDies: (hours: number, minutes: number): string => `Pencil dies in ${hours}h ${minutes}m`,
-  todayEscalationStep: (step: number, days: number): string => `Step ${step} · ${days} days late`,
+  // The ladder's rung in the house voice — the day, then what that day
+  // asks for — never 'Step 1', which reads like a wizard. The action
+  // arrives as data (core's EscalationAction), so a lookup with the
+  // action itself as the fallback, like the ledger's KIND_EN.
+  todayEscalationStep: (days: number, action: string): string =>
+    `Day ${days} — ${ESCALATION_EN[action] ?? action}`,
   todayEscalated: (when: string): string => `With the manager since ${when}`,
   todayEscalateConsiderBlacklist: 'Day 14 — consider blacklisting when the manager reviews it',
   bookingManagerEscalationText: (job: string, days: number, items: string, customer: string | null): string =>
@@ -1018,6 +1038,9 @@ const STR_EN = {
   quoteStepMinApplied: (min: number): string => `Below the ${min}-day minimum — billed as ${min}`,
   quoteStepWeekRule: (billable: number, counted: number, weeks: number, weekDays: number, remainder: number): string =>
     `${billable} billable day${s(billable)}: ${counted} days = ${weeks} week${s(weeks)} (${weeks * weekDays}) + ${remainder}`,
+  // Under a week the arithmetic is noise ('2 days = 0 weeks (0) + 2'):
+  // the trace just states the count.
+  quoteStepWeekRuleShort: (billable: number): string => `${billable} billable day${s(billable)}`,
   quoteStepCardRates: (priced: number, unpriced: number, card: string): string =>
     `${priced} line${s(priced)} priced from the “${card}” card, ${unpriced} unpriced`,
   quoteStepNoCard: 'No rate card yet — every line is unpriced until one is set up under Settings → Rates',
@@ -1080,6 +1103,7 @@ const STR_EN = {
   quoteCardSave: 'Save the card',
   quoteCardSaved: 'Card saved — waiting to send',
   quoteRatesListHeading: 'Day rates',
+  quoteRatesNoCard: 'No day rates until the card above is saved.',
   quoteRatesListSub: (priced: number, total: number): string => `${priced} of ${total} priced`,
   quoteRatesSearch: 'Search a product',
   quoteRateUnpriced: 'unpriced',
@@ -1273,7 +1297,7 @@ const STR_EN = {
   networkThermalPrint: 'Thermal print',
   networkThermalNoPrinter: 'No printer connected — the bytes are built, the Bluetooth link is the Android build.',
   networkThermalSaved: 'Printer bytes saved (dev only).',
-  networkThermalFailed: (reason: string): string => `Print failed: ${reason}`,
+  networkThermalFailed: (reason: string): string => `Print failed: ${reason} — try again, or share the parchi instead.`,
   networkThermalSent: 'Sent to the printer.',
 
   // --- the pipe (W9): enrolment, the PIN gate, Settings → This phone ---

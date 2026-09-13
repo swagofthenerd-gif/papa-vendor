@@ -118,7 +118,12 @@ export function PartnerScreen({ store, partnerId }: { store: DemoStore; partnerI
       <section className="section">
         <SectionHead icon="repeat" title={STR.networkOpenHeading} sub={STR.networkOpenSub(open.length)} />
         {open.length === 0 ? (
-          <p className="section-sub">{STR.networkNothingOpen}</p>
+          // No second door here: the page's primary button, two sections
+          // up, IS the door that fills this list.
+          <div className="empty">
+            <Icon name="repeat" size={32} />
+            <p>{STR.networkNothingOpen}</p>
+          </div>
         ) : (
           <ul className="line-list">
             {open.map((r) => (

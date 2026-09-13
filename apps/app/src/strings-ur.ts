@@ -48,6 +48,14 @@ const KIND_UR: Record<string, string> = {
  * The expense book's row vocabulary (0019) — 'marammat' for a repair,
  * loanwords where the trade uses them (sub-hire, transport).
  */
+/** Overdue ladder ke rung — us din ka kaam. */
+const ESCALATION_UR: Record<string, string> = {
+  whatsapp_nudge: 'pehla nudge',
+  call: 'call karo',
+  late_fee_draft: 'late fee lagao',
+  manager_escalation: 'manager ke paas',
+}
+
 const KHARCHA_UR: Record<string, string> = {
   repair: 'marammat',
   sub_hire: 'sub-hire',
@@ -106,6 +114,7 @@ export const STR_UR: StrTable = {
   commonLanguage: 'Zubaan',
   commonLanguageEnglish: 'English',
   commonLanguageRomanUrdu: 'Roman Urdu',
+  commonLanguageSub: 'Aik baar chuno — app usi zubaan mein dobara khulti hai',
 
   // ---------------------------------------------------------------- today
   todaySearchGearAria: 'Saaman dhoondein',
@@ -394,6 +403,7 @@ export const STR_UR: StrTable = {
   enquirySubtitle: 'Client ka message paste karein',
   enquiryPastePlaceholder:
     'Client ka message yahan paste karein…\n\nSalaam dua aur “please confirm” khud hi nazarandaz ho jate hain.',
+  enquiryPasteAria: 'Client ka message',
   enquiryCheckAvailability: 'Availability check karein',
   enquiryNewList: 'Nayi list',
   enquiryEverythingIsAvailable: 'Sab kuch available hai',
@@ -452,6 +462,7 @@ export const STR_UR: StrTable = {
   labelsImportLead:
     'Apne saaman ki list paste karein — seedha Excel, Google Sheets, ya CSV se. Jab tak aap dekh na lein kya hoga, kuch save nahi hota.',
   labelsImportPlaceholder: 'Item Description,Qty,Asset Code,Shelf\nSony FX9,2,FX9,Rack A\n…',
+  labelsImportAria: 'Aapke saaman ki list',
   labelsTryASampleList: 'Sample list se try karein',
   labelsStartAgain: 'Dobara shuru karein',
   labelsCheckTheColumns: 'Columns check karein',
@@ -498,6 +509,7 @@ export const STR_UR: StrTable = {
       ? 'Queue khali · demo mode — is device se kuch nahi jata'
       : `${n} scan queue mein · demo mode — is device se kuch nahi jata`,
   labelsPaymentHeading: 'Paise lene ka tareeqa',
+  labelsPaymentSub: 'Har statement pe likhi line aur QR',
   labelsPaymentLineLabel: 'Statement ke liye payment line',
   labelsPaymentLinePlaceholder: 'maslan JazzCash: 0300 1234567',
   labelsPaymentLineHint:
@@ -536,6 +548,7 @@ export const STR_UR: StrTable = {
   customerOwedSubtitle: (n: number): string =>
     `${n} customer${n === 1 ? '' : 's'} par udhaar`,
   customerNobodyOwes: 'Abhi kisi par kuch nahi.',
+  customerOwedDoorToday: 'Aaj ki jobs',
   customerOwedTapOne: 'Naam par tap karein, khata khulega',
   customerCardTitle: (name: string): string => `Hisaab — ${name}`,
   customerStatementTitle: (name: string, month: string): string =>
@@ -591,6 +604,7 @@ export const STR_UR: StrTable = {
     n === 1 ? '1 job mukammal' : `${n} jobs mukammal`,
   closedJobsEmpty: 'Abhi koi band job nahi.',
   closedJobsEmptyHint: 'Sab kuch wapas aa jaye to job ke card se band karein.',
+  closedJobsDoorToday: 'Aaj ki jobs',
   closedJobsDoor: 'Band jobs',
   closedJobsReopen: 'Dobara kholein',
   closedJobsClosedOn: (date: string): string => `${date} ko band hui`,
@@ -659,6 +673,7 @@ export const STR_UR: StrTable = {
   fleetGintiSubtitle: 'Kitaab ke against shelf ginein',
   fleetGintiScanShelf: 'Shuru karne ke liye shelf tag scan karein ya shelf chunein',
   fleetGintiPickShelf: 'Shelf chunein',
+  fleetGintiNoShelves: 'Abhi koi shelf nahi — saaman ki list ke saath aati hain.',
   fleetGintiCounting: (shelf: string): string => `${shelf} gin rahe hain`,
   fleetGintiSeen: (n: number): string => `${n} dekhi`,
   fleetGintiOk: (n: number): string => `${n} mil gayi`,
@@ -774,6 +789,7 @@ export const STR_UR: StrTable = {
   bookingLegendPencilled: 'pencil',
   bookingDayHeading: (day: string): string => `${day} ko`,
   bookingNothingThatDay: 'Us din kuch wada nahi.',
+  bookingNoneThisMonth: 'Is mahine abhi koi wada nahi.',
   bookingTapADay: 'Din pe tap karo — dekho us din kya wada hai.',
   bookingMonthCounts: (confirmed: number, pencilled: number): string =>
     `${confirmed} pakki · ${pencilled} pencil`,
@@ -886,8 +902,8 @@ export const STR_UR: StrTable = {
   todayPromisedHeading: 'Wade',
   todayPromisedSub: 'Agle do din mein shuru, aur aaj khatam hoti pencils',
   todayStartsAt: (when: string): string => `${when} se shuru`,
-  todayPencilDies: (hours: number, minutes: number): string => `Pencil ${hours}h ${minutes}m mein khatam`,
-  todayEscalationStep: (step: number, days: number): string => `Step ${step} · ${days} din late`,
+  todayEscalationStep: (days: number, action: string): string =>
+    `Din ${days} — ${ESCALATION_UR[action] ?? action}`,
   todayEscalated: (when: string): string => `${when} se manager ke paas`,
   todayEscalateConsiderBlacklist: 'Din 14 — manager dekhe to blacklist ka bhi socho',
   bookingManagerEscalationText: (job: string, days: number, items: string, customer: string | null): string =>
@@ -925,6 +941,7 @@ export const STR_UR: StrTable = {
   quoteStepMinApplied: (min: number): string => `${min} din ke minimum se kam — ${min} bill hua`,
   quoteStepWeekRule: (billable: number, counted: number, weeks: number, weekDays: number, remainder: number): string =>
     `${billable} bill wale din: ${counted} din = ${weeks} hafta (${weeks * weekDays}) + ${remainder}`,
+  quoteStepWeekRuleShort: (billable: number): string => `${billable} bill wale din`,
   quoteStepCardRates: (priced: number, unpriced: number, card: string): string =>
     `${priced} line “${card}” card se priced, ${unpriced} bina rate`,
   quoteStepNoCard: 'Abhi koi rate card nahi — Settings → Rates mein banao, tab tak har line bina rate hai',
@@ -984,6 +1001,7 @@ export const STR_UR: StrTable = {
   quoteCardSave: 'Card save karo',
   quoteCardSaved: 'Card save ho gaya — bhejne ka intezaar',
   quoteRatesListHeading: 'Din ke rates',
+  quoteRatesNoCard: 'Upar wala card save hone tak din ke rates nahi.',
   quoteRatesListSub: (priced: number, total: number): string => `${total} mein se ${priced} priced`,
   quoteRatesSearch: 'Cheez dhoondo',
   quoteRateUnpriced: 'bina rate',
@@ -1165,7 +1183,7 @@ export const STR_UR: StrTable = {
   networkThermalPrint: 'Thermal print',
   networkThermalNoPrinter: 'Printer juda nahi — bytes ban gaye, Bluetooth link Android build mein hai.',
   networkThermalSaved: 'Printer bytes save ho gaye (sirf dev).',
-  networkThermalFailed: (reason: string): string => `Print nahi hua: ${reason}`,
+  networkThermalFailed: (reason: string): string => `Print nahi hua: ${reason} — dobara try karein, ya parchi share karein.`,
   networkThermalSent: 'Printer ko bhej diya.',
 
   // --- the pipe (W9) ---
