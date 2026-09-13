@@ -158,6 +158,7 @@ import {
   recordSubHireOut,
   setPublicPhone,
   stolenBroadcast,
+  upsertPartner,
 } from '../src/demo/network.ts'
 import { buildParchi } from '../src/parchi.ts'
 
@@ -1820,6 +1821,12 @@ describe('a year in the life of the rental house', () => {
     )
     assert.deepEqual(chain.map((o) => o.op), ['sub_rent_intent', 'extend_booking'])
     assert.equal(chain[1].depends_on, chain[0].id, 'the extension replays only after the sub-rent lands')
+    // …and nothing on the server answers to that op yet: neither 0022 nor
+    // 0025 defines a sub_rent_intent RPC. When W9's pipe replays this
+    // queue the intent fails, and the extension chained behind it fails
+    // with it (the outbox poisons the subtree by design). Pinned as a
+    // finding, not a failing assert. Finding `sub-rent-intent-unreplayable`.
+    finding('sub-rent-intent-unreplayable')
     assert.equal(bookingView(db, sanaC500.bookingId, at(6, 10, 11)).assetReservations[0].assetId, 'asset-c500-1',
       'her claim on the unit stands until the partner unit covers it')
 
@@ -1857,24 +1864,37 @@ describe('a year in the life of the rental house', () => {
       times: 1, units: 1,
     })
 
-    // The vendor borrows two from a partner house. The import puts the
-    // units on the shelf (still stamped ownership='owned' — flipping that
-    // flag from an intake door is Phase E1 cross-hire polish, noted in
-    // the year doc), and the COST owed to the partner now lands on the
-    // book as a sub-hire expense tied to the job it rescues — the money
-    // half of what was `no-subrent-intake`, shipped.
-    const csv = 'Item,Qty,Code\nAputure 600D Pro,2,AP600P'
-    const { rows, rejected } = readRows(parseCsv(csv), { name: 0, quantity: 1, code: 2 })
-    assert.deepEqual(
-      applyImport(db, seed.orgId, planImport(rows, currentCatalogue(), rejected), at(7, -7)),
-      { products: 0, units: 2, renumbered: 0 },
+    // The vendor borrows two from a partner house — through the REAL door
+    // now (0025; the first year imported them stamped 'owned' and noted
+    // the intake flag as Phase E1 polish). Roshan is added to the partner
+    // list, both lights come in with serials at Rs 15,000 each: they join
+    // the shelf as sub_rented_in with local codes after the imported pair
+    // (ASSUMPTION #local-asset-code), tagged like any unit, and the cost
+    // lands on the kharcha book in Roshan's name. No job exists yet — the
+    // desk borrows FIRST, then makes the job — so the two bills carry no
+    // job id (see the margin below).
+    const roshan = upsertPartner(db, seed.orgId, { name: 'Roshan Light House', phone: '0300 9988776' }, at(7, -7), netIds(at(7, -7)))
+    assert.equal(roshan.ok, true)
+    const loaners = [1, 2].map((i) => {
+      const r = recordSubHireIn(db, seed.orgId, {
+        partnerId: roshan.id, productId: 'prod-aputure600',
+        startMs: at(7, -6, 8), endMs: at(7, 7, 18),
+        serial: `RL-600D-00${i}`, agreedCostMinor: rs(15_000), note: 'Eid week',
+      }, at(7, -7, 11 + i), netIds(at(7, -7, 11 + i)))
+      assert.equal(r.ok, true)
+      monthSpent[7] += rs(15_000)
+      const tag = `v1LOANER600D${i}ROSHAN000000`.slice(0, 24)
+      db.exec(`insert into asset_tags (tag_code, asset_id, status) values (?, ?, 'active')`, [tag, r.assetId])
+      tagOf.set(r.assetId, tag)
+      return r
+    })
+    assert.deepEqual(loaners.map((l) => l.assetCode), ['AP600-07', 'AP600-08'], 'codes continue past the imported pair')
+    const shelf = db.all(
+      `select a.ownership, count(*) as n from assets a join products p on p.id = a.product_id
+        where p.display_name = 'Aputure 600D Pro' and a.disposition is null group by a.ownership order by a.ownership`,
     )
-    assert.equal(bindImportedTags('APR', at(7, -7, 13)).imported.length, 2)
-    const borrowed = db.get(
-      `select count(*) as n from assets a join products p on p.id = a.product_id
-        where p.display_name = 'Aputure 600D Pro' and a.ownership = 'owned'`,
-    )
-    assert.equal(Number(borrowed.n), 8) // shelf count; the partner's bill is below
+    assert.deepEqual(shelf.map((r) => [r.ownership, Number(r.n)]), [['owned', 6], ['sub_rented_in', 2]])
+    assert.equal(partnerMoney(db, roshan.id).weOweMinor, rs(30_000))
 
     const again = checkAvailability(
       db,
@@ -1889,6 +1909,7 @@ describe('a year in the life of the rental house', () => {
       [{ productId: 'prod-aputure600', qty: 6 }, { productId: 'prod-cstand', qty: 6 }],
       iso(7, -2), at(7, -5))
     assert.equal(e1.expected.length, 12)
+    assert.ok(e1.expected.includes(loaners[0].assetId), 'one loaner rides the Eid truck')
 
     // --- The thermal parchi, bytes built for THIS job (0025 client wave) --
     // The gate pass the guard reads is the same text the handover screen
@@ -1923,18 +1944,21 @@ describe('a year in the life of the rental house', () => {
     assert.ok(holds([...parchiBytes], [0x1d, 0x28, 0x6b]), 'the QR block is there')
     assert.deepEqual([...buildParchiEscPos(parchiDocFromText(parchiText), { width: 32 })], [...parchiBytes], 'the same job prints the same bytes')
 
-    // The partner house's bill, tied to the job its lights rescued.
-    spend('sub_hire', 30_000, {
-      k: 7, d: -5, jobId: e1.id,
-      counterparty: 'Roshan Light House', note: '2x 600D, Eid week',
-    })
     jobBack(e1.id, 'cust-ayesha', at(7, -2), { k: 7, d: -2, chargeRs: 90_000, payRs: 90_000 })
-    // Margin at a glance: what the Eid job billed, minus what the partner
-    // was owed for making it possible — the read the handover now shows.
+    // Margin at a glance — and the wall the real door exposes: the sub-hire
+    // sheet ties its cost to a job or a booking AT RECORD TIME, and the desk
+    // borrowed before the Eid job existed. The bills are on the book (the
+    // month's profit nets them, below), the partner's page says Rs 30,000
+    // — but the handover's margin for the job the lights rescued reads the
+    // full Rs 90,000, and no door attaches an expense to a job after the
+    // fact. NOV's loaner (job first, then the sub-hire with its id) shows
+    // the link working; this is the other order, the common one when the
+    // shortage is found at the enquiry. Finding `subhire-cost-unlinkable`.
     const eidMargin = jobMargin(db, e1.id)
     assert.equal(eidMargin.incomeMinor, rs(90_000))
-    assert.equal(eidMargin.expenseMinor, rs(30_000))
-    assert.equal(eidMargin.marginMinor, rs(60_000))
+    assert.equal(eidMargin.expenseMinor, 0)
+    assert.equal(eidMargin.expenseCount, 0)
+    finding('subhire-cost-unlinkable')
     const e2 = jobOut('Eid day 2 — family films', 'cust-hamza',
       [{ productId: 'prod-fx6', qty: 2 }, { productId: 'prod-ronin', qty: 1 }],
       iso(7, 0), at(7, -1))
@@ -1996,6 +2020,20 @@ describe('a year in the life of the rental house', () => {
     assert.equal(eidText[9], 'Total: Rs 180,000')
     assert.equal(eidText[10], 'Indicative — not confirmed yet.')
     assert.equal(eidText[11], 'Deposit: half deposit')
+
+    // The loaners go home to Roshan after the rush — both here, neither on
+    // a truck — as returned_to_owner, and the shelf count says six again.
+    for (const l of loaners) {
+      assert.deepEqual(
+        closeSubHire(db, l.subHireId, at(7, 7, 19), at(7, 7, 19), netIds(at(7, 7, 19))),
+        { ok: true, jobClosed: false, returnedToOwner: true },
+      )
+      expectedScanOps++
+    }
+    assert.equal(
+      checkAvailability(db, matchKitList(parseKitList('6x Aputure 600D Pro'), demoCatalogue()), openJobCommitments(db), at(7, 8)).lines[0].onHand,
+      5,
+    )
 
     assertBooks()
     assertPhysical()
@@ -2331,11 +2369,11 @@ describe('a year in the life of the rental house', () => {
       `select disposition, count(*) as n from assets
         where disposition is not null group by disposition order by disposition`,
     )
-    // --- network --- November's loaner went home as returned_to_owner —
-    // a fourth terminal row that must never read 'retired'.
+    // --- network --- November's loaner and April's two went home as
+    // returned_to_owner — terminal rows that must never read 'retired'.
     assert.deepEqual(
       gone.map((r) => [r.disposition, Number(r.n)]),
-      [['lost', 1], ['returned_to_owner', 1], ['stolen', 3]],
+      [['lost', 1], ['returned_to_owner', 3], ['stolen', 3]],
     )
     // The absconded job left the coming-back board when its gear went stolen —
     // no red row, because the truth is now "gone", not "late".
@@ -2381,8 +2419,10 @@ describe('a year in the life of the rental house', () => {
     // subtracts confirmed claims and the log counts the committed refusal.
     // The second year (W8) takes `import-apply-welded`: applyImport lives
     // in read-model.ts and the year drives the real routine twice. The
-    // eight that remain are Phase B polish doors the waves did not build
-    // — each explained in docs/year-in-the-life.md.
+    // eight that remain are Phase B polish doors the waves did not build,
+    // and the second year found two NEW walls on the shipped doors —
+    // `sub-rent-intent-unreplayable` (MAR) and `subhire-cost-unlinkable`
+    // (APR) — each explained in docs/year-in-the-life.md.
     assert.deepEqual(
       [...FINDINGS].sort(),
       [
@@ -2393,6 +2433,8 @@ describe('a year in the life of the rental house', () => {
         'no-lifetime-value-view',
         'no-month-history-screen',
         'no-utilization-read',
+        'sub-rent-intent-unreplayable',
+        'subhire-cost-unlinkable',
         'waived-fee-invisible',
       ],
     )
