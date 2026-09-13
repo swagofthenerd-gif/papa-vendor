@@ -25,6 +25,17 @@
  * created_at agrees with its payload's device_time. Money still posts
  * through recordEntry (the store's sql.js driver cannot load under Node),
  * but the store methods accept `whenMs`, so a payment can be backdated.
+ *
+ * THE SECOND YEAR (W8). The same twelve months, re-lived against the
+ * finished app: the shaadi jobs are BOOKINGS first (pencil → confirm →
+ * convert), quotes go out priced through the six named steps with the
+ * desk's overrides and the season's multiplier, a partner's FX9 rescues a
+ * truck and goes home as returned_to_owner, an extension collision is
+ * settled through the substitute door, the thermal parchi's bytes are
+ * built for a real job, the overdue ladder's last rung fires on the
+ * chronic late payer, and a unit the ginti could not find goes STOLEN
+ * with the partner broadcast in one line. The import is the real routine
+ * now (applyImport lives in read-model.ts — was `import-apply-welded`).
  */
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
@@ -45,6 +56,12 @@ import {
   dueStatus,
   lateFeeDraft,
   checkAvailability,
+  escalationStep,
+  buildParchiEscPos,
+  parchiDocFromText,
+  ESCPOS_INIT,
+  ESCPOS_CUT,
+  HOUR_MS,
   parseKitList,
   matchKitList,
   availabilityNote,
@@ -67,10 +84,13 @@ import {
 } from '@papa/core'
 import { seedDemo, demoCatalogue } from '../src/demo/seed.ts'
 import {
+  applyImport,
   closeJob,
   createJob,
   decodeScanOps,
   dueBoard,
+  flagForManager,
+  managerFlaggedAt,
   openJob,
   openJobs,
   openJobCommitments,
@@ -98,6 +118,7 @@ import {
 } from '../src/demo/khata.ts'
 import {
   bookingView,
+  cancelBooking,
   confirmBooking,
   convertBookingToJob,
   createBooking,
@@ -114,6 +135,8 @@ import {
   recordExpense,
 } from '../src/demo/kharcha.ts'
 import {
+  calendarDays,
+  clearCalendarDay,
   quoteFor,
   quoteForLines,
   quoteTextOf,
@@ -133,6 +156,8 @@ import {
   partnerMoney,
   recordSubHireIn,
   recordSubHireOut,
+  setPublicPhone,
+  stolenBroadcast,
 } from '../src/demo/network.ts'
 import { buildParchi } from '../src/parchi.ts'
 
@@ -362,6 +387,34 @@ function mustClose(jobId, whenMs) {
 let netSeq = 0
 const netIds = (whenMs) => ({ now: () => whenMs, newId: () => `net-${++netSeq}` })
 
+// ------------------------------------------------------------ the import
+// The REAL applyImport (read-model.ts) runs under Node now, so the year
+// imports through the same routine the Import screen calls — was finding
+// `import-apply-welded`, whose line-for-line replica lived at the foot of
+// this file. New units get labels the way the rack did in September.
+
+/** Bind a fresh label to every imported unit that has none — the tagging
+ *  afternoon after an import. Returns the ids in tagging order. */
+function bindImportedTags(label, whenMs) {
+  const binder = new ScanSession(db, { deviceId: 'sim-phone', now: () => whenMs })
+  const untagged = db
+    .all(
+      `select a.id from assets a
+        where a.id like 'asset-imported-%'
+          and not exists (select 1 from asset_tags t where t.asset_id = a.id)
+        order by a.id`,
+    )
+    .map((r) => r.id)
+  untagged.forEach((assetId, i) => {
+    const code = `v1SIM${label}${String(i + 1).padStart(2, '0')}AAAAAAAAAAAAAA`
+    const r = binder.bindTag(code, assetId)
+    assert.equal(r.outcome, 'accepted')
+    tagOf.set(assetId, code)
+    assert.equal(lookupTag(db, code).assetId, assetId)
+  })
+  return { binder, imported: untagged }
+}
+
 // ------------------------------------------------------------- job helpers
 
 let jobSeq = 0
@@ -431,11 +484,20 @@ describe('a year in the life of the rental house', () => {
     assert.equal(plan.existingProducts, 2)   // FX9, Aputure — exact matches
     assert.equal(plan.unitsToCreate, 8)
 
-    // Applying the plan replicates DemoStore.applyImport line for line,
-    // because that routine lives in store.ts welded to the sql.js driver and
-    // cannot run (or be reused) under Node. Finding `import-apply-welded`.
-    finding('import-apply-welded')
-    applyPlan(plan)
+    // The REAL routine, on the simulated clock (was `import-apply-welded`:
+    // applyImport used to live in store.ts beside the sql.js driver, and
+    // this file carried a replica). It reports what it made — and that
+    // three sticker codes were renumbered past the shelf's: the FX9 and
+    // both Aputures (see the next block for why that matters).
+    assert.deepEqual(applyImport(db, seed.orgId, plan, at(0, -4)), { products: 2, units: 8, renumbered: 3 })
+
+    // The demo seeds a placeholder Eid at ×1.25 (ASSUMPTION #demo-eid);
+    // Eid moves, so the desk clears it on day one and types the real one
+    // when the date is known (APR). It also keeps the year's quotes from
+    // depending on which real month the run happens to start in.
+    for (const d of calendarDays(db).filter((d) => d.kind === 'holiday')) {
+      assert.equal(clearCalendarDay(db, d.day, d.kind, at(0, -4)), true)
+    }
 
     // The import used to give the new FX9 unit the code FX9-01 — the SAME
     // visible code as the seeded FX9-01, so two cameras answered to one
@@ -453,18 +515,8 @@ describe('a year in the life of the rental house', () => {
     assert.equal(importedFx9.asset_code, 'FX9-03')
 
     // --- Tagging the imported rack ----------------------------------------
-    const binder = new ScanSession(db, { deviceId: 'sim-phone', now: () => at(0, -3) })
-    const imported = db
-      .all(`select id from assets where id like 'asset-imported-%' order by id`)
-      .map((r) => r.id)
+    const { binder, imported } = bindImportedTags('SEP', at(0, -3))
     assert.equal(imported.length, 8)
-    imported.forEach((assetId, i) => {
-      const code = `v1SIMSEP${String(i + 1).padStart(2, '0')}AAAAAAAAAAAAAA`
-      const r = binder.bindTag(code, assetId)
-      assert.equal(r.outcome, 'accepted')
-      tagOf.set(assetId, code)
-      assert.equal(lookupTag(db, code).assetId, assetId)
-    })
     // A label already in use refuses to move — the protective rule holds.
     const steal = binder.bindTag(tagOf.get('asset-fx9-1'), imported[0])
     assert.equal(steal.outcome, 'conflict')
@@ -502,7 +554,10 @@ describe('a year in the life of the rental house', () => {
     // batteries are HELD by name for its day, so the wedding's confirm
     // allocates around them — the other four leave, and every row is
     // accepted. The seeded wedding job, with its stale list, is closed
-    // unused; the truck runs on the booking's job.
+    // unused; the truck runs on the booking's job — and the booking is a
+    // PENCIL first: Hamza's agency says "hold it", the desk holds it for
+    // the 24h TTL (ASSUMPTION #hold-ttl), the deposit lands, the desk
+    // confirms, and only then does a truck exist.
     const tvcHold = createBooking(db, seed.orgId, {
       customerId: 'cust-bilal', startMs: at(0, -1, 6), endMs: at(0, 0, 18),
       lines: ['asset-vmount-1', 'asset-vmount-2', 'asset-vmount-3', 'asset-vmount-4'].map((assetId) => ({ assetId })),
@@ -516,10 +571,23 @@ describe('a year in the life of the rental house', () => {
         { productId: 'prod-ronin', qty: 1 }, { productId: 'prod-vmount', qty: 4 },
         { productId: 'prod-sachdeva', qty: 2 }, { productId: 'prod-aputure300', qty: 1 },
       ],
-      status: 'confirmed', note: 'Wedding — Gulberg',
-    }, at(0, -2, 11))
-    assert.equal(wedBooking.ok, true, 'the wedding confirms around the hold')
-    const wedUnits = wedBooking.confirm.allocations.map((a) => a.assetId)
+      status: 'pencil', note: 'Wedding — Gulberg',
+    }, at(0, -2, 9))
+    assert.equal(wedBooking.ok, true, 'the pencil is held')
+    assert.equal(wedBooking.status, 'pencil')
+    assert.equal(wedBooking.pencilExpiresAtMs, at(0, -2, 9) + 24 * HOUR_MS, 'the 24h TTL, from the desk clock')
+    assert.equal(bookingView(db, wedBooking.bookingId, at(0, -2, 10)).stamp, 'pencil')
+    assert.equal(bookingView(db, wedBooking.bookingId, at(0, -2, 10)).assetReservations.length, 0, 'a pencil on products claims no unit yet')
+    const wedConfirm = confirmBooking(db, seed.orgId, wedBooking.bookingId, {}, at(0, -2, 11))
+    assert.equal(wedConfirm.ok, true, 'the wedding confirms around the hold')
+    assert.equal(wedConfirm.credentialGate, 'not_needed', 'Hamza is verified')
+    assert.equal(bookingView(db, wedBooking.bookingId, at(0, -2, 12)).stamp, 'confirmed')
+    assert.deepEqual(
+      db.all(`select op from outbox where payload like ? order by seq`, [`%"${wedBooking.bookingId}"%`]).map((r) => r.op),
+      ['create_booking', 'confirm_booking'],
+      'two ops, the way the server insists',
+    )
+    const wedUnits = wedConfirm.allocations.map((a) => a.assetId)
     assert.equal(wedUnits.length, 11)
     assert.ok(
       !wedUnits.some((id) => ['asset-vmount-1', 'asset-vmount-2', 'asset-vmount-3', 'asset-vmount-4'].includes(id)),
@@ -733,10 +801,54 @@ describe('a year in the life of the rental house', () => {
     assert.equal(goneCable.current_job_id, null)
     mustClose(o1.id, at(1, -4, 14))
 
+    // --- The lookbook is QUOTED first (0024): the golden math, an override
+    // Sana's DP pastes the list; the desk pencils it and the quote prices
+    // it through the six named steps: 10d 6h → 11 calendar days → one
+    // 3-day week plus a remainder capped at the week = 6 billable days,
+    // Komodo 20,000 + Ronin 8,000 on the card. Sana asks for the Komodo at
+    // 17,000; the override is the FINAL day rate (ASSUMPTION
+    // #override-final), the reason kept, the card rate remembered beside
+    // it, and the total moves by exactly 6 × 3,000. She is new, so the
+    // confirm logs the manager's override of the credential gate; then the
+    // booking becomes the job the truck runs.
+    const o2Booking = createBooking(db, seed.orgId, {
+      customerId: 'cust-sana', startMs: at(1, -8), endMs: at(1, 2, 18),
+      lines: [{ productId: 'prod-komodo', qty: 1 }, { productId: 'prod-ronin', qty: 1 }],
+      status: 'pencil', note: 'Fashion lookbook — Model Town',
+    }, at(1, -9, 10))
+    assert.equal(o2Booking.ok, true)
+    const o2Quote = quoteFor(db, o2Booking.bookingId)
+    assert.equal(o2Quote.steps.billableDays.calendarDays, 11)
+    assert.deepEqual(
+      [o2Quote.steps.weekRule.weeks, o2Quote.steps.weekRule.remainderDays, o2Quote.steps.weekRule.remainderBilled, o2Quote.steps.weekRule.billableDays],
+      [1, 4, 3, 6],
+    )
+    assert.equal(o2Quote.totals.subtotalMinor, rs(6 * (20_000 + 8_000)))
+    assert.equal(o2Quote.totals.unpricedCount, 0)
+    assert.deepEqual(o2Quote.totals.indicativeReasons, ['not_confirmed'], 'a pencil is indicative for one reason only')
+    const komodoLine = o2Quote.lines.find((l) => l.productId === 'prod-komodo')
+    const haggled = setLineOverride(db, komodoLine.lineId, rs(17_000), 'Sana — lookbook budget, agreed', at(1, -9, 11))
+    assert.equal(haggled.ok, true)
+    assert.equal(haggled.originalRateMinor, rs(20_000))
+    const o2Quote2 = quoteFor(db, o2Booking.bookingId)
+    assert.equal(o2Quote2.totals.subtotalMinor, rs(6 * (17_000 + 8_000)))
+    assert.equal(o2Quote2.totals.overriddenCount, 1)
+    assert.equal(o2Quote2.lines.find((l) => l.productId === 'prod-komodo').multiplierApplied, false, 'an override never takes a multiplier')
+    const o2Confirm = confirmBooking(db, seed.orgId, o2Booking.bookingId, { credentialOverrideNote: 'Cheque held — Sana is new' }, at(1, -9, 12))
+    assert.equal(o2Confirm.ok, true)
+    assert.equal(o2Confirm.credentialGate, 'overridden')
+    assert.equal(quoteFor(db, o2Booking.bookingId).totals.indicative, false, 'confirmed and every line priced: the number is final')
+    const o2Text = quoteTextOf(db, STR_EN, seed.houseName, quoteFor(db, o2Booking.bookingId)).split('\n')
+    assert.equal(o2Text[3], '6 billable days (11 on the calendar)')
+    assert.equal(o2Text[5], 'RED Komodo 6K × 1 · 6 days · Rs 17,000/day = Rs 102,000')
+    assert.ok(o2Text.includes('Total: Rs 150,000'))
+    const o2Convert = convertBookingToJob(db, seed.orgId, o2Booking.bookingId, at(1, -8, 5))
+    assert.equal(o2Convert.ok, true)
+    const o2 = { id: o2Convert.jobId, expected: openJob(db, o2Convert.jobId).expected }
+    assert.equal(o2.expected.length, 2, 'the job promises exactly the units confirm bound')
+    assert.equal(customerForJob(db, o2.id)?.id, 'cust-sana', 'born chargeable')
+
     // --- The first late fee, and the order-of-operations trap -------------
-    const o2 = makeJob('Fashion lookbook — Model Town', 'cust-sana',
-      [{ productId: 'prod-komodo', qty: 1 }, { productId: 'prod-ronin', qty: 1 }],
-      iso(1, 2), 'Sana 0322 7788990')
     const o2out = openSession(o2.id, 'out', at(1, -8))
     scanAll(o2out, o2.expected, 'check_out')
 
@@ -1217,6 +1329,28 @@ describe('a year in the life of the rental house', () => {
     assert.equal(recordTurnedAway(db, peakAsk.lines, at(3, 6)), 1)
     assert.deepEqual(turnedAwayByReason(db, 'prod-fx9', at(3, 6)), { short: 0, committed: 1 })
 
+    // --- The wedding-season multiplier, visible on a quote (0024 D6/D7) ---
+    // The desk marks the last week of peak as SEASON at ×1.25 — data typed
+    // under Settings → Rates, never a rule in code (ASSUMPTION
+    // #seasonal-pricing seeds the months at 1.0) — and Hamza's confirmed
+    // hold prices with it on every card-rate line: 2d 9h → 3 calendar days
+    // → 3 billable; 2 × 3 × Rs 25,000 × 1.25 = Rs 187,500, final because
+    // it is confirmed and every line is priced. The text names the day.
+    const seasonDay = localDate(at(3, 8, 9), DEFAULT_TIMEZONE)
+    assert.equal(setCalendarDay(db, seed.orgId, seasonDay, 'season', 'Wedding season', 1.25, at(3, 5, 11)).ok, true)
+    const peakQuote = quoteFor(db, peakHold.bookingId)
+    assert.equal(peakQuote.steps.billableDays.calendarDays, 3)
+    assert.equal(peakQuote.steps.weekRule.billableDays, 3)
+    assert.equal(peakQuote.steps.calendarMultiplier.multiplier, 1.25)
+    assert.equal(peakQuote.steps.calendarMultiplier.drivenBy.kind, 'season')
+    assert.ok(peakQuote.lines.every((l) => l.multiplierApplied), 'no override on this one: the season applies to every line')
+    assert.equal(peakQuote.totals.subtotalMinor, rs(187_500))
+    assert.equal(peakQuote.totals.indicative, false)
+    assert.match(
+      quoteTextOf(db, STR_EN, seed.houseName, peakQuote),
+      new RegExp(`Wedding season on ${seasonDay}: ×1\\.25 on the whole booking`),
+    )
+
     // --- Month end --------------------------------------------------------
     assertBooks()
     assertPhysical()
@@ -1529,6 +1663,77 @@ describe('a year in the life of the rental house', () => {
     // ships, the customer-side blacklist door does not yet.
     finding('no-blacklist')
 
+    // --- An extension collides; the SUBSTITUTE door settles it (0022 D10)
+    // Bilal holds FX9-02 — the body he always takes — for three days; Sana
+    // has the same body, by name, the day after. Bilal calls: two more
+    // days. The preview names Sana, the unit and when her hold begins, and
+    // changes nothing; the extension is refused with the collision as
+    // data. This time a substitute EXISTS: Sana's claim moves onto another
+    // FX9 through reallocate_reservation (chained under Bilal's booking, so
+    // the server replays the move before the extend), Bilal's extension
+    // writes behind it, and no unit ever carries two confirmed claims.
+    const bilalFx9 = createBooking(db, seed.orgId, {
+      customerId: 'cust-bilal', startMs: at(5, 10, 9), endMs: at(5, 12, 18),
+      lines: [{ assetId: 'asset-fx9-2' }], status: 'confirmed', note: 'Agency stills — FX9-02 as always',
+    }, at(5, 8, 10))
+    assert.equal(bilalFx9.ok, true)
+    const sanaFx9 = createBooking(db, seed.orgId, {
+      customerId: 'cust-sana', startMs: at(5, 13, 9), endMs: at(5, 14, 18),
+      lines: [{ assetId: 'asset-fx9-2' }], status: 'confirmed',
+      credentialOverrideNote: 'Regular since October',
+    }, at(5, 8, 11))
+    assert.equal(sanaFx9.ok, true, 'her window starts after his hold ends — no collision yet')
+    const febPreview = extensionPreview(db, bilalFx9.bookingId, at(5, 14, 18), at(5, 11, 9))
+    assert.equal(febPreview.collisions.length, 1)
+    const blocking = febPreview.collisions[0]
+    assert.equal(blocking.kind, 'asset')
+    assert.equal(blocking.bookingNo, sanaFx9.bookingNo)
+    assert.equal(blocking.customerName, 'Sana Tariq')
+    assert.equal(blocking.assetCode, 'FX9-02')
+    assert.equal(bookingView(db, bilalFx9.bookingId, at(5, 11, 9)).customerEndMs, at(5, 12, 18), 'the preview changed nothing')
+    const febRefused = extendBooking(db, bilalFx9.bookingId, at(5, 14, 18), at(5, 11, 9))
+    assert.equal(febRefused.extended, false)
+    assert.equal(febRefused.collisions[0].bookingNo, sanaFx9.bookingNo)
+    const sanaClaim = db.get(`select id from asset_reservations where booking_id = ?`, [sanaFx9.bookingId])
+    const febOffered = substitutesForReservation(db, sanaClaim.id)
+    assert.ok(febOffered.length >= 1, 'another FX9 is free over her window')
+    assert.ok(!febOffered.some((o) => o.id === 'asset-fx9-2'), 'the body under dispute is never offered')
+    const febMoved = reallocateReservation(db, sanaClaim.id, febOffered[0].id, at(5, 11, 10), undefined, bilalFx9.bookingId)
+    assert.equal(febMoved.ok, true)
+    assert.equal(bookingView(db, sanaFx9.bookingId, at(5, 11, 10)).assetReservations[0].assetId, febOffered[0].id)
+    const febExtended = extendBooking(db, bilalFx9.bookingId, at(5, 14, 18), at(5, 11, 11))
+    assert.equal(febExtended.extended, true)
+    assert.equal(febExtended.customerEndMs, at(5, 14, 18))
+    const febChain = db.all(
+      `select op, id, depends_on from outbox where op in ('reallocate_reservation', 'extend_booking') and seq > (
+         select max(seq) from outbox where op = 'confirm_booking' and payload like ?) order by seq`,
+      [`%"${sanaFx9.bookingId}"%`],
+    )
+    assert.deepEqual(febChain.map((o) => o.op), ['reallocate_reservation', 'extend_booking'])
+    assert.equal(febChain[1].depends_on, febChain[0].id, 'the extension replays only after the substitute lands')
+    assert.equal(
+      Number(db.get(
+        `select count(*) as n from asset_reservations a join asset_reservations b
+            on a.asset_id = b.asset_id and a.id < b.id
+           join bookings ba on ba.id = a.booking_id join bookings bb on bb.id = b.booking_id
+          where a.state = 'confirmed' and b.state = 'confirmed'
+            and ba.status = 'confirmed' and bb.status = 'confirmed'
+            and a.blocked_from < b.blocked_until and b.blocked_from < a.blocked_until`,
+      ).n),
+      0,
+      'no unit carries two overlapping confirmed claims',
+    )
+    // Bilal's booking becomes his truck; Sana's shoot is postponed and the
+    // pencil-turned-promise is released through the cancel door.
+    const febJob = convertBookingToJob(db, seed.orgId, bilalFx9.bookingId, at(5, 10, 8))
+    assert.equal(febJob.ok, true)
+    const febOut = openSession(febJob.jobId, 'out', at(5, 10, 9))
+    assert.deepEqual(febOut.expected, ['asset-fx9-2'])
+    scanAll(febOut, febOut.expected, 'check_out')
+    assert.deepEqual(cancelBooking(db, sanaFx9.bookingId, 'Postponed to March', at(5, 12)), { ok: true, bookingId: sanaFx9.bookingId, bookingNo: sanaFx9.bookingNo })
+    assert.equal(Number(db.get(`select count(*) as n from asset_reservations where booking_id = ?`, [sanaFx9.bookingId]).n), 0, 'her claim is released')
+    jobBack(febJob.jobId, 'cust-bilal', at(5, 14, 19), { k: 5, d: 14, chargeRs: 125_000, payRs: 125_000 })
+
     // A quiet rental keeps February honest.
     const feb1 = jobOut('Corporate AGM — PC Hotel', 'cust-imran',
       [{ productId: 'prod-aputure300', qty: 1 }, { productId: 'prod-mixpre', qty: 1 }],
@@ -1609,7 +1814,9 @@ describe('a year in the life of the rental house', () => {
     assert.equal(extended.extended, true)
     assert.equal(extended.customerEndMs, at(6, 12, 18))
     const chain = db.all(
-      `select op, depends_on, id from outbox where op in ('sub_rent_intent', 'extend_booking') order by seq`,
+      `select op, depends_on, id from outbox
+        where op in ('sub_rent_intent', 'extend_booking') and payload like ? order by seq`,
+      [`%"${hamzaC500.bookingId}"%`],
     )
     assert.deepEqual(chain.map((o) => o.op), ['sub_rent_intent', 'extend_booking'])
     assert.equal(chain[1].depends_on, chain[0].id, 'the extension replays only after the sub-rent lands')
@@ -1658,7 +1865,11 @@ describe('a year in the life of the rental house', () => {
     // half of what was `no-subrent-intake`, shipped.
     const csv = 'Item,Qty,Code\nAputure 600D Pro,2,AP600P'
     const { rows, rejected } = readRows(parseCsv(csv), { name: 0, quantity: 1, code: 2 })
-    applyPlan(planImport(rows, currentCatalogue(), rejected))
+    assert.deepEqual(
+      applyImport(db, seed.orgId, planImport(rows, currentCatalogue(), rejected), at(7, -7)),
+      { products: 0, units: 2, renumbered: 0 },
+    )
+    assert.equal(bindImportedTags('APR', at(7, -7, 13)).imported.length, 2)
     const borrowed = db.get(
       `select count(*) as n from assets a join products p on p.id = a.product_id
         where p.display_name = 'Aputure 600D Pro' and a.ownership = 'owned'`,
@@ -1678,6 +1889,40 @@ describe('a year in the life of the rental house', () => {
       [{ productId: 'prod-aputure600', qty: 6 }, { productId: 'prod-cstand', qty: 6 }],
       iso(7, -2), at(7, -5))
     assert.equal(e1.expected.length, 12)
+
+    // --- The thermal parchi, bytes built for THIS job (0025 client wave) --
+    // The gate pass the guard reads is the same text the handover screen
+    // renders as a QR; on paper it is an ESC/POS stream: init, the
+    // letterhead centred/bold/double-size, the body at 32 columns, the QR
+    // block, three feed lines, the cut. Pure bytes — deterministic, ASCII
+    // by construction — and the hardware is still unverified (see
+    // production-readiness: no printer has fed paper).
+    const parchiText = buildParchi({
+      houseName: seed.houseName, jobLabel: 'Eid shoot — six lights', mode: 'out', whenMs: at(7, -5),
+      items: e1.expected.map((id) => {
+        const r = db.get(
+          `select a.asset_code, coalesce(p.display_name, a.display_name) as name
+             from assets a left join products p on p.id = a.product_id where a.id = ?`,
+          [id],
+        )
+        return { code: r.asset_code, name: r.name }
+      }),
+      assumedCount: 0, shortfall: [], shortfallValueLabel: null,
+      attendants: attendantNames(db, e1.id),
+    })
+    assert.match(parchiText, /\nOUT \(12\):\n/)
+    const parchiBytes = buildParchiEscPos(parchiDocFromText(parchiText), { width: 32 })
+    assert.deepEqual([...parchiBytes.slice(0, 2)], [...ESCPOS_INIT])
+    assert.deepEqual([...parchiBytes.slice(2, 11)], [0x1b, 0x61, 1, 0x1b, 0x45, 1, 0x1d, 0x21, 0x11], 'centred, bold, double-size letterhead')
+    assert.deepEqual([...parchiBytes.slice(-4)], [...ESCPOS_CUT])
+    const asBytes = (text) => [...text].map((c) => c.charCodeAt(0))
+    const holds = (hay, needle) => hay.some((_, i) => needle.every((b, j) => hay[i + j] === b))
+    assert.ok(holds([...parchiBytes], asBytes('Eid shoot - six lights')), 'the em dash is folded to ASCII')
+    assert.ok(!holds([...parchiBytes], [0xe2, 0x80, 0x94]), 'no UTF-8 dash reaches the paper — a clone prints garbage for it')
+    assert.ok(holds([...parchiBytes], asBytes('OUT (12):')), 'the count the gate reads is on the paper')
+    assert.ok(holds([...parchiBytes], [0x1d, 0x28, 0x6b]), 'the QR block is there')
+    assert.deepEqual([...buildParchiEscPos(parchiDocFromText(parchiText), { width: 32 })], [...parchiBytes], 'the same job prints the same bytes')
+
     // The partner house's bill, tied to the job its lights rescued.
     spend('sub_hire', 30_000, {
       k: 7, d: -5, jobId: e1.id,
@@ -1762,6 +2007,36 @@ describe('a year in the life of the rental house', () => {
 
   // -------------------------------------------------------------- MAY (k=8)
   test('MAY — the cheque bounces: correction semantics and the debt clock', () => {
+    // --- The overdue ladder's last rung fires on the chronic late payer --
+    // Ayesha — owed since before the pilot — takes the C300 and does not
+    // bring it back. The ladder (ASSUMPTION #escalation-ladder) climbs
+    // from the stored due date on the phone's own clock: day 1 a nudge,
+    // day 3 a call, day 7 the late-fee draft, day 14 the manager, with a
+    // blacklist to CONSIDER — a decision, never an automatic flag. The
+    // desk escalates: one local flag (ASSUMPTION #manager-flag) and the
+    // board says when. The blacklist door itself still does not exist
+    // (`no-blacklist`, pinned in FEB).
+    const chronic = jobOut('Documentary pickups — Walled City', 'cust-ayesha',
+      [{ productId: 'prod-c300', qty: 1 }], iso(8, -6), at(8, -9))
+    const rungs = [1, 3, 7, 14].map((d) => escalationStep(dueStatus(iso(8, -6), at(8, -6 + d)).daysLate))
+    assert.deepEqual(rungs.map((r) => r.action), ['whatsapp_nudge', 'call', 'late_fee_draft', 'manager_escalation'])
+    assert.equal(rungs[3].considerBlacklist, true)
+    assert.equal(escalationStep(dueStatus(iso(8, -6), at(8, -6, 14)).daysLate ?? 0), null, 'nothing before day 1')
+    const lateRow = dueBoard(db, at(8, 8)).outJobs.find((j) => j.id === chronic.id)
+    assert.equal(lateRow.due.state, 'overdue')
+    assert.equal(lateRow.due.daysLate, 14)
+    assert.equal(managerFlaggedAt(db, chronic.id), null)
+    assert.equal(flagForManager(db, chronic.id, at(8, 8)), true)
+    assert.equal(managerFlaggedAt(db, chronic.id), new Date(at(8, 8)).toISOString())
+    assert.equal(flagForManager(db, chronic.id, at(8, 9)), true)
+    assert.equal(managerFlaggedAt(db, chronic.id), new Date(at(8, 8)).toISOString(), 'escalated once; a second tap keeps the first date')
+    // Day 15 it comes home; the by-the-book draft is 15 × Rs 20,000. The
+    // desk charges the rental and a reduced fee — unpaid, like everything
+    // else on Ayesha's page.
+    assert.equal(lateFeeDraftFor(db, chronic.id, at(8, 9)).draft.totalMinor, rs(15 * 20_000))
+    jobBack(chronic.id, 'cust-ayesha', at(8, 9), { k: 8, d: 9, chargeRs: 40_000 })
+    post('cust-ayesha', 'late_fee', 60_000, { k: 8, d: 9, jobId: chronic.id, note: '15 days late — reduced' })
+
     const may1 = jobOut('Drama finale — Bahria set', 'cust-imran',
       [{ productId: 'prod-komodo', qty: 1 }, { productId: 'prod-cne', qty: 1 }],
       iso(8, -1), at(8, -4))
@@ -1942,6 +2217,25 @@ describe('a year in the life of the rental house', () => {
     assert.ok(report.includes('CST-08'))
     assert.match(report, /Missing items are for you to decide/)
 
+    // --- The owner decides: STOLEN, and the partner group hears it (0025 D9)
+    // Nobody has seen C-Stand #8 since the Eid trucks. It leaves the fleet
+    // as a disposition — the count never did that by itself — and the
+    // broadcast is one line in the group's language, the other second,
+    // the house's public phone on it (a unit that is not stolen has no
+    // broadcast at all: the loud line is only honest when the state is).
+    setPublicPhone(db, '0300 1234567')
+    const stolenStand = markTerminal(db, {
+      assetId: 'asset-cstand-8', disposition: 'stolen',
+      note: 'Missing at the July ginti', now: () => at(10, 0, 14),
+    })
+    assert.ok(stolenStand.outboxId)
+    expectedScanOps++
+    assert.equal(db.get(`select disposition from assets where id = 'asset-cstand-8'`).disposition, 'stolen')
+    const shout = stolenBroadcast(db, 'asset-cstand-8', seed.houseName, 'ur')
+    assert.match(shout, /^CHORI \/ STOLEN — C-Stand \(CST-08\), tag v1[A-Za-z0-9]+\. Yeh Ravi Light & Grip ka saman hai/)
+    assert.match(shout, /0300 1234567 par call karein\. \/ This item was stolen from Ravi Light & Grip\./)
+    assert.equal(stolenBroadcast(db, seen[0], seed.houseName, 'en'), null, 'no broadcast for a unit that is home')
+
     assertPhysical()
     assertNoLostScans()
   })
@@ -1996,6 +2290,29 @@ describe('a year in the life of the rental house', () => {
       assetEarnings(db, 'asset-fx9-1').earnedMinor >
         assetEarnings(db, 'asset-fx6-1').earnedMinor,
     )
+    // …and each page's payback bar carries the year's repairs in its
+    // denominator: the FX9's Rs 3.5M plus the seed's, January's and
+    // June's bills, against rental money only.
+    const fx9Payback = assetEarnings(db, 'asset-fx9-1')
+    assert.equal(fx9Payback.costMinor, rs(3_500_000 + 105_000))
+    assert.equal(fx9Payback.paybackPct, Math.round((fx9Payback.earnedMinor / fx9Payback.costMinor) * 100))
+
+    // Q5 — "What did I turn away, and why?" The demand log by reason,
+    // summed over the year's months: every FX9 refusal was a COMMITTED
+    // one — the shelf had the bodies, the calendar had promised them — and
+    // the Eid lights split one shelf shortage from three promised units.
+    // That is the buy signal: one more FX9 would have taken three jobs.
+    const yearTurnedAway = (productId) => {
+      const sum = { short: 0, committed: 0 }
+      for (let k = 0; k < 12; k++) {
+        const r = turnedAwayByReason(db, productId, at(k, 10))
+        sum.short += r.short
+        sum.committed += r.committed
+      }
+      return sum
+    }
+    assert.deepEqual(yearTurnedAway('prod-fx9'), { short: 0, committed: 3 })
+    assert.deepEqual(yearTurnedAway('prod-aputure600'), { short: 1, committed: 3 })
 
     // --- The final reconciliation -----------------------------------------
     assertBooks()
@@ -2005,8 +2322,9 @@ describe('a year in the life of the rental house', () => {
     // Nothing hangs 'out' at year end any more. The three items that used to
     // stay red forever — October's paid-for cable, February's stolen FX6 and
     // lens — now have terminal states (0020): the cable is 'lost', the two
-    // absconded units are 'stolen', all off their jobs. The loss is RECORDED,
-    // as a disposition, instead of an eternal ghost on the coming-back board.
+    // absconded units are 'stolen' (and July's ginti sent a third unit the
+    // same way), all off their jobs. The loss is RECORDED, as a disposition,
+    // instead of an eternal ghost on the coming-back board.
     const stillOut = sqlOutSet()
     assert.equal(stillOut.size, 0)
     const gone = db.all(
@@ -2017,7 +2335,7 @@ describe('a year in the life of the rental house', () => {
     // a fourth terminal row that must never read 'retired'.
     assert.deepEqual(
       gone.map((r) => [r.disposition, Number(r.n)]),
-      [['lost', 1], ['returned_to_owner', 1], ['stolen', 2]],
+      [['lost', 1], ['returned_to_owner', 1], ['stolen', 3]],
     )
     // The absconded job left the coming-back board when its gear went stolen —
     // no red row, because the truth is now "gone", not "late".
@@ -2061,10 +2379,13 @@ describe('a year in the life of the rental house', () => {
     // refuses the second promise BY NAME — and
     // `turnaway-blind-to-commitments`: an enquiry asked with dates
     // subtracts confirmed claims and the log counts the committed refusal.
+    // The second year (W8) takes `import-apply-welded`: applyImport lives
+    // in read-model.ts and the year drives the real routine twice. The
+    // eight that remain are Phase B polish doors the waves did not build
+    // — each explained in docs/year-in-the-life.md.
     assert.deepEqual(
       [...FINDINGS].sort(),
       [
-        'import-apply-welded',
         'no-adjustment-door',
         'no-blacklist',
         'no-deposit-door',
@@ -2085,78 +2406,4 @@ function currentCatalogue() {
   return db
     .all(`select id, display_name from products order by display_name`)
     .map((r) => ({ id: r.id, name: r.display_name ?? 'Unnamed' }))
-}
-
-let importBatch = 0
-
-/**
- * DemoStore.applyImport, replicated for Node (finding `import-apply-welded`:
- * the real one is welded to the sql.js driver in store.ts and cannot run or
- * be reused here). Same rules: one transaction, ambiguous rows never merged,
- * serials only on single-unit rows.
- */
-function applyPlan(plan) {
-  const batch = ++importBatch
-  let products = 0
-  db.transaction(() => {
-    const idFor = new Map()
-    const takenCodes = new Set(
-      db
-        .all(`select asset_code from assets where asset_code is not null`)
-        .map((r) => r.asset_code),
-    )
-    for (const { row, verdict } of plan.rows) {
-      if (verdict.kind === 'rejected' || verdict.kind === 'ambiguous') continue
-      let productId
-      if (verdict.kind === 'existing' && !verdict.productId.startsWith('file:')) {
-        productId = verdict.productId
-      } else {
-        const key = row.name.toLowerCase().trim()
-        const already = idFor.get(key)
-        if (already) {
-          productId = already
-        } else {
-          productId = `prod-imported-${batch}-${slug(row.name)}-${products}`
-          db.exec(
-            `insert into products (id, org_id, display_name, category) values (?, ?, ?, ?)`,
-            [productId, seed.orgId, row.name, row.category ?? 'other'],
-          )
-          idFor.set(key, productId)
-          products++
-        }
-      }
-      const codes = row.code
-        ? allocateUnitCodes(takenCodes, row.code, row.quantity)
-        : null
-      for (let i = 1; i <= row.quantity; i++) {
-        const assetId = `asset-imported-${batch === 1 ? '' : `${batch}-`}${slug(row.name)}-${row.line}-${i}`
-        const code = codes ? codes[i - 1] : assetId
-        if (codes) takenCodes.add(code)
-        db.exec(
-          `insert into assets
-             (id, org_id, product_id, asset_code, serial_number, display_name,
-              presence, health, ownership, current_location_id, current_job_id, updated_at)
-           values (?, ?, ?, ?, ?, ?, 'here', 'ok', 'owned', null, null, ?)`,
-          [
-            assetId, seed.orgId, productId, code,
-            row.quantity === 1 ? row.serial : null,
-            row.name, new Date().toISOString(),
-          ],
-        )
-        // Later imports need tags too, bound the same way the first was.
-        if (batch > 1) {
-          const tag = `v1SIMB${batch}${String(row.line).padStart(2, '0')}${String(i).padStart(2, '0')}AAAAAAAAAAAA`.slice(0, 24)
-          db.exec(
-            `insert into asset_tags (tag_code, asset_id, status) values (?, ?, 'active')`,
-            [tag, assetId],
-          )
-          tagOf.set(assetId, tag)
-        }
-      }
-    }
-  })
-}
-
-function slug(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
 }

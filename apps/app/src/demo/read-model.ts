@@ -1,8 +1,10 @@
 import {
+  allocateUnitCodes,
   compareDueDates,
   dueStatus,
   voidedScanIds,
   type DueStatus,
+  type ImportPlan,
   type JobCommitment,
   type MoneyTotal,
   type SqlDriver,
@@ -1179,4 +1181,138 @@ export function managerFlaggedAt(db: SqlDriver, jobId: string): string | null {
   return db.get<{ at: string | null }>(
     `select manager_flagged_at as at from job_meta where job_id = ?`, [jobId],
   )?.at ?? null
+}
+
+// ------------------------------------------------------------ the import
+
+/** A name as an id fragment: 'Sony FX9' → 'sony-fx9'. */
+export function slug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
+}
+
+/**
+ * An id that is not yet in the table: the base, or the base with -2, -3…
+ * A second import of the same file — or a file whose product sits on the
+ * same line number as an earlier one — used to collide on the primary key
+ * and roll the whole transaction back with nothing to say for itself.
+ */
+function uniqueId(db: SqlDriver, table: 'products' | 'assets' | 'locations', base: string): string {
+  let id = base
+  for (let n = 2; db.get(`select 1 as one from ${table} where id = ?`, [id]); n++) {
+    id = `${base}-${n}`
+  }
+  return id
+}
+
+/** A shelf by name, created on first sight so an import cannot lose one. */
+function locationIdFor(db: SqlDriver, orgId: string, name: string): string {
+  const existing = db.get<{ id: string }>(
+    `select id from locations where lower(name) = lower(?)`,
+    [name],
+  )
+  if (existing) return existing.id
+  const id = uniqueId(db, 'locations', `loc-imported-${slug(name)}`)
+  db.exec(
+    `insert into locations (id, org_id, name, kind, path, code) values (?, ?, ?, 'shelf', ?, ?)`,
+    [id, orgId, name, name, name],
+  )
+  return id
+}
+
+/**
+ * Apply a reviewed import plan: create the products the planner could not
+ * match, then one asset per unit, in ONE transaction. Either everything
+ * lands or nothing does — a half-applied import is the worst outcome,
+ * because the next person cannot tell what was already created and running
+ * the file again would double whatever did.
+ *
+ * Rows the planner could not decide are created as their OWN product, never
+ * merged into the thing they resemble. That is the same refusal the kit-list
+ * reader makes between C300 and C500, for the same reason.
+ *
+ * Unit codes are collision-checked against every code already on an asset
+ * and numbering CONTINUES (FX9-01, FX9-02 on the shelf → this file's FX9
+ * becomes FX9-03) — see allocateUnitCodes. `renumbered` counts the units
+ * whose naive `CODE-NN` would have duplicated an existing sticker code, so
+ * the result screen can say so honestly instead of minting two cameras
+ * that answer to one code.
+ *
+ * Lives here, not in store.ts, so it runs under Node — the year test drives
+ * the REAL routine now (was finding `import-apply-welded`). The clock is
+ * injected like every other write's; store.ts binds Date.now.
+ */
+export function applyImport(
+  db: SqlDriver,
+  orgId: string,
+  plan: ImportPlan,
+  nowMs: number = Date.now(),
+): { products: number; units: number; renumbered: number } {
+  let products = 0
+  let units = 0
+  let renumbered = 0
+  const updatedAt = new Date(nowMs).toISOString()
+
+  db.transaction(() => {
+    const idFor = new Map<string, string>()
+    const takenCodes = new Set(
+      db
+        .all<{ asset_code: string | null }>(
+          `select asset_code from assets where asset_code is not null`,
+        )
+        .map((r) => r.asset_code as string),
+    )
+
+    for (const { row, verdict } of plan.rows) {
+      if (verdict.kind === 'rejected') continue
+
+      let productId: string
+      if (verdict.kind === 'existing' && !verdict.productId.startsWith('file:')) {
+        productId = verdict.productId
+      } else {
+        const key = row.name.toLowerCase().trim()
+        const already = idFor.get(key)
+        if (already) {
+          productId = already
+        } else {
+          productId = uniqueId(db, 'products', `prod-imported-${slug(row.name)}-${products}`)
+          db.exec(
+            `insert into products (id, org_id, display_name, category) values (?, ?, ?, ?)`,
+            [productId, orgId, row.name, row.category ?? 'other'],
+          )
+          idFor.set(key, productId)
+          products++
+        }
+      }
+
+      const locationId = row.location ? locationIdFor(db, orgId, row.location) : null
+      const codes = row.code
+        ? allocateUnitCodes(takenCodes, row.code, row.quantity)
+        : null
+      for (let i = 1; i <= row.quantity; i++) {
+        const assetId = uniqueId(db, 'assets', `asset-imported-${slug(row.name)}-${row.line}-${i}`)
+        const code = codes ? codes[i - 1] : assetId
+        if (codes) {
+          if (code !== `${row.code}-${String(i).padStart(2, '0')}`) renumbered++
+          takenCodes.add(code)
+        }
+        db.exec(
+          `insert into assets
+             (id, org_id, product_id, asset_code, serial_number, display_name,
+              presence, health, ownership, current_location_id, current_job_id, updated_at)
+           values (?, ?, ?, ?, ?, ?, 'here', 'ok', 'owned', ?, null, ?)`,
+          [
+            assetId, orgId, productId, code,
+            // A serial belongs to ONE physical unit. Copying it onto every
+            // unit of a multi-quantity row would put the same serial on
+            // twelve batteries, which is worse than having none.
+            row.quantity === 1 ? row.serial : null,
+            row.name, locationId, updatedAt,
+          ],
+        )
+        units++
+      }
+    }
+  })
+
+  return { products, units, renumbered }
 }
