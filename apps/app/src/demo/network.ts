@@ -12,7 +12,7 @@ import {
   type StolenBroadcastFacts,
 } from '@papa/core'
 import { closeJob, createJob, parseAttendantNames, stillOutCount } from './read-model.ts'
-import { lastBookingOp } from './bookings.ts'
+import { lastBookingOp, clientNamesFor } from './bookings.ts'
 import { createCustomer, getSetting, isoDate, recordEntry, setSetting } from './khata.ts'
 import { expenseRows, recordExpense } from './kharcha.ts'
 
@@ -299,11 +299,15 @@ export function removePartner(
  * #sub-rent-intent) — bookings.ts's lastBookingOp, the one home for that match.
  */
 function lastOpNaming(db: SqlDriver, key: 'client_partner_id' | 'client_sub_hire_id', id: string): string | null {
+  // Under the server's name too, once the pipe has re-keyed the row (W9) —
+  // bookings.ts lastBookingOp explains.
+  const patterns = [id, ...clientNamesFor(db, id)].map((n) => `%"${key}":"${n}"%`)
   const row = db.get<{ id: string }>(
     `select id from outbox
-      where state in ('pending', 'inflight') and payload like ?
+      where state in ('pending', 'inflight')
+        and (${patterns.map(() => 'payload like ?').join(' or ')})
       order by seq desc limit 1`,
-    [`%"${key}":"${id}"%`],
+    patterns,
   )
   return row?.id ?? null
 }

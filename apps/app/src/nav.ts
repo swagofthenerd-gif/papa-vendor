@@ -28,6 +28,8 @@ export type View =
   | { name: 'settings' }
   | { name: 'rates' }                            // Settings → the rate card and calendar
   | { name: 'partner'; partnerId: string }       // --- network --- one partner house
+  | { name: 'enrol' }                            // the pipe (W9): enrol this phone
+  | { name: 'phone' }                            // Settings → This phone
 
 /**
  * 'out' and 'in' open a real session and write events. 'lookup' is the
@@ -91,7 +93,13 @@ export function parseHash(hash: string): View {
     case 'ginti':
       return { name: 'ginti' }
     case 'settings':
-      return parts[1] === 'rates' ? { name: 'rates' } : { name: 'settings' }
+      if (parts[1] === 'rates') return { name: 'rates' }
+      if (parts[1] === 'phone') return { name: 'phone' }
+      return { name: 'settings' }
+    case 'enrol':
+      return { name: 'enrol' }
+    case 'phone':
+      return { name: 'phone' }
     case 'rates':
       return { name: 'rates' }
     // --- network ---
@@ -139,6 +147,10 @@ export function viewToHash(view: View): string {
     // --- network ---
     case 'partner':
       return `#/partner/${view.partnerId}`
+    case 'enrol':
+      return '#/enrol'
+    case 'phone':
+      return '#/settings/phone'
   }
 }
 

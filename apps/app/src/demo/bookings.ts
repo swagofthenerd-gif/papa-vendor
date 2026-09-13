@@ -349,18 +349,35 @@ export function pruneExpiredPencils(db: SqlDriver, nowMs: number): number {
  * for network.ts: a sub-hire IN that rescues a booking chains here too.
  */
 export function lastBookingOp(db: SqlDriver, bookingId: string): string | null {
+  // Once the pipe has re-keyed a booking to the server's id (W9), earlier
+  // queued ops still carry the phone's id — look under both names so the
+  // chain stays one chain and a refused confirm parks its convert too.
+  const names = [bookingId, ...clientNamesFor(db, bookingId)]
+  const patterns = names.flatMap((n) => [
+    `%"client_booking_id":"${n}"%`,
+    `%"p_booking_id":"${n}"%`,
+    `%"for_booking_id":"${n}"%`,
+  ])
   const row = db.get<{ id: string }>(
     `select id from outbox
       where state in ('pending', 'inflight')
-        and (payload like ? or payload like ? or payload like ?)
+        and (${patterns.map(() => 'payload like ?').join(' or ')})
       order by seq desc limit 1`,
-    [
-      `%"client_booking_id":"${bookingId}"%`,
-      `%"p_booking_id":"${bookingId}"%`,
-      `%"for_booking_id":"${bookingId}"%`,
-    ],
+    patterns,
   )
   return row?.id ?? null
+}
+
+/** The phone's own earlier names for a server id, from the pipe's id map
+ *  (empty when the table is absent or the id was never renamed). */
+export function clientNamesFor(db: SqlDriver, serverId: string): string[] {
+  try {
+    return db.all<{ client_id: string }>(
+      `select client_id from id_map where server_id = ?`, [serverId],
+    ).map((r) => r.client_id)
+  } catch {
+    return []
+  }
 }
 
 export function enqueueBookingOp(

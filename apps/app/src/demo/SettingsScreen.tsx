@@ -29,6 +29,15 @@ export function SettingsScreen({ store }: { store: DemoStore }) {
     >
       <LanguageRow />
       <BackedUpRow store={store} />
+
+      {/* The pipe (W9): who this phone is and who it talks to. */}
+      <section className="section">
+        <SectionHead icon="sliders" title={STR.pipePhoneTitle} sub={STR.pipePhoneDoorSub} />
+        <button className="btn btn-outline btn-block" onClick={() => go({ name: 'phone' })}>
+          <Icon name="sliders" size={18} /> {STR.pipePhoneTitle}
+        </button>
+      </section>
+
       <PaymentRow store={store} />
 
       {/* --- network --- (0025): the partner houses and the public line. */}

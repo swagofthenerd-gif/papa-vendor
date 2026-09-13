@@ -290,7 +290,11 @@ describe('the calendar writes', () => {
     const q = quoteForLines(db, [{ productId: 'prod-fx9', productName: 'FX9', qty: 1 }], APR1, APR11, null)
     assert.equal(q.steps.calendarMultiplier.multiplier, 1.5)
     assert.equal(q.lines[0].lineTotalMinor, Math.round(6 * rs(25_000) * 1.5))
-    assert.deepEqual(ops('set_calendar_day')[0].payload, { p_day: '2030-04-05', p_kind: 'holiday', p_name: 'Test holiday', p_rate_multiplier: 1.5 })
+    // client_day_id rides beside the args (W9): the pipe maps the server's
+    // row id onto the phone's `cal-…` one when the reply comes back.
+    const { client_day_id, ...args } = ops('set_calendar_day')[0].payload
+    assert.match(client_day_id, /^cal-/)
+    assert.deepEqual(args, { p_day: '2030-04-05', p_kind: 'holiday', p_name: 'Test holiday', p_rate_multiplier: 1.5 })
   })
   test('the same (day, kind) is one row, updated; clearCalendarDay removes it and queues', () => {
     setCalendarDay(db, ORG, '2030-04-05', 'holiday', 'First', 1.5, NOW, ids)

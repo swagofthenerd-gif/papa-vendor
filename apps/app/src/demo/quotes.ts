@@ -312,7 +312,9 @@ export function setCalendarDay(
     new Outbox(db, ids.now).enqueue({
       id: ids.newId(),
       op: 'set_calendar_day',
-      payload: { p_day: day, p_kind: kind, p_name: cleaned, p_rate_multiplier: rateMultiplier },
+      // client_day_id rides beside the args so the pipe can map the
+      // server's row id onto this one (dispatch.ts ID_REPLY_RULES).
+      payload: { client_day_id: id, p_day: day, p_kind: kind, p_name: cleaned, p_rate_multiplier: rateMultiplier },
       dependsOn: null,
     })
   })
