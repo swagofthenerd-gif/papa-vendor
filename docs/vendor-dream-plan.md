@@ -158,15 +158,17 @@ the assumptions it stands on.
    Convert / Send / Cancel doors, the PROMISED stamp on the scanner).
 2. ✅ Extension-collision preview — the structured collision list as
    data, three doors: Substitute (`reallocate_reservation`), Sub-rent
-   (an intent op — **which no RPC answers yet**, year finding
-   `sub-rent-intent-unreplayable`), Call.
+   (an intent line on the booking's note, crossing as `set_booking_note`
+   since W11 — was year finding `sub-rent-intent-unreplayable`), Call.
 3. ✅ WhatsApp-paste quoting — 0024 rate cards, the 3-day week, the
    opt-in weekend mask, the org calendar with multipliers, logged
    overrides as the final rate; the enquiry reply is a priced quote
    (`quoteForLines`), golden-tested EN + UR.
-4. ◐ Margin-before-quote — `booking_sub_hire_cost` / `subHireCostFor`
-   net every live expense tagged to the booking or its job; **the link
-   is made only at record time** (year finding `subhire-cost-unlinkable`).
+4. ✅ Margin-before-quote — `booking_sub_hire_cost` / `subHireCostFor`
+   net every live expense tagged to the booking or its job, and since
+   W11 `job_margin` reads the booking's bills from the job's side too:
+   pencil at the enquiry, borrow against it, convert (was year finding
+   `subhire-cost-unlinkable`).
 5. ◐ Escalation ladder — desk-facing (`escalationStep`: nudge → call →
    late-fee draft → manager), the day-7 rung IS the khata's draft, the
    day-14 rung a local flag (ASSUMPTION #28); no server escalation row.
@@ -277,10 +279,11 @@ this plan:
 2. **The pipe is the whole remaining risk.** The year cannot see a
    server. It proves what one phone does; it proves nothing about what
    happens when its queue — ops named after RPCs it has never called —
-   meets Postgres. Two of the year's new findings are exactly that kind:
+   meets Postgres. Two of the year's new findings were exactly that kind:
    an op with no RPC (`sub-rent-intent-unreplayable`) and a link the
-   server accepts but the phone cannot make after the fact
-   (`subhire-cost-unlinkable`). **W9 "the pipe"** (login, device
+   server accepts but the phone could not make after the fact
+   (`subhire-cost-unlinkable`) — both closed in W11, when every write
+   learned to cross. **W9 "the pipe"** (login, device
    session, pull sync, outbox drain, photo upload, on-device schema
    migration) is not a phase on this list because it is Phase A — and it
    comes before anything else.

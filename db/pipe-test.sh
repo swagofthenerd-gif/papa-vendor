@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# npm run test:pipe — bring the pipe up, run the six scenarios against it,
+# npm run test:pipe — bring the pipe up, run the ten scenarios against it,
 # take it down, and say which of the three failed.
 #
 #   KEEP=1 npm run test:pipe   # leave the containers up afterwards
