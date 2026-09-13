@@ -53,6 +53,12 @@ const ORDER: Record<AvailabilityLine['state'], number> = {
   unknown: 0, none: 1, short: 2, available: 3,
 }
 
+/** --- network --- a line the shelf (minus the calendar) cannot cover: the
+ *  Ask-the-market door shows for these and the ask is built from them. */
+export function needsTheMarket(line: AvailabilitySummary['lines'][number]): boolean {
+  return line.state === 'short' || line.state === 'none'
+}
+
 export function Enquiry({
   summary,
   reply,
@@ -240,7 +246,7 @@ export function Enquiry({
         ) : null}
         {/* --- network --- only when a line is short or committed: a door
             that appears with nothing to ask for is a dead button. */}
-        {onAskMarket && summary.lines.some((l) => l.state === 'short' || l.state === 'none') ? (
+        {onAskMarket && summary.lines.some(needsTheMarket) ? (
           <button className="btn btn-outline" onClick={onAskMarket}>
             <Icon name="handshake" size={18} /> {STR.networkAskMarket}
           </button>

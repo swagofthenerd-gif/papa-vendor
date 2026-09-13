@@ -19,6 +19,8 @@
  * here lets the phone build it offline from the mirror and the settings.
  */
 
+import { MONTHS_SHORT, WEEKDAYS_SHORT } from './bookings.ts'
+
 export type BroadcastLang = 'en' | 'ur'
 
 export interface ShortageLine {
@@ -35,13 +37,10 @@ export interface BroadcastOrg {
   phone: string | null
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-
 /** 'Sat 21 Nov' — the calendar's short date voice, local time. */
 function dayLabel(ms: number): string {
   const d = new Date(ms)
-  return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`
+  return `${WEEKDAYS_SHORT[d.getDay()]} ${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`
 }
 
 /** 'Sat 21 Nov – Mon 23 Nov', or one day when the window is inside it. */
@@ -62,34 +61,18 @@ export function askTheMarketText(
   org: BroadcastOrg,
   lang: BroadcastLang,
 ): string {
-  const lines: string[] = []
   const reply = org.phone ?? null
-  if (lang === 'ur') {
-    lines.push(`${org.name} — kuch gear chahiye`)
-    lines.push('')
-    for (const s of shortage) {
-      lines.push(`${s.qty} x ${s.productName} · ${windowLabel(s.fromMs, s.untilMs)}`)
-    }
-    lines.push('')
-    lines.push(
-      reply
+  const asks = shortage.map((s) => `${s.qty} x ${s.productName} · ${windowLabel(s.fromMs, s.untilMs)}`)
+  const head = lang === 'ur' ? `${org.name} — kuch gear chahiye` : `${org.name} — looking for gear`
+  const foot =
+    lang === 'ur'
+      ? reply
         ? `Agar kisi ke paas ho to ${reply} par bata dein. Shukriya.`
-        : 'Agar kisi ke paas ho to yahin reply kar dein. Shukriya.',
-    )
-  } else {
-    lines.push(`${org.name} — looking for gear`)
-    lines.push('')
-    for (const s of shortage) {
-      lines.push(`${s.qty} x ${s.productName} · ${windowLabel(s.fromMs, s.untilMs)}`)
-    }
-    lines.push('')
-    lines.push(
-      reply
+        : 'Agar kisi ke paas ho to yahin reply kar dein. Shukriya.'
+      : reply
         ? `If you have it, please let us know on ${reply}. Thank you.`
-        : 'If you have it, please reply here. Thank you.',
-    )
-  }
-  return lines.join('\n')
+        : 'If you have it, please reply here. Thank you.'
+  return [head, '', ...asks, '', foot].join('\n')
 }
 
 /** The facts stolen_broadcast_text (0025 D9) returns, as the phone holds

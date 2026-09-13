@@ -186,8 +186,9 @@ export interface OpenJobRow {
   attendantNames: string[]
 }
 
-/** jobs.attendant_names as a string list; anything unparseable is nobody. */
-function parseAttendantNames(raw: string | null): string[] {
+/** jobs.attendant_names as a string list; anything unparseable is nobody.
+ *  The one parser — network.ts's attendantNames reads through it too. */
+export function parseAttendantNames(raw: string | null): string[] {
   if (!raw) return []
   try {
     const parsed: unknown = JSON.parse(raw)

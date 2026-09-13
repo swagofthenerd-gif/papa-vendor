@@ -345,9 +345,10 @@ export function pruneExpiredPencils(db: SqlDriver, nowMs: number): number {
  * The most recent queued op for a booking — what the next op for the
  * same booking depends on, so the pipe replays create → confirm → extend
  * in the order the desk did them. Matched on the client id the payload
- * carries; JSON.stringify writes it as exactly this substring.
+ * carries; JSON.stringify writes it as exactly this substring. Exported
+ * for network.ts: a sub-hire IN that rescues a booking chains here too.
  */
-function lastBookingOp(db: SqlDriver, bookingId: string): string | null {
+export function lastBookingOp(db: SqlDriver, bookingId: string): string | null {
   const row = db.get<{ id: string }>(
     `select id from outbox
       where state in ('pending', 'inflight')

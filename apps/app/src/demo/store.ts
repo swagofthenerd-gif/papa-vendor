@@ -199,7 +199,6 @@ import {
   closeSubHire,
   crewFor,
   partner,
-  partnerCustomerId,
   partnerMoney,
   partners,
   publicPhone,
@@ -212,7 +211,6 @@ import {
   staff,
   stolenBroadcast,
   stolenBroadcastFacts,
-  subHire,
   subHireForAsset,
   subHireForJob,
   subHires,
@@ -1792,10 +1790,6 @@ export class DemoStore {
     return subHires(this.db, filter)
   }
 
-  subHire(id: string): SubHireRow | null {
-    return subHire(this.db, id)
-  }
-
   /** The sub-hire behind a job — how the board stamps SUB-HIRE. */
   subHireForJob(jobId: string): SubHireRow | null {
     return subHireForJob(this.db, jobId)
@@ -1809,10 +1803,6 @@ export class DemoStore {
   /** Both books on one line: what we owe them, what they owe us. */
   partnerMoney(id: string): PartnerMoney {
     return partnerMoney(this.db, id)
-  }
-
-  partnerCustomerId(id: string): string | null {
-    return partnerCustomerId(this.db, id)
   }
 
   /** Units of a product fit to lend: owned, in the fleet, on the shelf. */

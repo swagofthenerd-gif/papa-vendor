@@ -1182,7 +1182,6 @@ const STR_EN = {
   networkSubHireInTitle: 'Record a sub-hire in',
   networkSubHireInHint: 'Gear borrowed from a partner. With a serial the unit joins the fleet as borrowed and can take a label.',
   networkSubHireFromLabel: 'From',
-  networkSubHireToLabel: 'To',
   networkSubHireProductLabel: 'What',
   networkSubHireProductSearch: 'Search the catalogue',
   networkSubHireProductSearchAria: 'Find a product',
@@ -1225,7 +1224,6 @@ const STR_EN = {
   networkLendHint: 'A job named for the partner appears on the board; scan the gear out onto it like any client’s.',
   networkLendPartnerLabel: 'To',
   networkLendRecord: 'Lend it',
-  networkLendDone: (label: string): string => `${label} is on the Today board — scan the gear out onto it.`,
   networkLendThisUnit: 'Lend to a partner',
   networkBorrowedFrom: (partner: string): string => `Borrowed from ${partner}`,
   networkBorrowedOpenPartner: 'Open the partner house',
@@ -1238,13 +1236,6 @@ const STR_EN = {
   networkCrewRoleDriver: 'driver',
   networkCrewRemoveAria: (name: string): string => `Hold to take ${name} off the crew`,
   networkCrewNobodyLeft: 'Everyone is already on it.',
-  networkCrewRefusal: (reason: string): string =>
-    ({
-      no_job: 'That job is not on this phone.',
-      cancelled: 'A cancelled job sends nobody out.',
-      no_user: 'That person is not on the roster.',
-      bad_role: 'A crew role is attendant or driver.',
-    }[reason] ?? reason),
   // The stolen broadcast.
   networkTellPartners: 'Tell the partner houses',
   networkTellPartnersHint: 'The short line for the partner group, sent to each house. The public page rides along when one is set.',

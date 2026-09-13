@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { AvailabilitySummary, AvailabilityWindow, CatalogueItem } from '@papa/core'
-import { Enquiry } from '../routes/Enquiry.tsx'
+import { Enquiry, needsTheMarket } from '../routes/Enquiry.tsx'
 import { NewJobSheet } from './NewJobSheet.tsx'
 import { QuoteSheet } from './QuoteSheet.tsx'
 import { defaultPickupMs, defaultReturnMs, fromLocalInput, toLocalInput } from '../booking-view.ts'
@@ -135,7 +135,7 @@ export function EnquiryScreen({
     const untilMs = availabilityWindow?.endMs ?? now + DAY_MS
     setAsking(
       summary.lines
-        .filter((l) => (l.state === 'short' || l.state === 'none') && l.productId)
+        .filter((l) => needsTheMarket(l) && l.productId)
         .map((l) => ({
           productId: l.productId as string,
           productName: l.productName ?? l.raw,

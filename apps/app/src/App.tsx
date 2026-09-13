@@ -101,6 +101,8 @@ function AssetRoute({ store, assetId }: { store: DemoStore; assetId: string }) {
   const [lending, setLending] = useState(false)
   const [telling, setTelling] = useState(false)
   const bump = () => setTick((t) => t + 1)
+  // Null unless the unit is marked stolen: gates the door and the sheet.
+  const stolen = store.stolenBroadcastFacts(assetId)
 
   // tick is read so the lint stays honest that a re-render is the point — the
   // fleet writes below mutate the mirror in place, and bump() re-reads it.
@@ -170,7 +172,7 @@ function AssetRoute({ store, assetId }: { store: DemoStore; assetId: string }) {
         // --- network --- (0025): lend an owned unit; tell the partner
         // houses about a stolen one; name the house a borrowed one is from.
         onLend={store.lendable(assetId) ? () => setLending(true) : undefined}
-        onTellPartners={store.stolenBroadcastFacts(assetId) ? () => setTelling(true) : undefined}
+        onTellPartners={stolen ? () => setTelling(true) : undefined}
         borrowedFrom={store.subHireForAsset(assetId)}
       />
       {lending && asset ? (
@@ -181,17 +183,13 @@ function AssetRoute({ store, assetId }: { store: DemoStore; assetId: string }) {
           onClose={() => setLending(false)}
         />
       ) : null}
-      {telling && asset ? (
+      {telling && stolen ? (
         <PartnerSendSheet
           title={STR.networkTellPartners}
           hint={STR.networkTellPartnersHint}
           partners={store.partners()}
           text={store.stolenBroadcastText(assetId) ?? ''}
-          above={
-            store.stolenBroadcastFacts(assetId)?.publicUrl
-              ? null
-              : <p className="sheet-hint">{STR.networkTellPartnersNoPage}</p>
-          }
+          above={stolen.publicUrl ? null : <p className="sheet-hint">{STR.networkTellPartnersNoPage}</p>}
           onClose={() => setTelling(false)}
         />
       ) : null}

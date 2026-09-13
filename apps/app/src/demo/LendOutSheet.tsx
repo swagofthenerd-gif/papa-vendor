@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Icon } from '@papa/icons'
+import { DAY_MS } from '@papa/core'
 import { fromLocalInput, toLocalInput } from '../booking-view.ts'
+import { PartnerChips, PeriodFields, ProductPicker, optionalRupeesMinor } from './SubHireFields.tsx'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 
@@ -34,25 +36,18 @@ export function LendOutSheet({
   const [partnerId, setPartnerId] = useState<string>(initialPartner ?? partners[0]?.id ?? '')
   const [productId, setProductId] = useState<string | null>(asset?.productId ?? null)
   const [assetId, setAssetId] = useState<string | null>(asset?.id ?? null)
-  const [query, setQuery] = useState('')
   const [qty, setQty] = useState('1')
   const [start, setStart] = useState(toLocalInput(nowMs))
-  const [end, setEnd] = useState(toLocalInput(nowMs + 24 * 3_600_000))
+  const [end, setEnd] = useState(toLocalInput(nowMs + DAY_MS))
   const [charge, setCharge] = useState('')
   const [note, setNote] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
 
   const productName = productId ? (store.catalogue.find((c) => c.id === productId)?.name ?? asset?.name ?? null) : null
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (q.length === 0) return []
-    return store.catalogue.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 8)
-  }, [store, query])
   const units = useMemo(() => (productId && !asset ? store.lendableUnits(productId) : []), [store, productId, asset])
 
   const startMs = fromLocalInput(start)
   const endMs = fromLocalInput(end)
-  const rupees = Number(charge)
   const ready = partnerId.length > 0 && (assetId !== null || productId !== null) && startMs !== null && endMs !== null
 
   const lend = () => {
@@ -64,7 +59,7 @@ export function LendOutSheet({
       assetId,
       productId,
       qty: assetId ? 1 : Number(qty),
-      agreedChargeMinor: charge.trim().length > 0 && Number.isFinite(rupees) ? Math.round(rupees * 100) : null,
+      agreedChargeMinor: optionalRupeesMinor(charge),
       note: note.trim() || null,
     })
     if (!r.ok) { setProblem(STR.networkSubHireRefusal(r.reason)); return }
@@ -82,56 +77,27 @@ export function LendOutSheet({
         </header>
         <p className="sheet-hint">{STR.networkLendHint}</p>
 
-        <span className="field-label" id="lend-partner">{STR.networkLendPartnerLabel}</span>
-        <div className="chip-row" role="group" aria-labelledby="lend-partner">
-          {partners.map((p) => (
-            <button
-              key={p.id}
-              className={`filter-chip${partnerId === p.id ? ' active' : ''}`}
-              aria-pressed={partnerId === p.id}
-              onClick={() => setPartnerId(p.id)}
-            >
-              {p.name}
-            </button>
-          ))}
-        </div>
-        {partners.length === 0 ? <p className="sheet-hint">{STR.networkAskMarketNoPartners}</p> : null}
+        <PartnerChips
+          id="lend-partner"
+          label={STR.networkLendPartnerLabel}
+          partners={partners}
+          value={partnerId}
+          onChange={setPartnerId}
+        />
 
-        <label className="field-label" htmlFor="lend-product">{STR.networkSubHireProductLabel}</label>
         {asset ? (
-          <p className="sheet-hint code">{asset.code} · {asset.name}</p>
-        ) : productName ? (
-          <div className="chip-row">
-            <button className="filter-chip active" aria-pressed onClick={() => { setProductId(null); setAssetId(null) }}>
-              {productName} <Icon name="x" size={12} />
-            </button>
-          </div>
-        ) : (
           <>
-            <input
-              id="lend-product"
-              className="sheet-search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={STR.networkSubHireProductSearch}
-              aria-label={STR.networkSubHireProductSearchAria}
-              autoCorrect="off"
-              autoCapitalize="none"
-              spellCheck={false}
-            />
-            {results.length > 0 ? (
-              <ul className="sheet-list">
-                {results.map((c) => (
-                  <li key={c.id}>
-                    <button className="sheet-row" onClick={() => { setProductId(c.id); setQuery('') }}>
-                      <span>{c.name}</span>
-                      <Icon name="chevron-right" size={16} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+            <label className="field-label" htmlFor="lend-product">{STR.networkSubHireProductLabel}</label>
+            <p className="sheet-hint code">{asset.code} · {asset.name}</p>
           </>
+        ) : (
+          <ProductPicker
+            id="lend-product"
+            catalogue={store.catalogue}
+            productName={productName}
+            onPick={setProductId}
+            onClear={() => { setProductId(null); setAssetId(null) }}
+          />
         )}
 
         {productId && !asset ? (
@@ -173,16 +139,7 @@ export function LendOutSheet({
           </>
         ) : null}
 
-        <div className="field-pair">
-          <div>
-            <label className="field-label" htmlFor="lend-start">{STR.networkSubHireStartLabel}</label>
-            <input id="lend-start" className="sheet-search" type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} />
-          </div>
-          <div>
-            <label className="field-label" htmlFor="lend-end">{STR.networkSubHireEndLabel}</label>
-            <input id="lend-end" className="sheet-search" type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} />
-          </div>
-        </div>
+        <PeriodFields idPrefix="lend" start={start} end={end} onStart={setStart} onEnd={setEnd} />
 
         <label className="field-label" htmlFor="lend-charge">{STR.networkSubHireChargeLabel}</label>
         <input

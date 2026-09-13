@@ -11,8 +11,9 @@ import {
   type SqlDriver,
   type StolenBroadcastFacts,
 } from '@papa/core'
-import { closeJob, createJob, stillOutCount } from './read-model.ts'
-import { createCustomer, getSetting, recordEntry, setSetting } from './khata.ts'
+import { closeJob, createJob, parseAttendantNames, stillOutCount } from './read-model.ts'
+import { lastBookingOp } from './bookings.ts'
+import { createCustomer, getSetting, isoDate, recordEntry, setSetting } from './khata.ts'
 import { expenseRows, recordExpense } from './kharcha.ts'
 
 /**
@@ -288,48 +289,26 @@ export function removePartner(
   return { ok: true }
 }
 
-/** The most recent queued op naming this partner — what the next one
- *  chains behind, so the pipe replays create → edit → sub-hire in order.
- *  Matched on the client id JSON.stringify writes verbatim. */
-function lastPartnerOp(db: SqlDriver, partnerId: string): string | null {
+/**
+ * The most recent queued op whose payload names `id` under `key` — what
+ * the next op on the same thing chains behind, so the pipe replays
+ * create → edit → sub-hire (a partner) or record → close (a sub-hire) in
+ * order. Matched on the client id JSON.stringify writes verbatim. A
+ * sub-hire IN that rescues a booking chains behind the booking's own ops
+ * instead (and so after the extension screen's sub_rent_intent, ASSUMPTION
+ * #sub-rent-intent) — bookings.ts's lastBookingOp, the one home for that match.
+ */
+function lastOpNaming(db: SqlDriver, key: 'client_partner_id' | 'client_sub_hire_id', id: string): string | null {
   const row = db.get<{ id: string }>(
     `select id from outbox
       where state in ('pending', 'inflight') and payload like ?
       order by seq desc limit 1`,
-    [`%"client_partner_id":"${partnerId}"%`],
+    [`%"${key}":"${id}"%`],
   )
   return row?.id ?? null
 }
-
-/** The most recent queued op for a sub-hire — close chains behind record. */
-function lastSubHireOp(db: SqlDriver, subHireId: string): string | null {
-  const row = db.get<{ id: string }>(
-    `select id from outbox
-      where state in ('pending', 'inflight') and payload like ?
-      order by seq desc limit 1`,
-    [`%"client_sub_hire_id":"${subHireId}"%`],
-  )
-  return row?.id ?? null
-}
-
-/** The most recent queued op for a booking — a sub-hire IN that rescues
- *  a booking replays after the booking's own ops (and after the extension
- *  screen's sub_rent_intent, ASSUMPTION #sub-rent-intent). Same match as
- *  bookings.ts's lastBookingOp, kept here so this module stays standalone. */
-function lastBookingOp(db: SqlDriver, bookingId: string): string | null {
-  const row = db.get<{ id: string }>(
-    `select id from outbox
-      where state in ('pending', 'inflight')
-        and (payload like ? or payload like ? or payload like ?)
-      order by seq desc limit 1`,
-    [
-      `%"client_booking_id":"${bookingId}"%`,
-      `%"p_booking_id":"${bookingId}"%`,
-      `%"for_booking_id":"${bookingId}"%`,
-    ],
-  )
-  return row?.id ?? null
-}
+const lastPartnerOp = (db: SqlDriver, partnerId: string) => lastOpNaming(db, 'client_partner_id', partnerId)
+const lastSubHireOp = (db: SqlDriver, subHireId: string) => lastOpNaming(db, 'client_sub_hire_id', subHireId)
 
 // ---------------------------------------------------- the partner-customer
 
@@ -764,7 +743,7 @@ export function recordSubHireOut(
       orgId,
       label,
       contact: p.phone,
-      expectedBack: isoDateLocal(input.endMs),
+      expectedBack: isoDate(input.endMs),
       customerId,
       wants: assetId ? [] : [{ productId: product.id, qty }],
       expectedAssetIds: assetId ? [assetId] : [],
@@ -773,7 +752,7 @@ export function recordSubHireOut(
       ledgerEntryId = recordEntry(db, {
         orgId,
         customerId,
-        kind: 'charge' as LedgerEntryKind,
+        kind: 'charge',
         amountMinor: charge,
         jobId,
         assetId,
@@ -897,13 +876,6 @@ export function closeSubHire(
   return { ok: true, jobClosed, returnedToOwner }
 }
 
-/** Local YYYY-MM-DD — what jobs.expected_back holds. */
-function isoDateLocal(ms: number): string {
-  const d = new Date(ms)
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
-}
-
 // ---------------------------------------------------------- partner money
 
 export interface PartnerMoney {
@@ -971,13 +943,7 @@ export function staff(db: SqlDriver): StaffRow[] {
  *  the server syncs; assign/unassign rewrite it locally). */
 export function attendantNames(db: SqlDriver, jobId: string): string[] {
   const raw = db.get<{ a: string | null }>(`select attendant_names as a from jobs where id = ?`, [jobId])?.a
-  if (!raw) return []
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
-  } catch {
-    return []
-  }
+  return parseAttendantNames(raw ?? null)
 }
 
 export interface CrewMember {

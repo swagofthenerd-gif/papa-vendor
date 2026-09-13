@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Icon } from '@papa/icons'
-import { HOLD_MS } from '../hold.ts'
+import { useHold } from '../components/HoldToFinish.tsx'
 import type { CrewMember, StaffRow } from './network.ts'
 import { STR } from '../strings.ts'
 
@@ -8,8 +8,8 @@ import { STR } from '../strings.ts'
  * The crew line on a job card (0025 D7): who is going out with the gear,
  * as a chip row, plus the "Add crew" door. Taking someone OFF is a HOLD on
  * their chip, never a tap — a chip sits beside the card's frequent doors
- * and a glove brushing it must not un-crew the driver. The ring fills
- * like HoldToFinish's; lifting early cancels.
+ * and a glove brushing it must not un-crew the driver. The ring is
+ * HoldToFinish's own (useHold); lifting early cancels.
  */
 export function CrewChips({
   crew,
@@ -36,30 +36,7 @@ export function CrewChips({
 }
 
 function CrewChip({ member, onRemove }: { member: CrewMember; onRemove: () => void }) {
-  const [progress, setProgress] = useState(0)
-  const raf = useRef<number | null>(null)
-  const start = useRef<number | null>(null)
-
-  const cancel = useCallback(() => {
-    if (raf.current !== null) cancelAnimationFrame(raf.current)
-    raf.current = null
-    start.current = null
-    setProgress(0)
-  }, [])
-  useEffect(() => cancel, [cancel])
-
-  const begin = useCallback(() => {
-    if (start.current !== null) return
-    start.current = performance.now()
-    const tick = (now: number) => {
-      if (start.current === null) return
-      const p = Math.min(1, (now - start.current) / HOLD_MS)
-      setProgress(p)
-      if (p >= 1) { cancel(); onRemove(); return }
-      raf.current = requestAnimationFrame(tick)
-    }
-    raf.current = requestAnimationFrame(tick)
-  }, [cancel, onRemove])
+  const { progress, begin, cancel } = useHold(onRemove)
 
   return (
     <button

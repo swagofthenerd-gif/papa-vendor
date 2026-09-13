@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Icon } from '@papa/icons'
+import { DAY_MS } from '@papa/core'
 import { go } from '../nav.ts'
 import { fromLocalInput, toLocalInput } from '../booking-view.ts'
+import { PartnerChips, PeriodFields, ProductPicker, optionalRupeesMinor } from './SubHireFields.tsx'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 
@@ -41,10 +43,9 @@ export function SubHireInSheet({
   const nowMs = Date.now()
   const [partnerId, setPartnerId] = useState<string>(prefill?.partnerId ?? partners[0]?.id ?? '')
   const [productId, setProductId] = useState<string | null>(prefill?.productId ?? null)
-  const [query, setQuery] = useState('')
   const [qty, setQty] = useState(String(prefill?.qty ?? 1))
   const [start, setStart] = useState(toLocalInput(prefill?.startMs ?? nowMs))
-  const [end, setEnd] = useState(toLocalInput(prefill?.endMs ?? nowMs + 24 * 3_600_000))
+  const [end, setEnd] = useState(toLocalInput(prefill?.endMs ?? nowMs + DAY_MS))
   const [serial, setSerial] = useState('')
   const [cost, setCost] = useState('')
   const [note, setNote] = useState('')
@@ -52,15 +53,9 @@ export function SubHireInSheet({
   const [done, setDone] = useState<{ id: string; code: string | null; partner: string } | null>(null)
 
   const productName = productId ? (store.catalogue.find((c) => c.id === productId)?.name ?? null) : null
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (q.length === 0) return []
-    return store.catalogue.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 8)
-  }, [store, query])
 
   const startMs = fromLocalInput(start)
   const endMs = fromLocalInput(end)
-  const rupees = Number(cost)
   const ready = partnerId.length > 0 && productId !== null && startMs !== null && endMs !== null
 
   const record = () => {
@@ -72,7 +67,7 @@ export function SubHireInSheet({
       endMs,
       qty: Number(qty),
       serial: serial.trim() || null,
-      agreedCostMinor: cost.trim().length > 0 && Number.isFinite(rupees) ? Math.round(rupees * 100) : null,
+      agreedCostMinor: optionalRupeesMinor(cost),
       bookingId: prefill?.bookingId ?? null,
       jobId: prefill?.jobId ?? null,
       note: note.trim() || null,
@@ -131,66 +126,23 @@ export function SubHireInSheet({
         </header>
         <p className="sheet-hint">{STR.networkSubHireInHint}</p>
 
-        <span className="field-label" id="sub-hire-partner">{STR.networkSubHireFromLabel}</span>
-        <div className="chip-row" role="group" aria-labelledby="sub-hire-partner">
-          {partners.map((p) => (
-            <button
-              key={p.id}
-              className={`filter-chip${partnerId === p.id ? ' active' : ''}`}
-              aria-pressed={partnerId === p.id}
-              onClick={() => setPartnerId(p.id)}
-            >
-              {p.name}
-            </button>
-          ))}
-        </div>
-        {partners.length === 0 ? <p className="sheet-hint">{STR.networkAskMarketNoPartners}</p> : null}
+        <PartnerChips
+          id="sub-hire-partner"
+          label={STR.networkSubHireFromLabel}
+          partners={partners}
+          value={partnerId}
+          onChange={setPartnerId}
+        />
 
-        <label className="field-label" htmlFor="sub-hire-product">{STR.networkSubHireProductLabel}</label>
-        {productName ? (
-          <div className="chip-row">
-            <button className="filter-chip active" aria-pressed onClick={() => setProductId(null)}>
-              {productName} <Icon name="x" size={12} />
-            </button>
-          </div>
-        ) : (
-          <>
-            <input
-              id="sub-hire-product"
-              className="sheet-search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={STR.networkSubHireProductSearch}
-              aria-label={STR.networkSubHireProductSearchAria}
-              autoCorrect="off"
-              autoCapitalize="none"
-              spellCheck={false}
-            />
-            {results.length > 0 ? (
-              <ul className="sheet-list">
-                {results.map((c) => (
-                  <li key={c.id}>
-                    <button className="sheet-row" onClick={() => { setProductId(c.id); setQuery('') }}>
-                      <span>{c.name}</span>
-                      <Icon name="chevron-right" size={16} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </>
-        )}
+        <ProductPicker
+          id="sub-hire-product"
+          catalogue={store.catalogue}
+          productName={productName}
+          onPick={setProductId}
+          onClear={() => setProductId(null)}
+        />
 
-        <div className="field-pair">
-          <div>
-            <label className="field-label" htmlFor="sub-hire-start">{STR.networkSubHireStartLabel}</label>
-            <input id="sub-hire-start" className="sheet-search" type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} />
-          </div>
-          <div>
-            <label className="field-label" htmlFor="sub-hire-end">{STR.networkSubHireEndLabel}</label>
-            <input id="sub-hire-end" className="sheet-search" type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} />
-          </div>
-        </div>
+        <PeriodFields idPrefix="sub-hire" start={start} end={end} onStart={setStart} onEnd={setEnd} />
 
         <label className="field-label" htmlFor="sub-hire-qty">{STR.networkSubHireQtyLabel}</label>
         <input
