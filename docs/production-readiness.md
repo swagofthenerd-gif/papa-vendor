@@ -4,11 +4,19 @@ An honest ledger of what would have to be true to run this as a business, and
 where it actually stands. Written because "is it secure and does it scale" is
 not a yes/no question, and a confident yes would be the least useful answer.
 
-**Status date:** 2026-09-02 · **Verdict: not production-ready.**
+**Status date:** 2026-09-13 (after W8) · **Verdict: not production-ready
+— and the reason is now one thing, not many: the phone has no server
+connection.** Migrations `0001`–`0026` are live on the Supabase project
+and proven (1,173 pgTAP assertions on stock Postgres, tenancy re-proved on
+every deploy); every desk feature in the dream plan's phases B–E is built
+on the phone and tested against a simulated year. But the app has **no
+auth client, no sync, and has never made an RPC call** — every write it
+makes is an optimistic local row plus an outbox op *named after* a server
+function that nothing has ever invoked. That is W9, "the pipe", and it is
+the whole gap between a demo that runs a business on one phone and a
+product. Full account: [2026-09-13 — the second year](#2026-09-13--the-second-year-w8-where-it-stands-and-the-pipe).
 **Hosting decided:** Supabase Pro (~$25/mo), region **Singapore**, photos on
-**Cloudflare R2**. Reasoning and the ten-lens analysis: `docs/hosting-decision.md`. The data layer
-is genuinely solid and measured. Nobody can log in, and
-several controls exist as schema without the surrounding operations.
+**Cloudflare R2**. Reasoning and the ten-lens analysis: `docs/hosting-decision.md`.
 
 ### Deployment status — verified 2026-08-15
 
@@ -272,7 +280,8 @@ is unpartitioned and unpruned, and that is where 100k users actually breaks.
 
 | Gap | Consequence if shipped as-is | Effort |
 |---|---|---|
-| **No authentication at all** | Nobody can log in. There is no Supabase project. | Days |
+| ~~**No authentication at all**~~ **No auth CLIENT** | The server side shipped in 0016 (OTP-at-enrolment, hashed device sessions, PIN gate, revocation, device binding); the phone has no login screen, no session store and no token — nobody can log in **from the app**. | Days — W9 |
+| **No sync, no RPC calls** (added 2026-09-13) | The phone never pulls and never pushes. `pull_changes` has never been called by the app; the outbox has never drained. Every feature runs on the local demo store. A lost phone is a lost business, not a lost device. | The largest open item — W9 |
 | **No device DB encryption** (SQLCipher) | A stolen warehouse phone is the whole fleet, purchase prices, replacement values and the customer list, in plaintext | **Re-scoped 2026-08-12.** Not "days to add a flag" — **there is no device driver at all.** Capacitor is anticipated in comments and the Vite config but is not installed; the only `SqlDriver` is the node:sqlite one used by tests. The risk is ordering: whoever builds the Capacitor driver will get sync working first and come back for encryption, and SQLCipher **cannot open a plaintext database**, so retrofitting means an offline export/re-import on every installed phone — including the outbox, which exists nowhere else. `packages/core/src/db/device-key.ts` now makes the requirement a **type**: `openDeviceDatabase` will not accept a non-encrypted driver, and an empty key (which SQLCipher silently treats as *no encryption*) is refused. Encryption itself still has to be written. |
 | ~~**CNIC/NTN still sync to scanners**~~ | **Corrected 2026-08-12 — this was never true.** There is no `customers` table and no `cnic`/`ntn` column in the schema; they arrive in phase 2, so nothing was leaking. The real exposure was that `pull_changes` uses `select *` for six of eight tables, so adding `customers` to `make_syncable()` — a one-line change that will look routine — would have shipped `cnic` to every warehouse phone. `0009` adds a registry of column names that may not exist on any syncable table, and the test fails the build if one ever does. Enforced structurally instead of documented. | ✅ |
 | **No backups / PITR** | No project exists, so nothing is backed up | **Corrected: PITR on Supabase is $100/mo — 4× the infra budget, not "hours".** Pre-revenue substitute: Pro's 7-day daily backups + the append-only event log + a nightly cold export. Turn PITR on at first revenue. |
@@ -300,12 +309,12 @@ connectivity, a JSON-lines mirror against SQLite corruption, and an actionable
 
 ## The shortest path to production
 
-In order, because each depends on the last:
+In order, because each depends on the last (re-cut 2026-09-13):
 
 1. ~~**CI**~~ — ✅ done. Runs `db/run-tests.sh`, the same script used locally, so CI and local cannot drift.
-2. **A Supabase project** — Singapore region, migrations applied from CI, secrets in place. **Plus the R2 bucket and photo pipeline before the pilot**, not after: re-keying stored photos later is painful.
-3. **Auth**: phone OTP at enrolment, device session, per-user PIN gate. Wire
-   `rate_limit_check` into the PIN path.
+2. ~~**A Supabase project**~~ — ✅ done: project `evknfbkcszjdasjjwstw`, Singapore, `0001`–`0026` applied by `deploy.yml` on every merge, tenancy re-proved after each. R2 bucket exists; **the photo pipeline does not** (W9).
+3. ◐ **Auth**: ~~server~~ ✅ (0016). **Client: W9** — login, device session, PIN gate on the phone; wire `rate_limit_check` into the PIN path.
+3b. **The pipe (W9)**: the pull loop over `pull_changes` into the on-device mirror (the read models already read the mirror's shape — 0023/0026 projections were built for this), the outbox drain calling the RPCs every op is already named after, photo upload to R2, and an on-device schema migration story for phones that already hold data. Two year-findings ride with it: `sub_rent_intent` needs an RPC or must leave the chain; a sub-hire's cost needs an attach-to-job door.
 4. **Device encryption** (SQLCipher). ~~CNIC sync exclusion~~ — ✅ done as a
    structural guard (`0009`); the columns it protects do not exist yet, and now
    cannot be made syncable without failing the build.
@@ -323,13 +332,19 @@ In order, because each depends on the last:
 
 ## What I would tell a prospective customer today
 
-The inventory model, the tenancy isolation and the offline sync are real,
-measured and defended by 395 database assertions plus 270 application tests.
-That is the hard, expensive part and it is done.
+*(Rewritten 2026-09-13.)* The inventory model, the tenancy isolation, the
+money book, the promise calendar, the pricing pipeline and the partner
+network are real on both sides, measured, and defended by 1,173 database
+assertions, 808 application tests, 31 browser tests with a fake camera,
+and a simulated year that a vendor could re-read as a story. That is the
+hard, expensive part and it is done.
 
-It is not deployed, nobody can log in, and a lost phone is currently an
-unencrypted copy of a fleet. Those are days of work, not months — but they are
-work that has not happened, and until it has, this runs a pilot at most.
+The phone does not talk to the server. Nobody can log in from it, nothing
+it records leaves it, and a lost phone is an unencrypted copy of a fleet
+*and* of every booking and rupee since the pilot began. That is weeks of
+work, not months — the RPCs exist, the mirrors exist, the ops are already
+shaped for them — but until it has happened, this runs a one-phone demo,
+not a pilot.
 
 ---
 
@@ -396,3 +411,90 @@ Capacitor wave, out of scope now — and until then the handover's
 (a `.bin` download in dev, for piping to `/dev/rfcomm0` from a laptop).
 Open item before the pilot: feed one parchi through the pilot house's
 printer and read its QR back with a phone (ASSUMPTION #thermal-58mm).
+
+## 2026-09-13 — the second year (W8): where it stands, and the pipe
+
+Waves 1–7 shipped as PRs #12–#20; migrations `0019`–`0026` are live on
+the Supabase database. W8 re-lived the simulated year against all of it,
+extended the stress suite over bookings, quoting and the network, and
+re-cut the plan. This section is the honest ledger after that.
+
+### Numbers (all green on `second-year`, 2026-09-13)
+
+| Gate | Result |
+|---|---|
+| `npm run typecheck` | silent |
+| `npm test` | **808** tests, 0 failures (three new stress files; the year test at 15 blocks) |
+| `npm run build:app && npm run test:e2e` | built in 3.15s · **31** e2e tests, 0 failures (real Chromium, fake camera) |
+| `db/run-tests.sh` | **1,173** pgTAP assertions across 28 files, `==> all green` |
+| `db/test-migrate.sh` | `20 passed, 0 failed` |
+| Year findings | 1 retired (`import-apply-welded`), 8 kept (all Phase B polish doors), 2 new (`sub-rent-intent-unreplayable`, `subhire-cost-unlinkable`) |
+
+### The pipe — said plainly
+
+**The phone has no server connection.** Not "partial", not "stubbed":
+
+- **No auth client.** 0016's OTP / device-session / PIN model exists in
+  Postgres and is tested there. The app has no login screen, stores no
+  session, sends no token. `current_user_id()` has never been set by a
+  request from this app.
+- **No sync.** `pull_changes` (0005/0006, hardened 0015, with the 0023 and
+  0026 projections built specifically so the phone can mirror
+  reservations and rate cards) has never been called by the app. The
+  on-device mirror is filled by `seedDemo` and by the app's own
+  optimistic writes, and by nothing else.
+- **No RPC calls.** Every write — a scan batch, a booking, a confirm, a
+  quote override, a sub-hire, a close — lands as a local row plus an
+  outbox op whose `op` is the RPC's name and whose payload is the RPC's
+  `p_*` arguments. The outbox has never drained. The dependency chains
+  (create → confirm → extend; record → close) are correct in shape and
+  untested against a server.
+- **No photo upload.** Photos live in the never-evict local store; the R2
+  bucket is empty.
+- **No on-device schema migration.** `LOCAL_SCHEMA` is create-if-not-
+  exists; a phone that already holds data and receives a new column has
+  no path today.
+
+What this means for the pilot: **one phone, one desk, no backup.** The
+year test's every promise ("no scan is ever lost", "balances never
+drift") is a promise about that one phone's SQLite. The "Backed up ✓"
+chip the dream plan wants cannot be shown honestly.
+
+### The gap table after W8
+
+| Gap | Where it stands | Owner / wave |
+|---|---|---|
+| Login, device session, PIN on the phone | Server done (0016); client absent | **W9** |
+| Pull sync into the mirror | Server done (0005–0015, 0023, 0026); client absent | **W9** |
+| Outbox drain → RPC calls | Ops shaped and chained; never sent | **W9** |
+| Photo upload to R2 | Bucket exists; no path | **W9** |
+| On-device schema migration | None | **W9** |
+| `sub_rent_intent` has no RPC | The extension chained behind it would fail on replay (year finding) | **W9** |
+| Sub-hire cost attach-to-job | Link made only at record time (year finding) | **W9** (one door) |
+| SQLCipher | Type-enforced seam, no driver | W9/W10 — must land before the first real phone holds data |
+| Thermal printer transport | Bytes golden; Bluetooth SPP is the Capacitor wave; no paper fed | W10 + a human gate |
+| Deposit / reversal / write-off / blacklist / waiver doors | Schema and projections exist; no phone doors | B-polish week after W9 |
+| Month picker, lifetime value, earners leaderboard | Reads exist (`moneyStrip(nowMs)`, entries), no screens | B-polish |
+| Motion, WIG audit, dark theme pass | Not started | **W10** |
+| Scheduler for `run_maintenance()` / `raise_stale_device_alerts()` | Functions exist, nothing calls them | Ops, before pilot |
+| `scan_events` partitioning | Decision still open (`partitioning-decision.md`) | Before real volume |
+| PITR / nightly cold export job | Export function exists (0010); no job, no bucket | At first revenue |
+| Sentry / app-level error tracking | None | Before pilot |
+
+### The human gates (unchanged, still open)
+
+Three things no review can answer and the owner can, one afternoon each:
+**the 30-minute scan test on a cheap Android** (decode-to-feedback under
+100ms; the thermal budget), **one rack of printed labels** (the
+tag-survival clock starts the day they go on), and **the vendor
+afternoon** (`docs/assumptions.md` now opens with the ten questions in
+order). A fourth, small: **feed one parchi through the pilot house's
+receipt printer** and read its QR back with a phone.
+
+### What W8 changed in the code
+
+Deliberately little. `applyImport` moved from `store.ts` to
+`read-model.ts` (so the year test runs the real routine; a latent
+duplicate-id rollback on a second import of the same file was fixed on
+the way), and three stress files were added. Everything else W8 did is
+tests and documents — the point of the wave was to look, not to build.
