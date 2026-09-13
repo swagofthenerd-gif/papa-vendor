@@ -2,7 +2,6 @@ import {
   PhotoStore,
   ScanSession,
   VoiceNoteStore,
-  allocateUnitCodes,
   lookupTag,
   voidScan,
   markTerminal,
@@ -73,6 +72,7 @@ import { NETWORK_SCHEMA } from './network.ts'
 import { notifySync } from '../sync-tick.ts'
 import { SessionRegistry, type SessionMode } from './sessions.ts'
 import {
+  applyImport,
   assetFacts,
   closedJobs,
   closeJob,
@@ -806,107 +806,14 @@ export class DemoStore {
   }
 
   /**
-   * Apply an import plan.
-   *
-   * Everything lands in ONE transaction. A half-applied catalogue is the worst
-   * outcome available here: the person has no way to tell which half went in,
-   * and running the file again would double whatever did.
-   *
-   * Rows the planner could not decide are created as their OWN product, never
-   * merged into the thing they resemble. That is the same refusal the kit-list
-   * reader makes between C300 and C500, for the same reason.
-   *
-   * Unit codes are collision-checked against every code already on an asset
-   * and numbering CONTINUES (FX9-01, FX9-02 on the shelf → this file's FX9
-   * becomes FX9-03) — see allocateUnitCodes. `renumbered` counts the units
-   * whose naive `CODE-NN` would have duplicated an existing sticker code, so
-   * the result screen can say so honestly instead of minting two cameras
-   * that answer to one code.
+   * Apply a reviewed import plan — the real routine lives in read-model.ts
+   * (applyImport) so it runs under Node; this binds the org, the clock and
+   * the catalogue refresh the matcher needs.
    */
   applyImport(plan: ImportPlan): { products: number; units: number; renumbered: number } {
-    let products = 0
-    let units = 0
-    let renumbered = 0
-
-    this.db.transaction(() => {
-      const idFor = new Map<string, string>()
-      const takenCodes = new Set(
-        this.db
-          .all<{ asset_code: string | null }>(
-            `select asset_code from assets where asset_code is not null`,
-          )
-          .map((r) => r.asset_code as string),
-      )
-
-      for (const { row, verdict } of plan.rows) {
-        if (verdict.kind === 'rejected') continue
-
-        let productId: string
-        if (verdict.kind === 'existing' && !verdict.productId.startsWith('file:')) {
-          productId = verdict.productId
-        } else {
-          const key = row.name.toLowerCase().trim()
-          const already = idFor.get(key)
-          if (already) {
-            productId = already
-          } else {
-            productId = `prod-imported-${slug(row.name)}-${products}`
-            this.db.exec(
-              `insert into products (id, org_id, display_name, category) values (?, ?, ?, ?)`,
-              [productId, this.seed.orgId, row.name, row.category ?? 'other'],
-            )
-            idFor.set(key, productId)
-            products++
-          }
-        }
-
-        const locationId = row.location ? this.locationIdFor(row.location) : null
-        const codes = row.code
-          ? allocateUnitCodes(takenCodes, row.code, row.quantity)
-          : null
-        for (let i = 1; i <= row.quantity; i++) {
-          const assetId = `asset-imported-${slug(row.name)}-${row.line}-${i}`
-          const code = codes ? codes[i - 1] : assetId
-          if (codes) {
-            if (code !== `${row.code}-${String(i).padStart(2, '0')}`) renumbered++
-            takenCodes.add(code)
-          }
-          this.db.exec(
-            `insert into assets
-               (id, org_id, product_id, asset_code, serial_number, display_name,
-                presence, health, ownership, current_location_id, current_job_id, updated_at)
-             values (?, ?, ?, ?, ?, ?, 'here', 'ok', 'owned', ?, null, ?)`,
-            [
-              assetId, this.seed.orgId, productId, code,
-              // A serial belongs to ONE physical unit. Copying it onto every
-              // unit of a multi-quantity row would put the same serial on
-              // twelve batteries, which is worse than having none.
-              row.quantity === 1 ? row.serial : null,
-              row.name, locationId, new Date().toISOString(),
-            ],
-          )
-          units++
-        }
-      }
-    })
-
+    const result = applyImport(this.db, this.seed.orgId, plan)
     this.refreshCatalogue()
-    return { products, units, renumbered }
-  }
-
-  /** A shelf by name, created on first sight so an import cannot lose one. */
-  private locationIdFor(name: string): string {
-    const existing = this.db.get<{ id: string }>(
-      `select id from locations where lower(name) = lower(?)`,
-      [name],
-    )
-    if (existing) return existing.id
-    const id = `loc-imported-${slug(name)}`
-    this.db.exec(
-      `insert into locations (id, org_id, name, kind, path, code) values (?, ?, ?, 'shelf', ?, ?)`,
-      [id, this.seed.orgId, name, name, name],
-    )
-    return id
+    return result
   }
 
   /**
@@ -2207,9 +2114,6 @@ export class DemoStore {
 }
 
 /** A safe, stable id fragment from a product name. */
-function slug(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
-}
 
 /** The resolved lines of an answered kit list, as the quote pipeline
  *  takes them — unresolved lines are not priced, they are named. */

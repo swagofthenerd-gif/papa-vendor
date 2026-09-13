@@ -8,8 +8,12 @@ ships and a wall comes down, remove the id there and the section here in
 the same change. The simulation is green and must stay green: findings
 live in this document, never as failing asserts.
 
-Written 2026-09-11 against branch `year-hardening`. Cross-references are
-to [`vendor-dream-plan.md`](vendor-dream-plan.md) phases A–E.
+Written 2026-09-11 against branch `year-hardening`. **Re-lived 2026-09-13
+on `second-year` (W8)** against every merged wave — bookings, quoting,
+the network — so the story now walks through the doors a vendor would
+use: see [The second year](#the-second-year-w8) at the end. Cross-
+references are to [`vendor-dream-plan.md`](vendor-dream-plan.md) phases
+A–E.
 
 ---
 
@@ -98,6 +102,17 @@ simulation now drives the REAL registry); `recordPayment` / `chargeClient`
 payment sheet is UI follow-up); and `stats(nowMs)` can be asked about
 another day. (SEP block pins the registry and outbox stamping the
 simulated instant.)
+
+### 8. A second import of the same file collided on its own ids — FIXED (W8)
+
+Found while lifting `applyImport` out of `store.ts` (see (b)10): product
+and asset ids were minted from the row's name and line number
+(`prod-imported-<slug>-0`, `asset-imported-<slug>-<line>-<n>`), so
+importing a file twice — or a second file whose product sat on the same
+line as an earlier one — hit the primary key and rolled the whole
+transaction back with nothing to say for itself. Ids are now made unique
+against the table (`-2`, `-3`… on collision); the year imports twice
+through the real routine and both land. (SEP + APR pin it.)
 
 ---
 
@@ -203,10 +218,13 @@ strip and overdue ladder.
   outbox (ASSUMPTION #27 `#sub-rent-intent`) — her claim on the unit
   stands until the partner's unit covers it. (Pinned.)
 
-What remains for the calendar is the partner network itself (W7): the
-sub-rent intent has an op name and a chain position but no server
-realisation yet, and the manager escalation on day 14 is one local flag
-(ASSUMPTION #28 `#manager-flag`).
+The partner network shipped as W7 (0025; see (b)3 and the second-year
+section). Two things remain around the calendar: the **sub-rent intent
+still has no server realisation** — an op name and a chain position, but
+no RPC in 0022 or 0025 — which the second year pins as
+`sub-rent-intent-unreplayable` (below); and the manager escalation on
+day 14 is one local flag (ASSUMPTION #28 `#manager-flag`), which MAY now
+exercises end to end on the chronic late payer.
 
 ### 3. No expense side of the book — SHIPPED as the kharcha book (0019)
 
@@ -227,11 +245,11 @@ gained a Kharcha section and a double-ruled month profit line
 now records the JAN repair, the OCT cable purchase and the APR sub-hire
 on the real book and asserts every margin; both ids are retired.
 
-One deliberate remainder: the borrowed lights themselves still enter by
-import stamped `ownership='owned'` — the partner's BILL is on the book,
-but nothing yet sets `ownership='subrented'` on the units, so a
-stocktake still counts them as fleet. That intake flag rides with Phase
-E1 (cross-hire), where the partner list lives.
+The intake flag rode with Phase E1 as predicted: `recordSubHireIn`
+(0025) puts a borrowed unit on the shelf as `sub_rented_in` with a local
+code, and `closeSubHire` sends it home as `returned_to_owner`, never
+`retired`. APR now borrows the Eid lights through that door — and finds
+the door's own wall, `subhire-cost-unlinkable` (second-year section).
 
 ### 4. No terminal state for gear — SHIPPED as the fleet lifecycle (0020)
 
@@ -375,15 +393,13 @@ toggle with no swap behind it still has no screen. That narrowed gap is
 what `no-health-door` now names. (Related: retiring a peeled tag also has
 no door — JUL.)
 
-### 10. Import apply is welded to the store — SEP
-`import-apply-welded`
+### 10. Import apply is welded to the store — RETIRED (W8)
 
-`applyImport` (a pure-DB transaction) lives in `store.ts` beside the
-sql.js driver, so it cannot run — or be reused — under Node; this
-simulation carries a line-for-line replica. The 2026-09-02 review's "lift
-the read-model SQL out of store.ts" applies verbatim; move it to
-`read-model.ts` next time it is touched, and the replica in the year test
-can be deleted.
+Was `import-apply-welded`. `applyImport` lives in `read-model.ts` now
+(the org, the plan and an injectable clock in; `{products, units,
+renumbered}` out), `store.ts` binds the org and refreshes the catalogue,
+and the year test drives the real routine twice — the replica it carried
+is deleted. Lifting it surfaced fixed bug (a)8.
 
 ---
 
@@ -409,8 +425,66 @@ can be deleted.
   undoes a mis-scan in one op (see fixed finding 3); the scan screen's
   conflict row does not offer it yet, so a tech still needs the desk to
   know it exists.
+- **Every booking write reads every booking** (found by the stress suite,
+  W8). `pruneExpiredPencils` loads the whole `bookings` mirror on every
+  create/confirm/extend/cancel, and `lastBookingOp` scans every pending
+  outbox payload with three `LIKE`s. At a year's worth of bookings and
+  an outbox that never drains (no pipe yet) a create costs ~2ms on
+  node:sqlite — invisible on a desk, but the outbox scan is the kind of
+  cost that only shows up on the phone that has been offline longest.
+  Both are one `where` clause each; the pipe draining the outbox (W9)
+  removes the second on its own.
 
 ## (d) The vendor's verdict
+
+*(Year one's verdict is kept below for the record; this is year two's.)*
+
+**Would he still be using it in month 12 of the second year? Yes — and
+this time nobody kept a laptop nearby.** Every scenario that made him
+reach for SQL in year one goes through a door the phone has now: the
+wedding was a pencil the agency held and the desk confirmed; the lookbook
+went out priced, haggled and final before the truck moved; the November
+shaadi that wanted a promised body was refused BY NAME and the desk moved
+the claim; the swap, the theft report, the ginti, the borrowed FX9 and its
+homecoming, the season multiplier, the day-14 escalation, the parchi's
+bytes for the printer — all of it is the app's own vocabulary. More than
+250 scans, none lost; the balances never drifted a paisa across the
+year's ledger; every month's profit netted the partner's bill without a
+spreadsheet; the stress suite hammered the calendar, the pricing and the
+network for a simulated year and found no double promise, no drifting
+book, no lowered quote.
+
+**What would make him quit in year two, in order:**
+
+1. **The pipe.** Nothing in this year ever left the phone. There is no
+   login, no sync and no RPC call in the app — every door writes an
+   optimistically-mirrored row and an outbox op *named after* a server
+   RPC that has never been called. The year is honest about what the
+   phone does; it says nothing about what the server would answer. Until
+   W9 the pilot is one phone, one desk, and a backup that does not exist.
+2. **The four money doors he still has to fake**: a deposit
+   (`no-deposit-door`), a reversal or write-off outside the
+   charged-then-returned notice (`no-adjustment-door`), the blacklist the
+   day-14 rung tells him to consider (`no-blacklist`), and the goodwill
+   he extends when he waives a fee (`waived-fee-invisible`). Each is
+   pure past-fact recording — a B-polish week, not a wave.
+3. **The two walls the shipped doors have**, found only by using them in
+   order: a sub-rent intent that the pipe cannot replay
+   (`sub-rent-intent-unreplayable`) and a borrowed unit's cost that
+   cannot be attached to the job it rescued if the job came second
+   (`subhire-cost-unlinkable`). Both are W9's to close, because both are
+   about what happens when the queue meets a server.
+
+**The year's clearest instruction:** *the pipe before any more features.*
+Everything the dream plan sequenced after Phase A has been built on top
+of a Phase A that is half missing, and the simulated year cannot see the
+half that is missing. The order of what remains is W9 (login, session,
+sync, photo upload, the two new walls), then W10 (polish), then the
+B-polish money doors — with the three human gates (the 30-minute APK
+scan test, one rack of printed labels, the vendor afternoon) run in
+parallel, because the answers change the settings, not the schema.
+
+### Year one's verdict (2026-09-11, kept for the record)
 
 **Would he still be using it in month 12? Yes — but only because someone
 on the pilot team kept a laptop nearby.** The scan loop never lost a
@@ -442,3 +516,94 @@ survived contact with the simulated year.
 cliff and the December board-pileup are gone from the walls list. The
 adjustment and deposit doors remain open items (`no-adjustment-door`,
 `no-deposit-door`).
+
+---
+
+## The second year (W8)
+
+The same twelve months, re-lived on 2026-09-13 against the finished app
+(`second-year`, every wave merged: bookings 0022/0023, quoting 0024,
+the network 0025/0026). The narrative changes are in the test's own
+comments; this is the ledger of what moved.
+
+### What each month now does through a shipped door
+
+| Month | Year one | Year two |
+|---|---|---|
+| SEP | Bookings created `confirmed` in one call | The wedding is a **pencil** (24h TTL from the desk clock), then confirmed, then converted; two ops in the queue, the way the server insists. The import runs the REAL `applyImport`. |
+| OCT | A walk-in job | The lookbook is **quoted first**: 10d 6h → 11 calendar days → one 3-day week + a capped remainder = 6 billable days; the Komodo overridden to Rs 17,000 (final rate, reason kept, card rate remembered); confirmed with the manager's credential override; converted. Total Rs 150,000, final. |
+| NOV | — (already the network) | Unchanged: the named collision, the substitute, the borrowed FX9 as `sub_rented_in` → `returned_to_owner`, crew on the parchi. |
+| DEC | — | The desk sets the **season row** at ×1.25 (data, not code) and Hamza's confirmed hold prices 2 × 3 × Rs 25,000 × 1.25 = Rs 187,500, final; the text names the day. The bounced cheque's debt clock is still pinned in MAY. |
+| FEB | — | An **extension collision settled by substitution**: Bilal's FX9-02 extension names Sana, her claim moves to another body through `reallocate_reservation`, the extend chains behind it, no unit ever carries two confirmed claims; Bilal's booking becomes his truck, Sana's is cancelled through the door. |
+| APR | Borrowed lights by CSV, bill by hand | Roshan is a **partner**; two lights come in through `recordSubHireIn` with serials at Rs 15,000 each and go home as `returned_to_owner`. The **thermal parchi bytes** are built for the Eid job: init, centred/bold/double-size letterhead, 32 columns, the QR block, the cut, ASCII by construction, deterministic. |
+| MAY | — | The **ladder's day-14 rung** fires on Ayesha: nudge → call → late-fee draft → manager escalation with a blacklist to consider; the local flag is written once and keeps its first date. |
+| JUL | The ginti report | The missing C-Stand goes **STOLEN** from the count and the **partner broadcast** reads back in Roman Urdu with the house's public phone; a unit that is home has no broadcast. |
+| AUG | Four questions | Plus: **turned-away by reason** summed over the year (every FX9 refusal was a *committed* one — the buy signal), and the payback bar's denominator carries the year's three repair bills. |
+
+### Findings retired vs kept
+
+- **Retired (1):** `import-apply-welded` — the routine moved, the replica
+  died, and moving it fixed bug (a)8.
+- **Kept (8), each a Phase B polish door the waves did not build:**
+  `no-adjustment-door`, `no-deposit-door`, `no-blacklist`,
+  `no-health-door`, `waived-fee-invisible`, `no-month-history-screen`,
+  `no-lifetime-value-view`, `no-utilization-read`. None names a shipped
+  feature: the store still has no `holdDeposit`, no standalone reversal
+  or write-off door (only the charged-then-returned notice writes one),
+  no health toggle without a swap, no blacklist toggle, no waiver line,
+  no month picker on the Hisaab (`monthProfit()` is called with no
+  clock), no lifetime column on the owed list, no earners leaderboard.
+- **New (2), found only by using the shipped doors in a vendor's order:**
+
+### New wall: `sub-rent-intent-unreplayable` — MAR
+
+The extension screen's Sub-rent door records an intent as a
+`sub_rent_intent` outbox op and chains the extension behind it
+(ASSUMPTION #27). **No RPC answers to that op** — neither 0022 nor 0025
+defines one. The moment W9's pipe replays the queue, the intent fails,
+and by the outbox's own rule the extension chained behind it fails with
+it, surfacing as one needs-attention card for a booking the desk
+believes it extended weeks ago. W9 must either give the op a server
+realisation (a sub-hire-in whose unit covers the other client's claim,
+then the extend) or take it out of the chain.
+
+### New wall: `subhire-cost-unlinkable` — APR
+
+`recordSubHireIn` ties its expense to a job or a booking **at record
+time**. The common order at the enquiry is borrow first, make the job
+second — and then the bills sit on the kharcha book (the month's profit
+nets them, the partner's page says Rs 30,000) but the job's margin reads
+the full Rs 90,000, and no door attaches an expense to a job after the
+fact. NOV shows the link working in the other order. The fix is one
+door ("attach to job") on the expense row, or a booking-first flow on
+the enquiry screen; either is small, and the server's
+`booking_sub_hire_cost` already accepts both links.
+
+### The stress suite (W8)
+
+Three new seeded-deterministic files beside `stress-money` and
+`stress-registry`, every invariant re-checked after every write:
+
+- `stress-bookings`: 500 random bookings over twelve months on a 60-unit
+  fleet (plus a second seed's 200) — no two confirmed claims overlap on a
+  unit ('[)'), no dead pencil stands after a write and none survives the
+  year, booking numbers are gapless, a refused extension changes nothing
+  and equals its preview, availability is never negative, a converted
+  job's expected set IS the allocation, one op per write and every later
+  op chained.
+- `stress-quoting`: 2,000 random quotes through `priceQuote` — totals are
+  sums, unpriced never contributes, a multiplier ≥ 1 never lowers,
+  override lines ignore it, billable ≤ calendar days except through the
+  card's own minimum, indicative ⇔ unpriced-or-unconfirmed, and the same
+  input prices the same twice.
+- `stress-network`: 300 random sub-hire cycles per seed — every priced
+  in-hire has exactly one live expense, every priced out-hire exactly one
+  ledger charge, closing never moves either book and is refused twice, a
+  borrowed unit goes home as `returned_to_owner` and never `retired`, the
+  partner page's money line is the two books re-summed.
+
+The suite found no invariant violation. It found the papercut in (c)
+(every booking write reads every booking) and made the network
+assertions batch their lookups — a reminder that the phone's read models
+were written for one org's year, not for a test that runs one in five
+seconds.
