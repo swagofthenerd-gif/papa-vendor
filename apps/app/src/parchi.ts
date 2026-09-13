@@ -51,6 +51,12 @@ export interface ParchiInput {
    * the rates and the honesty split; the challan only carries the sentence.
    */
   shortfallValueLabel: string | null
+  /**
+   * Who went out with the kit (0025 D7) — 'With: Usman, Saqib' under the
+   * header, so the gate knows the truck's people as well as its lines.
+   * Absent or empty prints nothing; capped like every free field.
+   */
+  attendants?: string[]
 }
 
 /**
@@ -76,6 +82,10 @@ const MAX_NAME_CHARS = 16
 // 'Rs 99,999,999 +99 unpriced' is 26; anything longer is clipped, because a
 // scannable QR outranks the last digits of an implausible number.
 const MAX_VALUE_CHARS = 30
+// The crew line: three names, then '+N' — a truck rarely carries more,
+// and the gate counts the people it can see.
+const MAX_CREW_NAMES = 3
+const MAX_CREW_NAME_CHARS = 12
 
 /** Clip to a budget, marking the cut. The mark spends one of the n chars so
  *  a clipped value can never exceed an unclipped one's budget. */
@@ -105,6 +115,12 @@ export function buildParchi(input: ParchiInput): string {
   lines.push(`PARCHI — ${clip(input.houseName, MAX_HOUSE_CHARS)}`)
   lines.push(clip(input.jobLabel, MAX_JOB_CHARS))
   lines.push(`${verb} ${stamp(input.whenMs)}`)
+  const crew = input.attendants ?? []
+  if (crew.length > 0) {
+    const named = crew.slice(0, MAX_CREW_NAMES).map((n) => clip(n, MAX_CREW_NAME_CHARS))
+    const more = crew.length > MAX_CREW_NAMES ? ` +${crew.length - MAX_CREW_NAMES}` : ''
+    lines.push(`With: ${named.join(', ')}${more}`)
+  }
   lines.push('')
 
   // The list section is always present, even at zero — a gate pass with no

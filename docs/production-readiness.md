@@ -380,3 +380,19 @@ never loss); CI actions pinned to tags not SHAs.
 **⚠ Deployment note:** the live Supabase database has `0001`–`0014` applied.
 `0015_hardening.sql` closes real holes — deploy it before any real data
 exists, and before anyone is given credentials.
+
+## 2026-09-11 — thermal printing (0025 client wave)
+
+**Bytes golden-tested, hardware unverified.** The parchi's ESC/POS stream
+(`packages/core/src/escpos.ts`: init, alignment, bold, double-size title,
+`GS ( k` QR model 2 / size 6 / EC M with correct `pL pH`, `GS V 66 0`
+cut, 32-column word wrap, ASCII fold with LF kept for the QR payload) is
+pinned byte-for-byte in `packages/core/test/escpos.test.mjs` against the
+Epson reference. **No printer has fed paper.** The transport seam is
+`apps/app/src/print/thermal.ts` (`ThermalPrinter { print(bytes) }`): the
+Android build registers a **Bluetooth SPP** transport there — the
+Capacitor wave, out of scope now — and until then the handover's
+"Thermal print" door says *No printer connected* in the built bundle
+(a `.bin` download in dev, for piping to `/dev/rfcomm0` from a laptop).
+Open item before the pilot: feed one parchi through the pilot house's
+printer and read its QR back with a phone (ASSUMPTION #thermal-58mm).

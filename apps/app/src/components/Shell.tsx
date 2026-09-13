@@ -32,7 +32,9 @@ const TABS: Tab[] = [
   { view: { name: 'jobs' }, label: STR.commonTabToday, icon: 'home', matches: ['jobs', 'session', 'scan'] },
   { view: { name: 'gear' }, label: STR.commonTabGear, icon: 'box', matches: ['gear', 'asset', 'ginti', 'closed'] },
   { view: { name: 'desk' }, label: STR.commonTabDesk, icon: 'chat', matches: ['desk', 'calendar', 'booking'] },
-  { view: { name: 'owed' }, label: STR.commonTabKhata, icon: 'scroll', matches: ['owed', 'customer', 'hisaab'] },
+  // --- network --- the partner page lights the Khata tab: a partner house
+  // is a counterparty on both books.
+  { view: { name: 'owed' }, label: STR.commonTabKhata, icon: 'scroll', matches: ['owed', 'customer', 'hisaab', 'partner'] },
 ]
 
 /** The settings door every tab's top bar carries — one glyph, one place. */

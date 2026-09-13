@@ -1,5 +1,7 @@
 import { DEFAULT_BOOKING_SETTINGS, HOUR_MS, blockedPeriod, type SqlDriver } from '@papa/core'
 import { DEMO_SCHEMA } from './read-model.ts'
+// --- network ---
+import { seedNetwork } from './network.ts'
 
 /**
  * A demo rental house, so the app can be used before there is any login,
@@ -446,6 +448,9 @@ export function seedDemo(db: SqlDriver): DemoSeed {
     seedRateCard(db)
     seedMoneyBook(db)
     seedBookings(db)
+    // --- network --- (0025): partner houses, the staff roster, the
+    // wedding truck's crew. See network.ts seedNetwork.
+    seedNetwork(db, ORG)
   })
 
   return {

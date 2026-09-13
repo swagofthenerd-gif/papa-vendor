@@ -53,6 +53,12 @@ const ORDER: Record<AvailabilityLine['state'], number> = {
   unknown: 0, none: 1, short: 2, available: 3,
 }
 
+/** --- network --- a line the shelf (minus the calendar) cannot cover: the
+ *  Ask-the-market door shows for these and the ask is built from them. */
+export function needsTheMarket(line: AvailabilitySummary['lines'][number]): boolean {
+  return line.state === 'short' || line.state === 'none'
+}
+
 export function Enquiry({
   summary,
   reply,
@@ -64,6 +70,7 @@ export function Enquiry({
   window,
   onWindowChange,
   onPrice,
+  onAskMarket,
 }: {
   summary: AvailabilitySummary | null
   reply: string
@@ -79,6 +86,8 @@ export function Enquiry({
   onWindowChange?: (start: string, end: string) => void
   /** Price the resolved lines over the window — the Quote sheet. */
   onPrice?: () => void
+  /** --- network --- ask the partner houses for what is short (0025). */
+  onAskMarket?: () => void
 }) {
   const [text, setText] = useState('')
 
@@ -233,6 +242,13 @@ export function Enquiry({
         {onBook ? (
           <button className="btn btn-outline" onClick={onBook}>
             <Icon name="calendar" size={18} /> {STR.bookingNew}
+          </button>
+        ) : null}
+        {/* --- network --- only when a line is short or committed: a door
+            that appears with nothing to ask for is a dead button. */}
+        {onAskMarket && summary.lines.some(needsTheMarket) ? (
+          <button className="btn btn-outline" onClick={onAskMarket}>
+            <Icon name="handshake" size={18} /> {STR.networkAskMarket}
           </button>
         ) : null}
       </div>

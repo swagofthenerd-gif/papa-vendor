@@ -188,7 +188,50 @@ import {
   type SetRateResult,
 } from './quotes.ts'
 import { STR } from '../strings.ts'
+import { getLang } from '../lang.ts'
 import { buildParchi } from '../parchi.ts'
+// --- network --- (0025)
+import { buildParchiEscPos, parchiDocFromText, type ShortageLine } from '@papa/core'
+import {
+  askTheMarket,
+  assignAttendant,
+  attendantNames,
+  closeSubHire,
+  crewFor,
+  partner,
+  partnerMoney,
+  partners,
+  publicPhone,
+  publicTagUrlBase,
+  recordSubHireIn,
+  recordSubHireOut,
+  removePartner,
+  setPublicPhone,
+  setPublicTagUrlBase,
+  staff,
+  stolenBroadcast,
+  stolenBroadcastFacts,
+  subHireForAsset,
+  subHireForJob,
+  subHires,
+  unassignAttendant,
+  upsertPartner,
+  type CloseSubHireResult,
+  type CrewMember,
+  type CrewResult,
+  type PartnerMoney,
+  type PartnerRow,
+  type RecordSubHireInInput,
+  type RecordSubHireInResult,
+  type RecordSubHireOutInput,
+  type RecordSubHireOutResult,
+  type RemovePartnerResult,
+  type StaffRow,
+  type SubHireFilter,
+  type SubHireRow,
+  type UpsertPartnerInput,
+  type UpsertPartnerResult,
+} from './network.ts'
 import { buildProveIt } from '../prove-it.ts'
 import { buildTheftReport, theftLabels } from '../theft-report.ts'
 import { buildGintiReport, gintiLabels } from '../ginti-report.ts'
@@ -887,6 +930,8 @@ export class DemoStore {
       // The same money the handover header shows, so the challan and the
       // screen above it cannot name two different figures for one shortfall.
       shortfallValueLabel: moneyLabel(summary.missingValue),
+      // --- network --- the crew line: who went with the kit (0025 D7).
+      attendants: attendantNames(this.db, jobId),
     })
   }
 
@@ -1700,6 +1745,146 @@ export class DemoStore {
    *  whose hold begins inside the horizon (48h). */
   promisedSoon(assetId: string, nowMs: number = Date.now()): PromisedSoon | null {
     return promisedSoon(this.db, assetId, nowMs)
+  }
+
+  // ---- the network (0025) ------------------------------------------------
+  // Thin doors onto network.ts: partner houses, sub-hire in and out, crew,
+  // the stolen broadcast, ask the market, the thermal parchi. Every rule
+  // lives there where plain Node asserts it; the store binds the database,
+  // the clock, the org and the active language.
+
+  partners(): PartnerRow[] {
+    return partners(this.db)
+  }
+
+  partner(id: string): PartnerRow | null {
+    return partner(this.db, id)
+  }
+
+  upsertPartner(input: UpsertPartnerInput, nowMs: number = Date.now()): UpsertPartnerResult {
+    return upsertPartner(this.db, this.seed.orgId, input, nowMs)
+  }
+
+  /** Refused while a sub-hire with the partner is still open. */
+  removePartner(id: string, nowMs: number = Date.now()): RemovePartnerResult {
+    return removePartner(this.db, id, nowMs)
+  }
+
+  /** Gear borrowed from a partner — a unit when a serial is given, the
+   *  expense when a cost is, always the row and the op. */
+  recordSubHireIn(input: RecordSubHireInInput, nowMs: number = Date.now()): RecordSubHireInResult {
+    return recordSubHireIn(this.db, this.seed.orgId, input, nowMs)
+  }
+
+  /** Gear lent to a partner — the 'Sub-hire → X' job on the board. */
+  recordSubHireOut(input: RecordSubHireOutInput, nowMs: number = Date.now()): RecordSubHireOutResult {
+    return recordSubHireOut(this.db, this.seed.orgId, input, nowMs)
+  }
+
+  /** It came back (out) or went home (in). Refusals are results. */
+  closeSubHire(id: string, returnedAtMs: number = Date.now(), nowMs: number = Date.now()): CloseSubHireResult {
+    return closeSubHire(this.db, id, returnedAtMs, nowMs)
+  }
+
+  subHires(filter: SubHireFilter = {}): SubHireRow[] {
+    return subHires(this.db, filter)
+  }
+
+  /** The sub-hire behind a job — how the board stamps SUB-HIRE. */
+  subHireForJob(jobId: string): SubHireRow | null {
+    return subHireForJob(this.db, jobId)
+  }
+
+  /** The open sub-hire that borrowed this unit in, when it is one. */
+  subHireForAsset(assetId: string): SubHireRow | null {
+    return subHireForAsset(this.db, assetId)
+  }
+
+  /** Both books on one line: what we owe them, what they owe us. */
+  partnerMoney(id: string): PartnerMoney {
+    return partnerMoney(this.db, id)
+  }
+
+  /** Units of a product fit to lend: owned, in the fleet, on the shelf. */
+  lendableUnits(productId: string): { id: string; code: string }[] {
+    return this.db
+      .all<{ id: string; asset_code: string | null }>(
+        `select id, asset_code from assets
+          where product_id = ? and ownership = 'owned' and disposition is null
+            and presence = 'here' and health = 'ok'
+          order by asset_code`,
+        [productId],
+      )
+      .map((r) => ({ id: r.id, code: r.asset_code ?? '—' }))
+  }
+
+  /** Whether a unit may be lent on: owned, still in the fleet. */
+  lendable(assetId: string): boolean {
+    const a = this.db.get<{ ownership: string | null; disposition: string | null }>(
+      `select ownership, disposition from assets where id = ?`,
+      [assetId],
+    )
+    return !!a && (a.ownership ?? 'owned') === 'owned' && a.disposition === null
+  }
+
+  staff(): StaffRow[] {
+    return staff(this.db)
+  }
+
+  crewFor(jobId: string): CrewMember[] {
+    return crewFor(this.db, jobId)
+  }
+
+  assignAttendant(
+    jobId: string,
+    userId: string,
+    role: 'attendant' | 'driver' = 'attendant',
+    nowMs: number = Date.now(),
+  ): CrewResult {
+    return assignAttendant(this.db, this.seed.orgId, jobId, userId, role, nowMs)
+  }
+
+  unassignAttendant(jobId: string, userId: string, nowMs: number = Date.now()): CrewResult {
+    return unassignAttendant(this.db, jobId, userId, nowMs)
+  }
+
+  /** The facts behind the partner-group line; null unless stolen. */
+  stolenBroadcastFacts(assetId: string) {
+    return stolenBroadcastFacts(this.db, assetId, this.seed.houseName)
+  }
+
+  /** The partner-group line for a stolen unit, in the active language. */
+  stolenBroadcastText(assetId: string): string | null {
+    return stolenBroadcast(this.db, assetId, this.seed.houseName, getLang())
+  }
+
+  /** The ask-the-market message, in the active language. */
+  askTheMarket(shortage: ShortageLine[]): string {
+    return askTheMarket(this.db, shortage, this.seed.houseName, getLang())
+  }
+
+  publicTagUrlBase(): string | null {
+    return publicTagUrlBase(this.db)
+  }
+
+  setPublicTagUrlBase(value: string | null): void {
+    setPublicTagUrlBase(this.db, value)
+  }
+
+  publicPhone(): string | null {
+    return publicPhone(this.db)
+  }
+
+  setPublicPhone(value: string | null): void {
+    setPublicPhone(this.db, value)
+  }
+
+  /** The parchi as printer bytes (58mm, 32 columns) — null when no
+   *  session was ever recorded on the job. Bytes only; where they go is
+   *  the ThermalPrinter seam (print/thermal.ts). */
+  thermalParchiBytes(jobId: string, nowMs: number = Date.now()): Uint8Array | null {
+    const text = this.parchiText(jobId, nowMs)
+    return text ? buildParchiEscPos(parchiDocFromText(text), { width: 32 }) : null
   }
 
   /** The active tag for an asset — how a ginti scan names it. */

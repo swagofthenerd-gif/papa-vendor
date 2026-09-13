@@ -64,7 +64,7 @@ export type {
   Disposition, MarkTerminalInput, FleetOpResult,
   SwapInput, SwapResult, SwapFlag, CountDiff, RecordServicedInput,
 } from './fleet.ts'
-export { rentalDaysBetween } from './project.ts'
+export { rentalDaysBetween, dispositionFor } from './project.ts'
 export {
   DEFAULT_BOOKING_SETTINGS, ESCALATION_LADDER, HOUR_MS, DAY_MS, WEEKDAYS_SHORT, MONTHS_SHORT,
   blockedPeriod, isLivePencil, pencilCountdown, overlaps, peakOverlap, msOf,
@@ -91,3 +91,12 @@ export { dueStatus, parseDueDate, compareDueDates, compareJobsByDue } from './ov
 export type { DueState, DueStatus } from './overdue.ts'
 export { FEEDBACK, ERROR_FEEDBACK, firstBuzzMs, hapticDurationMs } from './feedback.ts'
 export type { FeedbackSpec } from './feedback.ts'
+
+// --- network (0025) ---------------------------------------------------------
+export {
+  buildParchiEscPos, parchiDocFromText, qrCommands, toAscii, wrapLine,
+  ESCPOS_INIT, ESCPOS_CUT, ESCPOS_QR_MODULE_SIZE,
+} from './escpos.ts'
+export type { ParchiDoc, EscPosOptions } from './escpos.ts'
+export { askTheMarketText, stolenBroadcastText, windowLabel } from './partners.ts'
+export type { ShortageLine, BroadcastOrg, BroadcastLang, StolenBroadcastFacts } from './partners.ts'

@@ -23,7 +23,11 @@ import { projectOp } from './project.ts'
  * stays intact.
  */
 
-export type Disposition = 'lost' | 'stolen' | 'sold' | 'retired'
+/** Why a unit left the fleet. 'returned_to_owner' (0025 D5) is what
+ *  `retire` means on a BORROWED unit — the reducer derives it from
+ *  ownership, so there is no separate verb: asking for it here mints the
+ *  same `retire` event and project.ts stamps the honest word. */
+export type Disposition = 'lost' | 'stolen' | 'sold' | 'retired' | 'returned_to_owner'
 
 /** The event verb that declares each terminal outcome. `retired` rides the
  *  existing `retire` verb (0003); the other three are the 0020 additions. */
@@ -32,6 +36,7 @@ const MARK_EVENT: Record<Disposition, string> = {
   stolen: 'mark_stolen',
   sold: 'mark_sold',
   retired: 'retire',
+  returned_to_owner: 'retire',
 }
 
 export interface MarkTerminalInput {

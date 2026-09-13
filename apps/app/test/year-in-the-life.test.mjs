@@ -124,6 +124,17 @@ import { buildSummary } from '../src/session-summary.ts'
 import { buildTheftReport, theftLabels } from '../src/theft-report.ts'
 import { buildGintiReport, gintiLabels } from '../src/ginti-report.ts'
 import { STR_EN } from '../src/strings.ts'
+// --- network --- (0025): the partner doors and the parchi's crew line.
+import {
+  askTheMarket,
+  assignAttendant,
+  attendantNames,
+  closeSubHire,
+  partnerMoney,
+  recordSubHireIn,
+  recordSubHireOut,
+} from '../src/demo/network.ts'
+import { buildParchi } from '../src/parchi.ts'
 
 // ---------------------------------------------------------------- the world
 
@@ -346,6 +357,10 @@ function mustClose(jobId, whenMs) {
   const closed = closeJob(db, jobId, whenMs)
   assert.deepEqual(closed, { ok: true }, `${jobId} closes once everything is home`)
 }
+
+// --- network --- ids for the partner doors, on the simulated clock.
+let netSeq = 0
+const netIds = (whenMs) => ({ now: () => whenMs, newId: () => `net-${++netSeq}` })
 
 // ------------------------------------------------------------- job helpers
 
@@ -1007,6 +1022,98 @@ describe('a year in the life of the rental house', () => {
     assert.equal(monthCharged[2], rs(50_000 + 25_000 + 20_000 + 22_000 + 15_000))
   })
 
+  // --- network --- (0025) ---------------------------------------- NOV, cont.
+  test('NOV — the network: a borrowed FX9 rescues a third shaadi truck and goes home as returned_to_owner', () => {
+    // A third shaadi wants one more FX9 than the house owns. The shelf says
+    // short; the desk asks the market — one message, the shortage named.
+    const ask4 = () => checkAvailability(
+      db, matchKitList(parseKitList('4x Sony FX9'), demoCatalogue()), openJobCommitments(db), at(2, 7, 18),
+    )
+    assert.equal(ask4().lines[0].onHand, 3)
+    assert.equal(ask4().lines[0].state, 'short')
+    const askText = askTheMarket(
+      db,
+      [{ productId: 'prod-fx9', productName: 'Sony FX9', qty: 1, fromMs: at(2, 9, 6), untilMs: at(2, 11, 18) }],
+      seed.houseName,
+      'en',
+    )
+    assert.match(askText, /^Ravi Light & Grip — looking for gear\n\n1 x Sony FX9 · /)
+
+    // The truck the loaner will ride: born first, so the sub-hire's cost
+    // lands on ITS margin (the job_margin / booking_sub_hire_cost line).
+    const shaadi = makeJob('Shaadi — Gulberg', 'cust-hamza', [{ productId: 'prod-fx9', qty: 1 }], iso(2, 11))
+
+    // Kamran says yes. With a serial the loaner joins the fleet as
+    // BORROWED, with a local code after the imported FX9-03, and its cost
+    // rides the kharcha book in Kamran's name.
+    const loan = recordSubHireIn(db, seed.orgId, {
+      partnerId: 'partner-kamran', productId: 'prod-fx9',
+      startMs: at(2, 9, 6), endMs: at(2, 11, 18),
+      serial: 'KR-FX9-0042', agreedCostMinor: rs(30_000), jobId: shaadi.id, note: 'Shaadi weekend',
+    }, at(2, 8), netIds(at(2, 8)))
+    assert.equal(loan.ok, true)
+    assert.equal(loan.assetCode, 'FX9-04')
+    monthSpent[2] += rs(30_000)
+    assert.equal(jobMargin(db, shaadi.id).expenseMinor, rs(30_000))
+    assert.equal(
+      db.get(`select ownership from assets where id = ?`, [loan.assetId]).ownership,
+      'sub_rented_in',
+    )
+    // A label on it, and the shelf count says four.
+    const loanTag = 'v1LOANERFX9KAMRAN0000001'
+    db.exec(`insert into asset_tags (tag_code, asset_id, status) values (?, ?, 'active')`, [loanTag, loan.assetId])
+    tagOf.set(loan.assetId, loanTag)
+    assert.equal(ask4().lines[0].onHand, 4)
+    assert.equal(ask4().lines[0].state, 'available')
+
+    // Crew on the truck — and the parchi says who went with the kit.
+    assert.deepEqual(assignAttendant(db, seed.orgId, shaadi.id, 'user-usman', 'attendant', at(2, 8), netIds(at(2, 8))).attendantNames, ['Usman'])
+    assert.deepEqual(assignAttendant(db, seed.orgId, shaadi.id, 'user-danish', 'driver', at(2, 8), netIds(at(2, 8))).attendantNames, ['Usman', 'Danish'])
+    assert.deepEqual(openJob(db, shaadi.id).attendantNames, ['Usman', 'Danish'])
+
+    // The truck leaves: the owned FX9 on the list, the loaner as the extra
+    // the desk added at the dock — recorded, not refused.
+    const out = openSession(shaadi.id, 'out', at(2, 9, 6))
+    scanAll(out, shaadi.expected, 'check_out')
+    scanAll(out, [loan.assetId], 'check_out', ['unexpected'])
+    assert.equal(db.get(`select current_job_id as j from assets where id = ?`, [loan.assetId]).j, shaadi.id)
+    const parchi = buildParchi({
+      houseName: seed.houseName, jobLabel: 'Shaadi — Gulberg', mode: 'out', whenMs: at(2, 9, 6),
+      items: [...shaadi.expected, loan.assetId].map((id) => {
+        const r = db.get(`select asset_code from assets where id = ?`, [id])
+        return { code: r.asset_code, name: 'Sony FX9' }
+      }),
+      assumedCount: 0, shortfall: [], shortfallValueLabel: null,
+      attendants: attendantNames(db, shaadi.id),
+    })
+    assert.match(parchi, /\nWith: Usman, Danish\n\nOUT \(2\):\n/)
+    assert.match(parchi, /FX9-04 {2}Sony FX9/)
+
+    // It cannot go home while it is out on a job.
+    assert.deepEqual(closeSubHire(db, loan.subHireId, at(2, 10), at(2, 10), netIds(at(2, 10))), { ok: false, reason: 'unit_out' })
+
+    // Back, charged, closed — then home to Kamran: gone + returned_to_owner
+    // through the plain retire verb, and the Gone filter's word is never
+    // 'retired' (ASSUMPTION #returned-to-owner).
+    jobBack(shaadi.id, 'cust-hamza', at(2, 11, 20), { k: 2, d: 11, chargeRs: 45_000, payRs: 45_000 })
+    const home = closeSubHire(db, loan.subHireId, at(2, 12), at(2, 12), netIds(at(2, 12)))
+    assert.deepEqual(home, { ok: true, jobClosed: false, returnedToOwner: true })
+    expectedScanOps++ // the retire event
+    const row = db.get(`select presence, disposition, current_job_id from assets where id = ?`, [loan.assetId])
+    assert.equal(row.presence, 'gone')
+    assert.equal(row.disposition, 'returned_to_owner')
+    assert.equal(row.current_job_id, null)
+    assert.equal(STR_EN.fleetDispositionWord('returned_to_owner'), 'returned to owner')
+    assert.notEqual(STR_EN.fleetDispositionWord('returned_to_owner'), STR_EN.fleetDispositionWord('retired'))
+    assert.equal(Number(db.get(`select count(*) as n from assets where disposition = 'retired'`).n), 0)
+    assert.equal(ask4().lines[0].onHand, 3, 'the loaner is out of the fleet count')
+    assert.equal(partnerMoney(db, 'partner-kamran').weOweMinor, rs(30_000))
+
+    assertBooks()
+    assertPhysical()
+    assertNoLostScans()
+  })
+
   // -------------------------------------------------------------- DEC (k=3)
   test('DEC — peak season: twelve concurrent jobs, a double charge, a deposit', () => {
     const roster = [
@@ -1247,6 +1354,57 @@ describe('a year in the life of the rental house', () => {
     // January's bottom line carries the repair: the crisis month is the
     // first whose profit is not simply its billing.
     assertMonthProfit(4)
+  })
+
+  // --- network --- (0025) ---------------------------------------- JAN, cont.
+  test('JAN — the network: a Komodo lent to Kamran rides a real job, and their khata carries the charge', () => {
+    const unit = db.get(
+      `select id, asset_code from assets
+        where product_id = 'prod-komodo' and presence = 'here' and ownership = 'owned'
+          and disposition is null order by asset_code limit 1`,
+    )
+    assert.ok(unit, 'a Komodo on the shelf to lend')
+    const lend = recordSubHireOut(db, seed.orgId, {
+      partnerId: 'partner-kamran', startMs: at(4, 6, 8), endMs: at(4, 9, 18),
+      assetId: unit.id, agreedChargeMinor: rs(20_000), note: 'Komodo, 3 days',
+    }, at(4, 5), netIds(at(4, 5)))
+    assert.equal(lend.ok, true)
+    assert.equal(lend.jobLabel, 'Sub-hire → Kamran Rentals')
+    // The partner is a customer now (D3): a khata row born with the charge.
+    books.set(lend.customerId, { balance: rs(20_000), deposit: 0 })
+    monthCharged[4] += rs(20_000)
+    const khata = customerView(db, lend.customerId)
+    assert.equal(khata.name, 'Kamran Rentals')
+    assert.equal(khata.balanceMinor, rs(20_000))
+    assert.equal(khata.entries[0].jobId, lend.jobId)
+    assert.equal(khata.entries[0].assetId, unit.id)
+    assert.deepEqual(openJob(db, lend.jobId).expected, [unit.id], 'the unit is promised on the sub-hire job')
+
+    // The desk scans it out onto the job like any client's (D4).
+    const out = openSession(lend.jobId, 'out', at(4, 6, 8))
+    scanAll(out, [unit.id], 'check_out')
+    assert.deepEqual(
+      closeSubHire(db, lend.subHireId, at(4, 9), at(4, 9), netIds(at(4, 9))),
+      { ok: false, reason: 'job_still_out', stillOut: 1 },
+    )
+
+    // Back, settled in cash at the door, closed — the job with it.
+    const back = openSession(lend.jobId, 'in', at(4, 9, 18))
+    scanAll(back, back.expected, 'check_in')
+    post(lend.customerId, 'payment', -20_000, { k: 4, d: 9, hour: 19, jobId: lend.jobId, note: 'Cash' })
+    assert.deepEqual(
+      closeSubHire(db, lend.subHireId, at(4, 9, 20), at(4, 9, 20), netIds(at(4, 9, 20))),
+      { ok: true, jobClosed: true, returnedToOwner: false },
+    )
+    assert.equal(openJob(db, lend.jobId), null, 'off the board')
+    const money = partnerMoney(db, 'partner-kamran')
+    assert.equal(money.theyOweMinor, 0)
+    assert.equal(money.weOweMinor, rs(30_000), "November's loan is still on the kharcha book")
+    assert.equal(money.customerId, lend.customerId)
+
+    assertBooks()
+    assertPhysical()
+    assertNoLostScans()
   })
 
   // -------------------------------------------------------------- FEB (k=5)
@@ -1855,9 +2013,11 @@ describe('a year in the life of the rental house', () => {
       `select disposition, count(*) as n from assets
         where disposition is not null group by disposition order by disposition`,
     )
+    // --- network --- November's loaner went home as returned_to_owner —
+    // a fourth terminal row that must never read 'retired'.
     assert.deepEqual(
       gone.map((r) => [r.disposition, Number(r.n)]),
-      [['lost', 1], ['stolen', 2]],
+      [['lost', 1], ['returned_to_owner', 1], ['stolen', 2]],
     )
     // The absconded job left the coming-back board when its gear went stolen —
     // no red row, because the truth is now "gone", not "late".

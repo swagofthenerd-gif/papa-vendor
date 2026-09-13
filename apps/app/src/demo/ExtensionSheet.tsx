@@ -2,6 +2,8 @@ import { useMemo, useRef, useState } from 'react'
 import { Icon } from '@papa/icons'
 import { DAY_MS, bookingDateLabel, telUrl, type ExtensionCollision } from '@papa/core'
 import { SwapSheet } from './SwapSheet.tsx'
+// --- network --- (0025): the Sub-rent door opens the market.
+import { AskTheMarketSheet, type Shortage } from './AskTheMarketSheet.tsx'
 import { collisionKey, type BookingView } from './bookings.ts'
 import { collisionSentence, collisionStarts, collisionSubject, fromLocalInput, toLocalInput } from '../booking-view.ts'
 import type { DemoStore } from './store.ts'
@@ -45,6 +47,7 @@ export function ExtensionSheet({
   const [end, setEnd] = useState(toLocalInput(booking.customerEndMs + DAY_MS))
   const [settled, setSettled] = useState<Map<string, ExtensionCollision>>(new Map())
   const [substituting, setSubstituting] = useState<ExtensionCollision | null>(null)
+  const [asking, setAsking] = useState<Shortage[] | null>(null) // --- network ---
   const [copied, setCopied] = useState<string | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
@@ -89,6 +92,18 @@ export function ExtensionSheet({
     }, nowMs)
     if (!r.ok) return
     setSettled((prev) => new Map(prev).set(collisionKey(c), c))
+    // --- network --- the intent is noted; now actually ask the houses.
+    // The shortage is the RIVAL's window — that is who the partner's unit
+    // covers — and the sub-hire, if they say yes, chains behind their
+    // booking (ASSUMPTION #sub-rent-intent).
+    setAsking([{
+      productId: c.productId,
+      productName: c.productName,
+      qty: c.kind === 'bulk' ? c.shortBy : 1,
+      fromMs: c.theirFromMs,
+      untilMs: c.theirUntilMs,
+      bookingId: c.bookingId,
+    }])
   }
 
   const copyName = (c: ExtensionCollision) => {
@@ -192,6 +207,14 @@ export function ExtensionSheet({
           {open.length > 0 ? STR.bookingExtendBlocked(open.length) : STR.bookingExtendNow}
         </button>
       </div>
+
+      {asking ? (
+        <AskTheMarketSheet
+          store={store}
+          shortage={asking}
+          onClose={() => setAsking(null)}
+        />
+      ) : null}
 
       {substituting && substituting.kind === 'asset' ? (
         <SubstituteSheet

@@ -19,17 +19,13 @@ export { HOLD_MS }
  */
 
 
-export function HoldToFinish({
-  label,
-  onFinish,
-  disabled = false,
-  holdMs = HOLD_MS,
-}: {
-  label: string
-  onFinish: () => void
-  disabled?: boolean
-  holdMs?: number
-}) {
+/**
+ * The hold itself, as a hook, so the crew chip (demo/CrewChips.tsx) can
+ * fill its ring by the same rule: `progress` 0..1 for the CSS variable,
+ * `begin` on pointer-down / key-down, `cancel` on every way a hold ends
+ * early. Reaching 1 cancels and fires `onFinish` once.
+ */
+export function useHold(onFinish: () => void, { disabled = false, holdMs = HOLD_MS } = {}) {
   const [progress, setProgress] = useState(0)
   const raf = useRef<number | null>(null)
   const start = useRef<number | null>(null)
@@ -62,6 +58,22 @@ export function HoldToFinish({
     }
     raf.current = requestAnimationFrame(tick)
   }, [cancel, disabled, holdMs, onFinish])
+
+  return { progress, begin, cancel }
+}
+
+export function HoldToFinish({
+  label,
+  onFinish,
+  disabled = false,
+  holdMs = HOLD_MS,
+}: {
+  label: string
+  onFinish: () => void
+  disabled?: boolean
+  holdMs?: number
+}) {
+  const { progress, begin, cancel } = useHold(onFinish, { disabled, holdMs })
 
   return (
     <button

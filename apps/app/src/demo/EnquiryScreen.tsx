@@ -1,9 +1,12 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { AvailabilitySummary, AvailabilityWindow, CatalogueItem } from '@papa/core'
-import { Enquiry } from '../routes/Enquiry.tsx'
+import { Enquiry, needsTheMarket } from '../routes/Enquiry.tsx'
 import { NewJobSheet } from './NewJobSheet.tsx'
 import { QuoteSheet } from './QuoteSheet.tsx'
 import { defaultPickupMs, defaultReturnMs, fromLocalInput, toLocalInput } from '../booking-view.ts'
+// --- network --- (0025): the reply card's Ask-the-market door.
+import { AskTheMarketSheet, type Shortage } from './AskTheMarketSheet.tsx'
+import { DAY_MS } from '@papa/core'
 import { go } from '../nav.ts'
 import { enquiryLines, type DemoStore } from './store.ts'
 import type { EnquiryLine } from './quotes.ts'
@@ -32,6 +35,7 @@ export function EnquiryScreen({
 }) {
   const [summary, setSummary] = useState<AvailabilitySummary | null>(null)
   const [creating, setCreating] = useState(false)
+  const [asking, setAsking] = useState<Shortage[] | null>(null) // --- network ---
   const [pricing, setPricing] = useState(false)
   // The dates the client asked for: tomorrow 09:00 → the day after, 18:00
   // by default, the same defaults the booking sheet opens on. With them
@@ -120,11 +124,34 @@ export function EnquiryScreen({
       : base
   }, [summary])
 
+  // --- network --- the short lines as an ask: what the shelf minus the
+  // calendar cannot cover. The ask carries the reply card's dates when the
+  // desk has set them; while they are blank or backwards it names
+  // today → tomorrow and the desk corrects it in the sub-hire sheet.
+  const askMarket = () => {
+    if (!summary) return
+    const now = Date.now()
+    const fromMs = availabilityWindow?.startMs ?? now
+    const untilMs = availabilityWindow?.endMs ?? now + DAY_MS
+    setAsking(
+      summary.lines
+        .filter((l) => needsTheMarket(l) && l.productId)
+        .map((l) => ({
+          productId: l.productId as string,
+          productName: l.productName ?? l.raw,
+          qty: Math.max(1, l.wanted - Math.max(0, l.onHand - l.confirmedOverlap)),
+          fromMs,
+          untilMs,
+        })),
+    )
+  }
+
   return (
     <>
       <Enquiry
         summary={summary}
         reply={summary ? store.replyText(summary, availabilityWindow) : ''}
+        onAskMarket={askMarket}
         onPaste={onPaste}
         onResolve={onResolve}
         onCopyReply={onCopyReply}
@@ -141,6 +168,9 @@ export function EnquiryScreen({
         onWindowChange={onWindowChange}
         onPrice={() => setPricing(true)}
       />
+      {asking && asking.length > 0 ? (
+        <AskTheMarketSheet store={store} shortage={asking} onClose={() => setAsking(null)} />
+      ) : null}
       {pricing && summary && availabilityWindow ? (
         <QuoteSheet
           store={store}

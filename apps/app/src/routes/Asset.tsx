@@ -11,6 +11,7 @@ import { PhotoCompare } from '../components/PhotoCompare.tsx'
 import { AwaazNote, type AwaazRecording, type AwaazSaveResult } from '../components/AwaazNote.tsx'
 import type { PhotoPair, VoiceNoteRow } from '@papa/core'
 import type { ServiceFacts } from '../demo/read-model.ts'
+import type { SubHireRow } from '../demo/network.ts'
 import { STR } from '../strings.ts'
 
 /**
@@ -250,6 +251,7 @@ const STAMP_WORD: Record<string, string> = {
   stolen: STR.fleetStampStolen,
   sold: STR.fleetStampSold,
   retired: STR.fleetStampRetired,
+  returned_to_owner: STR.fleetStampReturnedToOwner, // --- network --- (0025 D5)
 }
 
 /**
@@ -270,12 +272,18 @@ function FleetSection({
   onFound,
   onTheftReport,
   onSwap,
+  onLend,
+  onTellPartners,
 }: {
   asset: AssetView
   onMarkTerminal: (d: MarkDisposition, note: string | null, saleMinor: number | null) => void
   onFound: () => void
   onTheftReport: () => void
   onSwap: () => void
+  /** --- network --- lend this owned unit to a partner (0025 D4). */
+  onLend?: () => void
+  /** --- network --- the partner-group broadcast for a stolen unit (D9). */
+  onTellPartners?: () => void
 }) {
   const [open, setOpen] = useState(false)
 
@@ -288,6 +296,11 @@ function FleetSection({
         {asset.disposition === 'stolen' ? (
           <button className="btn btn-outline btn-block" onClick={onTheftReport}>
             <Icon name="send" size={18} /> {STR.fleetTheftReport}
+          </button>
+        ) : null}
+        {asset.disposition === 'stolen' && onTellPartners ? (
+          <button className="btn btn-outline btn-block" onClick={onTellPartners}>
+            <Icon name="handshake" size={18} /> {STR.networkTellPartners}
           </button>
         ) : null}
         <button className="btn btn-ghost btn-block" onClick={onFound}>
@@ -304,6 +317,13 @@ function FleetSection({
       {isOut ? (
         <button className="btn btn-outline btn-block" onClick={onSwap}>
           <Icon name="repeat" size={18} /> {STR.fleetSwapOntoJob}
+        </button>
+      ) : null}
+      {/* --- network --- the lend door: on the shelf and owned. A write,
+          so it sits with the other writes, not beside the share buttons. */}
+      {!isOut && onLend ? (
+        <button className="btn btn-outline btn-block" onClick={onLend}>
+          <Icon name="handshake" size={18} /> {STR.networkLendThisUnit}
         </button>
       ) : null}
 
@@ -438,6 +458,9 @@ export function Asset({
   onFound,
   onTheftReport,
   onSwap,
+  onLend,
+  onTellPartners,
+  borrowedFrom,
 }: {
   asset: AssetView | null
   money: AssetMoney | null
@@ -466,6 +489,12 @@ export function Asset({
   onTheftReport: () => void
   /** Open the swap sheet for an item out on a live job. */
   onSwap: () => void
+  /** --- network --- lend this unit (owned, in the fleet); absent otherwise. */
+  onLend?: () => void
+  /** --- network --- the partner broadcast (stolen only); absent otherwise. */
+  onTellPartners?: () => void
+  /** --- network --- the sub-hire that borrowed this unit in, when it is one. */
+  borrowedFrom?: SubHireRow | null
 }) {
   if (!asset) {
     return (
@@ -493,6 +522,20 @@ export function Asset({
         </div>
         <h2 className="asset-name">{asset.name}</h2>
         <p className="asset-status">{sentence}</p>
+        {/* --- network --- a borrowed unit says whose it is, with the
+            door to the partner page where 'Returned to them' lives. */}
+        {borrowedFrom ? (
+          <p className="asset-promised">
+            <span className="stamp stamp-small">{STR.networkBorrowedStamp}</span>{' '}
+            <span className="section-sub">{STR.networkBorrowedFrom(borrowedFrom.partnerName)}</span>{' '}
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={() => go({ name: 'partner', partnerId: borrowedFrom.partnerId })}
+            >
+              <Icon name="handshake" size={16} /> {STR.networkBorrowedOpenPartner}
+            </button>
+          </p>
+        ) : null}
         {promised ? (
           <p className="asset-promised">
             <span className="stamp stamp-small">
@@ -608,6 +651,8 @@ export function Asset({
         onFound={onFound}
         onTheftReport={onTheftReport}
         onSwap={onSwap}
+        onLend={onLend}
+        onTellPartners={onTellPartners}
       />
     </>
   )

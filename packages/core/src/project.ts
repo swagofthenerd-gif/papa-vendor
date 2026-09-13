@@ -139,17 +139,34 @@ function presenceFor(eventType: unknown): string | null {
 }
 
 /** The disposition an event stamps, or null. Mirrors the server reducer
- *  (0020 D1): the mark_* verbs name why the item left, `found` clears it.
- *  Undefined for every other event — leave the column exactly as it was. */
-function dispositionFor(eventType: unknown): { set: string | null } | undefined {
+ *  (0020 D1, fifth edition in 0025 D5): the mark_* verbs name why the item
+ *  left, `found` clears it, and `retire` on a BORROWED unit (ownership =
+ *  'sub_rented_in') stamps 'returned_to_owner' — "we scrapped it" and "we
+ *  gave it back" must never read the same on the Gone filter. Derived from
+ *  ownership, which the caller reads off the pre-update row, exactly as the
+ *  server does. Undefined for every other event — leave the column as it was. */
+export function dispositionFor(
+  eventType: unknown,
+  ownership: string | null | undefined = 'owned',
+): { set: string | null } | undefined {
   switch (eventType) {
     case 'mark_lost':   return { set: 'lost' }
     case 'mark_stolen': return { set: 'stolen' }
     case 'mark_sold':   return { set: 'sold' }
-    case 'retire':      return { set: 'retired' }
+    case 'retire':      return { set: ownership === 'sub_rented_in' ? 'returned_to_owner' : 'retired' }
     case 'found':       return { set: null }
     default:            return undefined
   }
+}
+
+/** The ownership axis of one unit, read before the projection writes — the
+ *  one fact `retire` branches on. Null when the row is missing. */
+function ownershipOf(db: SqlDriver, assetId: string): string | null {
+  const row = db.get<{ ownership: string | null }>(
+    `select ownership from assets where id = ?`,
+    [assetId],
+  )
+  return row?.ownership ?? null
 }
 
 /** Whether an event takes the asset off its current job. A terminal item
@@ -192,7 +209,7 @@ export function projectOp(db: SqlDriver, op: ProjectableOp): string | undefined 
   const addDays = op.event_type === 'check_in' ? serviceDaysFor(db, op, assetId) : 0
   const addCycles = op.event_type === 'check_out' && countsCycles(db, assetId) ? 1 : 0
 
-  const disposition = dispositionFor(op.event_type)
+  const disposition = dispositionFor(op.event_type, ownershipOf(db, assetId))
 
   // `last_scanned_at` is only written when the op carries a time. It always
   // does in practice — ScanSession stamps every payload — but coalescing in

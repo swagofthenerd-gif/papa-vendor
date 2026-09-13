@@ -132,10 +132,13 @@ create table if not exists locations (
 -- booking_id mirrors the 0022 D8 bridge, projected as of 0023: the one
 -- live job a confirmed booking became, so the phone can refuse a second
 -- conversion and a cancel while the job is open — the server's own rules.
+-- attendant_names (0025 D8): the crew line as JSON text — display names in
+-- assignment order, '[]' when nobody is on it. Rides the jobs projection
+-- because job_attendants itself never syncs.
 create table if not exists jobs (
   id text primary key, org_id text, label text, contact text,
   expected_back text, status text, customer_id text, closed_at text,
-  booking_id text
+  booking_id text, attendant_names text
 );
 
 -- service_due_after_rental_days / count_cycles / retire_after_cycles mirror
@@ -292,6 +295,65 @@ create table if not exists org_calendar_days (
   rate_multiplier  real not null default 1
 );
 create index if not exists org_calendar_days_day_idx on org_calendar_days (day);
+
+-- ---------------------------------------------------------------------------
+-- --- network --- (0025). Desk-side tables that NEVER sync: partner_houses
+-- carries a phone (PII — 0025 D1 gives it no change_seq), sub_hires is
+-- papa_app SELECT for desk roles only (D2), job_attendants rides the jobs
+-- projection as attendant_names (D8). In this wave the demo store owns them
+-- locally and writes them beside the outbox op the server will replay;
+-- on the real pipe the desk role reads them through RPC-backed reads.
+-- Same create-if-not-exists caveat as every column above.
+-- ---------------------------------------------------------------------------
+create table if not exists partner_houses (
+  id                  text primary key,
+  org_id              text not null,
+  name                text not null,
+  phone               text,
+  whatsapp_group_note text,
+  city                text not null default 'Lahore',
+  notes               text,
+  created_at          text,
+  updated_at          text,
+  deleted_at          text
+);
+create index if not exists partner_houses_live_idx on partner_houses (deleted_at, name);
+
+-- period arrives split like the bookings' ranges ('[)', ISO text).
+-- Amounts nullable ON PURPOSE (0025 D6): unpriced is counted, never zeroed.
+create table if not exists sub_hires (
+  id                  text primary key,
+  org_id              text not null,
+  direction           text not null,          -- 'in' | 'out'
+  partner_house_id    text not null,
+  booking_id          text,
+  job_id              text,
+  product_id          text not null,
+  qty                 integer not null default 1,
+  asset_id            text,
+  period_from         text not null,
+  period_until        text not null,
+  agreed_cost_minor   integer,
+  agreed_charge_minor integer,
+  expense_id          text,
+  ledger_entry_id     text,
+  returned_at         text,
+  note                text,
+  created_at          text not null
+);
+create index if not exists sub_hires_partner_idx on sub_hires (partner_house_id, returned_at);
+create index if not exists sub_hires_job_idx on sub_hires (job_id);
+create index if not exists sub_hires_asset_idx on sub_hires (asset_id);
+
+create table if not exists job_attendants (
+  id         text primary key,
+  org_id     text not null,
+  job_id     text not null,
+  user_id    text not null,
+  role       text not null default 'attendant',   -- 'attendant' | 'driver'
+  created_at text not null
+);
+create unique index if not exists job_attendants_job_user_idx on job_attendants (job_id, user_id);
 
 -- ---------------------------------------------------------------------------
 -- Device-only. NOT mirrored, NOT recoverable from the server.

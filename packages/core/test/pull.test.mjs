@@ -244,3 +244,21 @@ describe('resetting the mirrors', () => {
     assert.equal(new Outbox(db).pendingCount(), 1, 'unsent scans survive a mirror reset')
   })
 })
+
+// --- network (0025 D8) ------------------------------------------------------
+test('jobs mirror attendant_names as JSON text, [] when nobody is on the crew', () => {
+  const db = new NodeSqliteDriver()
+  db.exec(LOCAL_SCHEMA)
+  const applier = new PullApplier(db)
+  applier.apply(page({
+    jobs: [
+      { id: 'j-crew', org_id: ORG, label: 'Shaadi', status: 'open', attendant_names: ['Usman', 'Danish'] },
+      { id: 'j-solo', org_id: ORG, label: 'Pickup', status: 'open', attendant_names: [] },
+    ],
+  }))
+  assert.deepEqual(
+    JSON.parse(db.get(`select attendant_names as a from jobs where id = 'j-crew'`).a),
+    ['Usman', 'Danish'],
+  )
+  assert.equal(db.get(`select attendant_names as a from jobs where id = 'j-solo'`).a, '[]')
+})

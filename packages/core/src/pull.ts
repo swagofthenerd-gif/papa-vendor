@@ -46,7 +46,9 @@ const MIRROR_COLUMNS: Record<string, string[]> = {
   // boards that stop accumulating finished jobs both read the mirror.
   // booking_id arrives as of 0023 (the 0022 D8 bridge), read by the
   // booking write rules on the phone.
-  jobs: ['id', 'org_id', 'label', 'expected_back', 'status', 'customer_id', 'closed_at', 'booking_id'],
+  // --- network --- attendant_names arrives as of 0025 D8: the crew line,
+  // a JSON array of display names in assignment order ([] when none).
+  jobs: ['id', 'org_id', 'label', 'expected_back', 'status', 'customer_id', 'closed_at', 'booking_id', 'attendant_names'],
   // The promise calendar (0022, projected by 0023). The server's tstzranges
   // arrive split into their bounds; customer_name is denormalised onto the
   // booking so the phone never needs the customers table.
@@ -242,6 +244,10 @@ function normalise(v: unknown): SqlValue {
   if (v === undefined || v === null) return null
   if (typeof v === 'boolean') return v ? 1 : 0
   if (typeof v === 'number') return v
+  // A JSON column (jobs.attendant_names, 0025 D8; rate_cards.weekend_mask)
+  // arrives as an array or object and is kept as its JSON text — String()
+  // would flatten ['Usman','Danish'] to 'Usman,Danish', which a name with a
+  // comma could never survive.
   if (typeof v === 'object') return JSON.stringify(v)
   return String(v)
 }

@@ -5,6 +5,8 @@ import { explainConfirmRefusal } from '../booking-view.ts'
 import type { DemoStore } from './store.ts'
 import type { BookingView, ConfirmPlan } from './bookings.ts'
 import { STR } from '../strings.ts'
+// --- network --- (0025): the `short` refusal's door.
+import { AskTheMarketSheet, type Shortage } from './AskTheMarketSheet.tsx'
 
 /**
  * The Confirm sheet — what confirming WOULD do, then the one button.
@@ -35,6 +37,7 @@ export function ConfirmSheet({
   const [sameDay, setSameDay] = useState(false)
   const [overrideNote, setOverrideNote] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
+  const [asking, setAsking] = useState<Shortage[] | null>(null) // --- network ---
   const nowMs = Date.now()
 
   const opts = {
@@ -62,6 +65,8 @@ export function ConfirmSheet({
   // refuse — the promise can stand while the desk finds the rate.
   const unpriced = store.quoteFor(booking.id)?.totals.unpricedCount ?? 0
   const gate = !plan.ok && 'reason' in plan && plan.reason === 'needs_credentials' ? plan : null
+  // --- network --- a shortfall is a question for the partner houses.
+  const short = !plan.ok && 'reason' in plan && plan.reason === 'short' ? plan.short : null
   const refusal = !plan.ok && !gate ? explainConfirmRefusal(plan, booking.bookingNo) : null
 
   const confirm = () => {
@@ -158,6 +163,21 @@ export function ConfirmSheet({
             <div><strong>{problem ?? refusal}</strong></div>
           </div>
         ) : null}
+        {short ? (
+          <button
+            className="btn btn-outline btn-block"
+            onClick={() => setAsking([{
+              productId: short.productId,
+              productName: short.productName,
+              qty: Math.max(1, short.wanted - short.available),
+              fromMs: holdStart,
+              untilMs: holdEnd,
+              bookingId: booking.id,
+            }])}
+          >
+            <Icon name="handshake" size={18} /> {STR.networkAskMarket}
+          </button>
+        ) : null}
 
         <button
           className="btn btn-primary btn-lg sheet-submit"
@@ -167,6 +187,9 @@ export function ConfirmSheet({
           <Icon name="check" size={18} /> {STR.bookingConfirmNow}
         </button>
       </div>
+      {asking ? (
+        <AskTheMarketSheet store={store} shortage={asking} onClose={() => setAsking(null)} />
+      ) : null}
     </div>
   )
 }
