@@ -2,7 +2,26 @@
 
 Every guess made in the absence of field data. Walk this list with the pilot vendor at the end of the build, item by item.
 
-Mark the corresponding code with `// ASSUMPTION: ... See docs/assumptions.md#anchor`.
+Mark the corresponding code with `// ASSUMPTION: ... See docs/assumptions.md#anchor`. Anchors are stable; numbers are for reading (the table is numbered 1–42 in the order the guesses were made, with no gaps — reference anchors in code, never numbers).
+
+## Vendor afternoon checklist
+
+The ten guesses that cost most if wrong, in the order to ask them in one afternoon at the desk — money first (each answer is a setting the desk can change that evening), then the warehouse (each answer is something to *watch*, not ask). Bring the phone with the demo on it and a printed rate card of ours to compare against theirs.
+
+| Ask | # | Anchor | The question, as you would say it | What changes if the answer differs |
+|---|---|---|---|---|
+| 1 | 5 | `#week-rate` | "Show me your rate card. How do you quote a ten-day job?" | One org setting (`week_equals_days`); the whole quote pipeline reads it. |
+| 2 | 21 | `#rental-day` | "What time does gear have to be back to avoid another day? Is there a grace window?" | One expression, maybe one more knob on the card. |
+| 3 | 2 | `#deposit-norms` | "What do you take from a stranger before a Rs 4M camera leaves — cash, a cheque, CNIC? What happened last time gear came back damaged?" | The deposit state machine and the refund gate are built around this; the phone door is still to build, so the answer shapes it. |
+| 4 | 1 | `#hold-ttl` | "How is a hold placed today? Who calls whom when two clients want the same body, and how long does a hold live?" | `pencil_ttl_hours` per org; the escalation trigger. |
+| 5 | 3 | `#cash-split` | "How were the last ten jobs paid?" | Which payment surfaces come first. |
+| 6 | 20 | `#seasonal-pricing` | "Is an Eid-week or December quote ever higher than a March one for the same kit? By how much?" | Rows on the calendar (data); whether MAX is the right rule. |
+| 7 | 11 | `#tag-survival` | *Do, don't ask:* tag one rack today; look at it after a month of real jobs. | If tags fail often, manual entry becomes the primary path — the design's largest bet. |
+| 8 | 9 | `#literacy` | *Watch:* hand the phone to a prep tech with no explanation. | Adoption; the icon/colour/haptic-first scanner is built for this. |
+| 9 | 10 | `#shared-device` | "How many phones are there, and who carries them?" | PIN fast-switch vs per-user OTP — the auth model is built for the harder case. |
+| 10 | 7 | `#fleet-size` | *Count:* the shelves. | The cursor-pull sync sizing; above ~200MB the sync decision is revisited. |
+
+And one hardware question that is not on the list because it is a *doing*: feed one parchi through their receipt printer (`#thermal-58mm`, #42) and read the QR back with any phone.
 
 | # | Anchor | Assumption | Why we're guessing | How we'd know | Cost if wrong |
 |---|---|---|---|---|---|
