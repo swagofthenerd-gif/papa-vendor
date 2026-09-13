@@ -409,6 +409,7 @@ const STR_EN = {
   enquirySubtitle: 'Paste what the client sent',
   enquiryPastePlaceholder:
     'Paste the client’s message here…\n\nGreetings and “please confirm” are ignored automatically.',
+  enquiryPasteAria: 'The client’s message',
   enquiryCheckAvailability: 'Check availability',
   enquiryNewList: 'New list',
   enquiryEverythingIsAvailable: 'Everything is available',
@@ -469,6 +470,7 @@ const STR_EN = {
   labelsImportLead:
     'Paste your gear list — straight out of Excel, Google Sheets, or a CSV. Nothing is saved until you have seen what it would do.',
   labelsImportPlaceholder: 'Item Description,Qty,Asset Code,Shelf\nSony FX9,2,FX9,Rack A\n…',
+  labelsImportAria: 'Your gear list',
   labelsTryASampleList: 'Try it with a sample list',
   labelsStartAgain: 'Start again',
   labelsCheckTheColumns: 'Check the columns',

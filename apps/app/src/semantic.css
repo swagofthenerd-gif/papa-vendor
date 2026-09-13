@@ -70,6 +70,11 @@
      the ones that actually prevent the wrong tap. */
   --tap-glove: 64px;
   --tap-gap-glove: 12px;
+  /* The marketplace's --tap is 44px, the phone-app minimum. Here every
+     control is pressed with a glove or a wet thumb, so the floor is 48:
+     the buttons, the icon doors, the tab bar, the search field and the
+     inputs all take their height from this token. */
+  --tap: 48px;
   --tap-gap-danger: 24px;   /* destructive vs non-destructive */
 
   /* Sub-token gaps that sit below the --sp-* scale: the hair of space
@@ -95,6 +100,12 @@
      sizes. Here accent frequently means "this needs your attention",
      so it must be readable. 4.6:1 on white. */
   --accent-strong: #c93f00;
+  /* The filled primary button is the ONE place accent is a text
+     background, and white on the marketplace's #ff6b2c is 2.8:1 — a
+     readable button in sun needs the AA alias as its fill (5.0:1 with
+     white ink). The ink is a token because the dark theme's alias is a
+     light orange that wants dark ink on it instead (9.0:1). */
+  --btn-primary-ink: #ffffff;
 
   /* ---- Status ------------------------------------------------
      Twelve asset states cannot be aliased onto five hues: the
@@ -168,14 +179,18 @@
 
    Ratios (see test/contrast.test.mjs, which recomputes them):
      card/bg 1.41 · line/card 1.81
-     ink/card 9.2 · muted/card 5.1 · stamp/card 4.8
+     ink/card 9.2 · muted/card 5.5 · muted/card-2 4.8 · stamp/card 4.8
+     (--muted is lifted from the sibling's #8fa0af, which was 4.4:1 on
+     --card-2 — the badge and the group count sit on card-2 and fell
+     under AA there.)
    ============================================================ */
 :root[data-theme='dark'] {
   --bg: #0c0e12;            /* carbon blue-black, deeper than the sibling */
   --card: #272e39;          /* RAISED — this is what buys the separation */
   --card-2: #313845;
   --ink: #c9d6e2;           /* pale carbon-blue ink on the duplicate page */
-  --muted: #8fa0af;
+  --muted: #96a7b6;
+  --btn-primary-ink: var(--status-ink);
   --line: #4c5561;
   --line-strong: #626d7c;
   --accent-strong: #ff9563; /* on dark, accent-as-text goes lighter, not darker */

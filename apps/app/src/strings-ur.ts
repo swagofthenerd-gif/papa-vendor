@@ -377,6 +377,7 @@ export const STR_UR: StrTable = {
   enquirySubtitle: 'Client ka message paste karein',
   enquiryPastePlaceholder:
     'Client ka message yahan paste karein…\n\nSalaam dua aur “please confirm” khud hi nazarandaz ho jate hain.',
+  enquiryPasteAria: 'Client ka message',
   enquiryCheckAvailability: 'Availability check karein',
   enquiryNewList: 'Nayi list',
   enquiryEverythingIsAvailable: 'Sab kuch available hai',
@@ -435,6 +436,7 @@ export const STR_UR: StrTable = {
   labelsImportLead:
     'Apne saaman ki list paste karein — seedha Excel, Google Sheets, ya CSV se. Jab tak aap dekh na lein kya hoga, kuch save nahi hota.',
   labelsImportPlaceholder: 'Item Description,Qty,Asset Code,Shelf\nSony FX9,2,FX9,Rack A\n…',
+  labelsImportAria: 'Aapke saaman ki list',
   labelsTryASampleList: 'Sample list se try karein',
   labelsStartAgain: 'Dobara shuru karein',
   labelsCheckTheColumns: 'Columns check karein',

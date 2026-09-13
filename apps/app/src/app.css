@@ -82,7 +82,7 @@ body {
 /* Hover states exist only where a pointer does. */
 @media (hover: hover) {
   .btn:hover { background: color-mix(in srgb, var(--ink) 6%, var(--card-2)); }
-  .btn-primary:hover { background: color-mix(in srgb, #000 6%, var(--accent)); }
+  .btn-primary:hover { background: color-mix(in srgb, #000 6%, var(--accent-strong)); }
   .btn-ghost:hover, .icon-btn:hover, .search-clear:hover { background: var(--card-2); }
   .btn-outline:hover { background: var(--card-2); }
   .stat:hover, .quick:hover, .job-card:hover, .gear-unit:hover,
@@ -117,9 +117,11 @@ body {
   cursor: pointer;
 }
 .btn:active { transform: scale(0.97); }
+/* Filled with the AA alias, not the raw accent: white on #ff6b2c is
+   2.8:1 and a primary button is read in sun. See --btn-primary-ink. */
 .btn-primary {
-  background: var(--accent); color: #fff; border: none;
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 30%, transparent);
+  background: var(--accent-strong); color: var(--btn-primary-ink); border: none;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent-strong) 30%, transparent);
 }
 .btn-block { width: 100%; }
 /* Secondary emphasis carries accent only as TEXT (the AA-safe alias);
@@ -130,12 +132,21 @@ body {
   color: var(--accent-strong);
 }
 .btn-ghost { background: transparent; border: var(--line-w) solid var(--line); }
-.btn-sm { min-height: 40px; padding: 8px 14px; font-size: var(--fs-sm); }
+/* The small pill draws at 44 and is HIT at 48: an invisible 2px apron
+   above and below (the ::after) takes the tap, so a row of small doors
+   keeps its look and every one of them is still an honest target. The
+   same apron gives the 40px chips their 48. */
+.btn-sm { min-height: 44px; padding: 8px 14px; font-size: var(--fs-sm); position: relative; }
+.btn-sm::after, .filter-chip::after {
+  content: ''; position: absolute; left: 0; right: 0; top: -2px; bottom: -2px;
+}
+.filter-chip::after { top: -4px; bottom: -4px; }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .icon-btn {
   display: grid; place-items: center;
   width: var(--tap); height: var(--tap);
+  border-radius: var(--r-pill);
   border: none; background: transparent; color: var(--ink); cursor: pointer;
 }
 
@@ -473,7 +484,7 @@ body {
 .sheet-head { display: flex; align-items: center; justify-content: space-between; }
 .sheet-title { font-size: var(--fs-md); font-weight: 800; }
 .sheet-search {
-  width: 100%; margin-top: var(--sp-3); padding: var(--sp-3);
+  width: 100%; min-height: var(--tap); margin-top: var(--sp-3); padding: var(--sp-3);
   border: 2px solid var(--line); border-radius: var(--r-sm);
   background: var(--card-2); color: var(--ink);
   font-family: var(--ff-code); font-size: var(--fs-md);
@@ -880,7 +891,7 @@ h2.stamp .h-ico { display: none; }
 }
 .chip-row::-webkit-scrollbar { display: none; }
 .filter-chip {
-  flex: none; padding: 8px 14px;
+  flex: none; padding: 8px 14px; min-height: 40px; position: relative;
   border: var(--line-w) solid var(--line); border-radius: var(--r-pill);
   background: var(--card); color: var(--ink);
   font: inherit; font-size: var(--fs-sm); font-weight: 700; white-space: nowrap;
@@ -1414,8 +1425,11 @@ h2.stamp .h-ico { display: none; }
 .cal-title { text-align: center; min-width: 0; }
 .cal-title h2 { margin: 0; font-size: var(--fs-lg); font-weight: 800; }
 .cal-title .section-sub { margin-top: 2px; }
+/* No column gap: seven cells in a 343px column are 49px wide only with
+   nothing between them, and 49 is the glove floor. The feint rule under
+   each cell and the number's inset keep the days apart. */
 .cal-grid {
-  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px 0;
   margin-top: var(--sp-3);
 }
 .cal-weekday {
@@ -1559,7 +1573,7 @@ h2.stamp .h-ico { display: none; }
    row beside the frequent doors, so the hold is what protects it. */
 .crew-chip {
   position: relative; display: inline-flex; align-items: center; gap: 5px;
-  min-height: 36px; padding: 4px 12px;
+  min-height: 48px; padding: 4px 12px;
   border: var(--line-w) solid var(--line); border-radius: var(--r-pill);
   background: var(--card); color: var(--ink);
   font: inherit; font-size: var(--fs-xs); font-weight: 800;
@@ -1655,6 +1669,6 @@ h2.stamp .h-ico { display: none; }
 /* Seven weekdays on one settings page: wrap rather than scroll, so the
    whole week is visible at a glance and nothing hides off the edge. */
 .weekday-row { flex-wrap: wrap; overflow: visible; }
-.weekday-row .filter-chip { padding: 8px 10px; font-size: var(--fs-xs); }
+.weekday-row .filter-chip { padding: 8px 6px; font-size: var(--fs-xs); min-height: 40px; min-width: 48px; }
 .calendar-row-tap { min-height: var(--tap); display: flex; align-items: center; }
 .calendar-row-doors { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--tap-gap-glove); align-items: center; margin-top: var(--sp-1); }

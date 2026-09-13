@@ -89,6 +89,7 @@ export function Import({
         <p className="import-lead">{STR.labelsImportLead}</p>
         <textarea
           className="paste-box"
+          aria-label={STR.labelsImportAria}
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={STR.labelsImportPlaceholder}
