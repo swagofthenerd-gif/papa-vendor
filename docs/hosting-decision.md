@@ -204,6 +204,33 @@ stays true only if these hold:
 > and every device in the field — on offline phones, in warehouses. Nothing else
 > comes close.
 
+## The PostgREST contract (W9 — the pipe)
+
+The phone reaches Postgres through PostgREST, and only through it. This is
+the configuration the local proof runs (`db/pipe-up.sh`) and the one any
+host must reproduce; it is deliberately the smallest one that works.
+
+| Setting | Value | Why |
+|---|---|---|
+| `db-uri` | `postgres://papa_authenticator:…@host/papa` | a LOGIN role that can do nothing but `SET ROLE papa_app` (`noinherit`, granted `papa_app`) |
+| `db-anon-role` | `papa_app` | every request runs as the application role — NOLOGIN, NOSUPERUSER, NOBYPASSRLS, the role every pgTAP test already runs as |
+| `db-pre-request` | `public.auth_pre_request` | 0016: reads the `x-papa-session` header, calls `authenticate_device`, sets `papa.*` as transaction-local GUCs; a bad token raises and the transaction dies; no header is a no-op |
+| `db-schemas` | `public` | the RPCs, nothing else |
+| `jwt-secret` | **absent** | identity is the session header; a JWT would outrank it (`current_org_id()` prefers `request.jwt.*`) — the phone never sends one |
+| `server-port` | 3000 (mapped to 3050 locally) | |
+
+What is **not** in the contract, on purpose: no table endpoints are used
+(all writes are RPCs; reads are `pull_changes`), no `db-extra-search-path`,
+no anonymous-role JWT trick, no vendor SDK. Any gateway that can run one
+function at the top of the transaction and expose named-argument RPCs can
+stand in for PostgREST — which is the whole point of "Staying portable".
+
+Two things a host must add that the proof does not: the SMS transport
+(something that calls `request_otp` as `papa_auth` and sends the code —
+an edge function or a cron), and the upload URL provider behind
+`packages/core/src/upload.ts` (R2 signed URLs, or whatever the storage
+choice is). Both are seams with one function each.
+
 ## Verification
 
 - `npm run test:all` stays green — typecheck, 120 JS tests, the Vite build, all

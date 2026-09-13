@@ -432,7 +432,7 @@ re-cut the plan. This section is the honest ledger after that.
 
 ### The pipe — said plainly
 
-**The phone has no server connection.** Not "partial", not "stubbed":
+**The phone has no server connection** (as of W8; see "The pipe (W9)" below, which closes this on this machine). Not "partial", not "stubbed":
 
 - **No auth client.** 0016's OTP / device-session / PIN model exists in
   Postgres and is tested there. The app has no login screen, stores no
@@ -498,3 +498,40 @@ Deliberately little. `applyImport` moved from `store.ts` to
 duplicate-id rollback on a second import of the same file was fixed on
 the way), and three stress files were added. Everything else W8 did is
 tests and documents — the point of the wave was to look, not to build.
+
+<!-- ===================== The pipe (W9) — appended as one section; keep delimited ===================== -->
+
+## The pipe (W9) — the phone and the server have met
+
+**Built and proven on this machine** (`npm run test:pipe`: a real
+`postgrest/postgrest:v12.2.3` in front of a real `postgres:16`, migrated by
+`db/migrate.sh`, driven by a phone-side SQLite in Node). This changes three
+rows of the "Designed but NOT BUILT" table above and adds nothing to the
+security column that was not already there:
+
+| Gap (from the table above) | Now |
+|---|---|
+| **No authentication at all** | The phone enrols (`complete_enrolment`), carries the session in `x-papa-session`, switches users by PIN (`switch_session_user`), signs out (`sign_out_device`). The PIN gate covers an enrolled phone on open. Still hosting-specific: the SMS transport that calls `request_otp` as `papa_auth` — documented as a seam, not built. Still the device-driver wave: SQLCipher at rest; the browser build keeps the token in memory and says so. |
+| No sync at all (implicit above) | `SyncLoop`: pull → apply → flush, kicked by `online`, foreground, a 30s poll and every write; scans idempotent per `(device, client_seq)` as before; **every non-scan op exactly-once through `replay_op` (0027)** with the server's minted ids mapped back onto the phone's rows. Principle 3's test passes against the real server: the network dies after the server commits, nothing is lost, the retry is acked as duplicates, the row count is exact. |
+| No device migration path (schema.ts's standing caveat) | `migrateLocal`: a versioned ladder from the pre-0018 shape to today, welded to `LOCAL_SCHEMA` by a test; an interrupted step finishes on the next open. |
+
+**Honest limits, stated:**
+
+- The proof runs in Node against containers. No phone has run the live
+  mode over a real network; the Android build (Capacitor driver, SQLCipher)
+  is still the wave that makes the token survive a reboot.
+- `replay_op` makes non-scan ops exactly-once **per device**; a booking
+  placed on two phones is two bookings by design, and the second confirm
+  parks with the server's message (scenario 5).
+- Ops that never existed cannot cross: the money book, expenses, the
+  walk-in job and job close on the phone still enqueue nothing (they were
+  local-only before this wave and remain so). The dispatcher is generic —
+  they cross the day their write sides enqueue a `p_*` payload.
+- The upload seam has a URL provider and a test, but no host: photos and
+  voice notes still do not leave the phone until R2 (or equivalent) is
+  wired behind `Uploader`.
+
+Details: `docs/the-pipe.md`. Contract: `docs/hosting-decision.md`, "The
+PostgREST contract".
+
+<!-- ===================== end: The pipe (W9) ===================== -->

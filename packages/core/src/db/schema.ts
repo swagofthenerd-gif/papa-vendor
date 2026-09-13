@@ -474,6 +474,45 @@ create table if not exists sync_meta (
   key   text primary key,
   value text
 );
+
+/*
+ * The id map — the pipe's memory of which name the server gave a thing the
+ * phone named first (W9).
+ *
+ * The server mints its own ids for bookings, jobs, partner houses, borrowed
+ * units, expenses… The phone cannot wait for them (a pencil is placed
+ * offline), so it mints a client id, writes the mirror optimistically, and
+ * queues the op with that id riding beside the RPC args as client_*. When
+ * the server accepts, its reply names the real id; this table records the
+ * pair, every later op that still names the client id is rewritten before it
+ * is sent, and the local rows are re-keyed to the server's name in the same
+ * transaction as the ack (docs/the-pipe.md, "Id mapping").
+ *
+ * Device-only: it exists nowhere else, and a wipe would leave every queued
+ * op naming ids the server has never heard of.
+ */
+create table if not exists id_map (
+  client_id  text primary key,
+  server_id  text not null,
+  kind       text not null,
+  mapped_at  integer not null
+);
+create index if not exists id_map_server_idx on id_map (server_id);
+
+/*
+ * The members mirror (0027, W9) — who can pick up this phone. Slim on
+ * purpose: id (the user id switch_session_user takes), display name, role,
+ * and whether a PIN is set. Names and roles are not PII (the 0023 D1
+ * reasoning; phones and CNICs never leave the server). Read by the PIN
+ * gate and Settings → This phone.
+ */
+create table if not exists members (
+  id           text primary key,
+  org_id       text not null,
+  display_name text not null,
+  role         text not null,
+  has_pin      integer not null default 0
+);
 `
 
 /** Device-only tables, i.e. what a wipe would destroy irrecoverably. */
@@ -488,6 +527,9 @@ export const DEVICE_ONLY_TABLES = [
   // exists nowhere else until it uploads, so nothing in the app deletes one.
   'voice_notes',
   'sync_meta',
+  // The pipe's memory of the server's names for locally-minted ids (W9).
+  // Lose it and every queued op names ids the server never issued.
+  'id_map',
 ] as const
 
 /** Tables sync replaces wholesale. Safe to drop and re-seed at any time. */
@@ -495,4 +537,5 @@ export const MIRROR_TABLES = [
   'assets', 'asset_tags', 'asset_containment', 'locations', 'jobs', 'products',
   'bookings', 'booking_lines', 'asset_reservations', 'stock_reservations',
   'stock_lots', 'rate_cards', 'rate_card_entries', 'org_calendar_days',
+  'members',
 ] as const

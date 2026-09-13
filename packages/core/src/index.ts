@@ -100,3 +100,29 @@ export {
 export type { ParchiDoc, EscPosOptions } from './escpos.ts'
 export { askTheMarketText, stolenBroadcastText, windowLabel } from './partners.ts'
 export type { ShortageLine, BroadcastOrg, BroadcastLang, StolenBroadcastFacts } from './partners.ts'
+
+// --- the pipe (W9) -----------------------------------------------------------
+export { PostgrestTransport, errorFrom } from './transport/postgrest.ts'
+export type { PostgrestTransportOptions, PostgrestErrorBody } from './transport/postgrest.ts'
+export {
+  IdMap, ID_REPLY_RULES, REKEY_COLUMNS, CLIENT_MINTED_SQL, argsOf, isClientMinted, rekeyLocal,
+} from './dispatch.ts'
+export type { IdReplyRule } from './dispatch.ts'
+export { toScanOp } from './sync.ts'
+export type { SyncEngineOptions } from './sync.ts'
+export {
+  LOCAL_MIGRATIONS, LOCAL_SCHEMA_VERSION, localSchemaVersion, migrateLocal,
+} from './db/migrate.ts'
+export type { LocalMigration, MigrateReport } from './db/migrate.ts'
+export { SyncLoop } from './engine.ts'
+export type { SyncLoopOptions, PullTransport, CycleReport, SyncStatusView } from './engine.ts'
+export {
+  SESSION_KEYS, sessionOf, ensureDeviceId, enrol, pinSwitch, signOut, forgetSession,
+  pinEcho, rememberPinEcho, hasPinEcho, needsPinGate,
+} from './auth.ts'
+export type {
+  AuthSessionResult, RpcCaller, Session, EnrolInput, EnrolResult, PinSwitchResult, SignOutResult,
+} from './auth.ts'
+export { Uploader, decodeDataUri } from './upload.ts'
+export type { UploadTarget, UploaderOptions, PendingUploadRow, UploadReport } from './upload.ts'
+export { metaGet, metaGetNumber, metaSet } from './meta.ts'

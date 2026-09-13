@@ -19,7 +19,10 @@
     "build:app": "npm run build -w @papa/app",
     "dev": "npm run dev -w @papa/app",
     "dev:https": "npm run dev:https -w @papa/app",
-    "test:e2e": "node --test \"apps/app/test/e2e/*.e2e.mjs\""
+    "test:e2e": "node --test \"apps/app/test/e2e/*.e2e.mjs\"",
+    "pipe:up": "./db/pipe-up.sh",
+    "pipe:down": "./db/pipe-down.sh",
+    "test:pipe": "./db/pipe-test.sh"
   },
   "engines": {
     "node": ">=20"

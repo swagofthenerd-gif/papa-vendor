@@ -1,5 +1,4 @@
 import {
-  LOCAL_SCHEMA,
   PhotoStore,
   ScanSession,
   VoiceNoteStore,
@@ -45,8 +44,32 @@ import {
   type SqlDriver,
   type TagLookup,
 } from '@papa/core'
+import {
+  Outbox,
+  PostgrestTransport,
+  SyncLoop,
+  enrol,
+  ensureDeviceId,
+  forgetSession,
+  metaGet,
+  migrateLocal,
+  needsPinGate,
+  pinSwitch,
+  sessionOf,
+  signOut,
+  type EnrolInput,
+  type EnrolResult,
+  type OutboxRow,
+  type PinSwitchResult,
+  type Session,
+  type SignOutResult,
+  type SyncStatusView,
+} from '@papa/core'
 import { SqlJsDriver } from './sqljs-driver.ts'
 import { demoCatalogue, seedDemo, type DemoSeed } from './seed.ts'
+import { DEMO_SCHEMA } from './read-model.ts'
+import { NETWORK_SCHEMA } from './network.ts'
+import { notifySync } from '../sync-tick.ts'
 import { SessionRegistry, type SessionMode } from './sessions.ts'
 import {
   applyImport,
@@ -259,10 +282,65 @@ export type JobCustomerChoice =
  * That is deliberate and visible — the sync strip reports scans waiting to
  * send, which is exactly what a phone in a basement shows.
  */
+/**
+ * Which server the store talks to (W9).
+ *
+ *   demo — the pretend house, seeded on open, no server: the outbox fills
+ *          and never drains, and every chip says so.
+ *   live — an enrolled phone: seed skipped, the mirrors filled by the
+ *          SyncLoop from the real server, every queued op replayed there.
+ *
+ * ONE class, not two. The screens, the read models and the write sides are
+ * identical in both modes; only who fills the mirrors and who drains the
+ * outbox differs, and that is one field and one loop.
+ */
+export type StoreMode = 'demo' | 'live'
+
+/**
+ * The app's own tables a re-key must rewrite when the server renames a
+ * thing (core's REKEY_COLUMNS covers the mirrors; these are the demo-side
+ * tables read-model.ts and network.ts own).
+ */
+const APP_REKEY_COLUMNS: Record<string, string[]> = {
+  job_expected: ['job_id', 'asset_id'],
+  job_meta: ['job_id'],
+  scan_sessions: ['job_id'],
+  customers: ['id'],
+  customer_ledger_entries: ['customer_id', 'job_id', 'asset_id'],
+  org_expenses: ['asset_id', 'job_id', 'booking_id'],
+  demand_log: ['product_id'],
+  partner_customer_links: ['partner_house_id', 'customer_id'],
+  product_rates: ['product_id'],
+}
+
+/** One "needs attention" card: a parked op and everything parked behind it. */
+export interface AttentionCard {
+  rootId: string
+  op: string
+  code: string
+  message: string
+  seq: number
+  createdAt: number
+  /** Ops parked only because they depended on this one. */
+  blocked: number
+}
+
+export interface MemberRow {
+  id: string
+  name: string
+  role: string
+  hasPin: boolean
+  current: boolean
+}
+
 export class DemoStore {
   readonly db: SqlDriver
-  readonly seed: DemoSeed
+  seed: DemoSeed
   catalogue: CatalogueItem[]
+  mode: StoreMode
+  /** The background loop, attached in live mode. Never awaited by a screen. */
+  loop: SyncLoop | null = null
+  private transport: PostgrestTransport | null = null
 
   /**
    * Sessions keyed by (job, direction) — see sessions.ts for why there are
@@ -270,17 +348,16 @@ export class DemoStore {
    * opening a return mid-prep destroyed the prep's dedupe set, and every
    * rescan on resuming wrote a duplicate op.
    */
-  private readonly sessions: SessionRegistry
+  private sessions: SessionRegistry
   readonly photos: PhotoStore
   readonly voice: VoiceNoteStore
 
-  private constructor(db: SqlDriver, seed: DemoSeed) {
+  private constructor(db: SqlDriver, seed: DemoSeed, mode: StoreMode, deviceId: string) {
     this.db = db
     this.seed = seed
+    this.mode = mode
     this.catalogue = demoCatalogue()
-    this.sessions = new SessionRegistry(db, 'demo-device', (jobId, mode) =>
-      this.expectedFor(jobId, mode),
-    )
+    this.sessions = this.registryFor(deviceId)
     // A deliberately small budget in the demo — a few megabytes rather than
     // 512 — so the "device full" refusal is reachable by a person trying the
     // app for ten minutes, instead of being a branch nobody ever sees.
@@ -290,11 +367,238 @@ export class DemoStore {
     this.voice = new VoiceNoteStore(db, { budgetBytes: 2 * 1024 * 1024 })
   }
 
+  /** The session registry for a device id — rebuilt whenever the phone
+   *  changes identity (enrol, sign out), always the same way. */
+  private registryFor(deviceId: string): SessionRegistry {
+    return new SessionRegistry(this.db, deviceId, (jobId, mode) => this.expectedFor(jobId, mode))
+  }
+
+  /**
+   * Open the phone's database and decide the mode: a session token present
+   * means an enrolled phone (live); otherwise the demo house is seeded. The
+   * browser build's database is in memory, so it always opens demo — the
+   * Enrol screen switches the SAME store to live for the life of the page
+   * (goLive), and the Android build's persisted database boots straight
+   * into the live branch.
+   */
   static async open(): Promise<DemoStore> {
     const db = await SqlJsDriver.open()
-    db.exec(LOCAL_SCHEMA)
+    migrateLocal(db)
+    const session = sessionOf(db)
+    if (session) {
+      db.exec(DEMO_SCHEMA)
+      db.exec(NETWORK_SCHEMA)
+      const store = new DemoStore(db, liveSeed(session), 'live', session.deviceId)
+      store.refreshCatalogue()
+      store.attachLoop(session)
+      return store
+    }
     const seed = seedDemo(db)
-    return new DemoStore(db, seed)
+    return new DemoStore(db, seed, 'demo', 'demo-device')
+  }
+
+  // ---- the pipe (W9) ------------------------------------------------------
+
+  /** The live session, or null in demo mode. */
+  session(): Session | null {
+    return sessionOf(this.db)
+  }
+
+  /** Enrol this phone and switch the store to live. */
+  async enrol(input: Omit<EnrolInput, 'deviceId'> & { serverUrl: string }): Promise<EnrolResult> {
+    const deviceId = ensureDeviceId(this.db)
+    const transport = this.transportFor(input.serverUrl)
+    const r = await enrol(this.db, transport, { ...input, deviceId })
+    if (!r.ok) return r
+    this.goLive(r.session)
+    return r
+  }
+
+  /**
+   * Become the enrolled phone. From demo mode the pretend house is cleared
+   * first — mirrors, the demo's own tables, AND the demo outbox: those scans
+   * were of pretend gear, and replaying them at a real server would only
+   * park as cards. ASSUMPTION: see docs/assumptions.md#enrol-clears-demo
+   */
+  private goLive(session: Session): void {
+    if (this.mode === 'demo') {
+      this.db.transaction(() => {
+        for (const t of [
+          'assets', 'asset_tags', 'asset_containment', 'locations', 'jobs', 'products',
+          'bookings', 'booking_lines', 'asset_reservations', 'stock_reservations', 'stock_lots',
+          'rate_cards', 'rate_card_entries', 'org_calendar_days', 'partner_houses', 'sub_hires',
+          'job_attendants', 'members', 'outbox', 'id_map', 'pending_uploads', 'condition_photos',
+          'voice_notes', 'job_expected', 'job_meta', 'scan_sessions', 'product_rates', 'customers',
+          'customer_ledger_entries', 'org_expenses', 'demand_log', 'staff', 'partner_customer_links',
+        ]) {
+          this.db.exec(`delete from ${t}`)
+        }
+        this.db.exec(`delete from sync_meta where key in ('pull_cursor', 'clock_offset_ms')`)
+      })
+    }
+    this.mode = 'live'
+    this.seed = liveSeed(session)
+    this.catalogue = []
+    this.sessions = this.registryFor(session.deviceId)
+    this.attachLoop(session)
+  }
+
+  private transportFor(serverUrl: string): PostgrestTransport {
+    return new PostgrestTransport({
+      baseUrl: serverUrl,
+      sessionToken: () => metaGet(this.db, 'session_token') ?? null,
+    })
+  }
+
+  private attachLoop(session: Session): void {
+    this.loop?.stop()
+    this.transport = this.transportFor(session.serverUrl ?? '')
+    this.loop = new SyncLoop({
+      db: this.db,
+      transport: this.transport,
+      deviceId: session.deviceId,
+      rekeyColumns: APP_REKEY_COLUMNS,
+      onChange: () => this.afterSync(),
+    })
+    this.loop.start()
+  }
+
+  /**
+   * After any cycle that changed rows: the kit-list reader's catalogue is
+   * rebuilt from the mirror, and the crew roster (network.ts's `staff`
+   * table, ASSUMPTION #staff-roster) is the members mirror — copied, so
+   * network.ts keeps its one join and the demo keeps its seed. Then the
+   * screens are told.
+   */
+  private afterSync(): void {
+    this.refreshCatalogue()
+    this.db.transaction(() => {
+      this.db.exec(`delete from staff where id not in (select id from members)`)
+      this.db.exec(
+        `insert into staff (id, org_id, display_name, role)
+         select id, org_id, display_name, role from members where true
+         on conflict (id) do update set display_name = excluded.display_name, role = excluded.role`,
+      )
+    })
+    notifySync()
+  }
+
+  /** Ask the loop to run now. Fire-and-forget from the UI. */
+  kickSync(): void {
+    void this.loop?.kick()
+  }
+
+  /** What Settings → This phone and the chips read. Null in demo mode. */
+  syncView(): SyncStatusView | null {
+    return this.loop?.status() ?? null
+  }
+
+  deviceLabel(): string {
+    return metaGet(this.db, 'device_label') ?? ''
+  }
+
+  /** Who may pick this phone up, the current holder marked. */
+  members(): MemberRow[] {
+    const current = this.session()?.userId ?? null
+    return this.db
+      .all<{ id: string; display_name: string; role: string; has_pin: number }>(
+        `select id, display_name, role, has_pin from members order by display_name`,
+      )
+      .map((r) => ({
+        id: r.id, name: r.display_name, role: r.role,
+        hasPin: Number(r.has_pin) === 1, current: r.id === current,
+      }))
+  }
+
+  needsPinGate(): boolean {
+    return needsPinGate(this.db)
+  }
+
+  async pinSwitch(userId: string, pin: string): Promise<PinSwitchResult> {
+    if (!this.transport) return { ok: false, reason: 'refused', message: 'demo mode' }
+    const r = await pinSwitch(this.db, this.transport, userId, pin, {
+      online: this.loop?.status().online ?? true,
+    })
+    if (r.ok) this.seed = liveSeed(this.session()!)
+    return r
+  }
+
+  /** Sign out: refused while anything is queued; needs the server; then the
+   *  phone forgets the house and reopens as the demo. */
+  async signOut(): Promise<SignOutResult> {
+    if (!this.transport) return { ok: false, reason: 'refused', message: 'demo mode' }
+    const r = await signOut(this.db, this.transport)
+    if (!r.ok) return r
+    this.loop?.stop()
+    this.loop = null
+    this.transport = null
+    this.mode = 'demo'
+    forgetSession(this.db)
+    this.db.exec(`delete from staff`)
+    this.seed = seedDemo(this.db)
+    this.catalogue = demoCatalogue()
+    this.sessions = this.registryFor('demo-device')
+    return r
+  }
+
+  /**
+   * The "needs attention" cards: every parked op the server itself refused,
+   * with the count of ops parked behind it. ONE card per refusal, never
+   * one per blocked child (outbox.ts, the DAG rule).
+   */
+  attentionCards(): AttentionCard[] {
+    const failed = new Outbox(this.db).failures()
+    const byId = new Map(failed.map((r) => [r.id, r]))
+    const rootOf = (row: OutboxRow): string => {
+      let cur = row
+      const seen = new Set<string>()
+      while (cur.error_code === 'blocked_by_dependency' && cur.depends_on && !seen.has(cur.id)) {
+        seen.add(cur.id)
+        const parent = byId.get(cur.depends_on)
+        if (!parent) break
+        cur = parent
+      }
+      return cur.id
+    }
+    const cards = new Map<string, AttentionCard>()
+    for (const row of failed) {
+      if (row.error_code === 'blocked_by_dependency') continue
+      cards.set(row.id, {
+        rootId: row.id, op: row.op, code: row.error_code ?? '', message: row.error_detail ?? '',
+        seq: row.seq, createdAt: row.created_at, blocked: 0,
+      })
+    }
+    for (const row of failed) {
+      if (row.error_code !== 'blocked_by_dependency') continue
+      const card = cards.get(rootOf(row))
+      if (card) card.blocked++
+    }
+    return [...cards.values()].sort((a, b) => a.seq - b.seq)
+  }
+
+  /**
+   * Drop a parked card and everything behind it. The server never took
+   * these rows, so nothing on it changes — but the phone's optimistic
+   * mirror may still show what they promised; the next pull is the truth.
+   */
+  dismissCard(rootId: string): number {
+    const failed = new Outbox(this.db).failures()
+    const children = new Map<string, string[]>()
+    for (const r of failed) {
+      if (r.depends_on) children.set(r.depends_on, [...(children.get(r.depends_on) ?? []), r.id])
+    }
+    const doomed: string[] = []
+    const queue = [rootId]
+    while (queue.length > 0) {
+      const id = queue.shift()!
+      if (doomed.includes(id)) continue
+      doomed.push(id)
+      queue.push(...(children.get(id) ?? []))
+    }
+    this.db.transaction(() => {
+      for (const id of doomed) this.db.exec(`delete from outbox where id = ? and state = 'failed'`, [id])
+    })
+    return doomed.length
   }
 
   /**
@@ -1813,4 +2117,20 @@ export function enquiryLines(summary: AvailabilitySummary): EnquiryLine[] {
   return summary.lines
     .filter((l) => l.productId)
     .map((l) => ({ productId: l.productId as string, productName: l.productName ?? l.raw, qty: l.quantity }))
+}
+
+/**
+ * The seed-shaped facts a live store carries: the org from the session,
+ * the person holding the phone, no demo tags and no demo jobs. The house
+ * name is the parchi letterhead; the org's name is not mirrored yet, so
+ * the enrolled person's org id stands in until a settings row carries it.
+ */
+function liveSeed(session: Session): DemoSeed {
+  return {
+    orgId: session.orgId,
+    houseName: session.role ? session.displayName : '',
+    userName: session.displayName,
+    tags: [],
+    jobs: [],
+  }
 }

@@ -46,3 +46,19 @@ jobs:
       # deploys with, exercised on throwaway databases on every push.
       - name: The migration runner
         run: ./db/test-migrate.sh
+
+  # The pipe (W9): a real PostgREST in front of a real Postgres, and a
+  # phone-side database driving both — the six scenarios in
+  # apps/app/test/pipe. Its own job so a container hiccup here never
+  # masquerades as a unit failure, and so it can run in parallel.
+  pipe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: The pipe, end to end
+        run: npm run test:pipe
