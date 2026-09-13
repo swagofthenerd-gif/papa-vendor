@@ -521,6 +521,13 @@ export function voidScan(
         voids: outboxId,
         asset_id: assetId,
         device_time: new Date(now()).toISOString(),
+        // What the voided op said, carried here because the voided row is
+        // gone (acked and deleted) by the time this op is sent: the pipe
+        // sends a void as a forward-pointing CORRECTION wearing the voided
+        // op's own event type (sync.ts toScanOp).
+        voided_event_type: payload.event_type ?? null,
+        voided_job_id: payload.job_id ?? null,
+        voided_tag_code: payload.tag_code ?? null,
       },
       dependsOn: outboxId,
     })

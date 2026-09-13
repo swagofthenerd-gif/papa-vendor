@@ -100,3 +100,17 @@ export {
 export type { ParchiDoc, EscPosOptions } from './escpos.ts'
 export { askTheMarketText, stolenBroadcastText, windowLabel } from './partners.ts'
 export type { ShortageLine, BroadcastOrg, BroadcastLang, StolenBroadcastFacts } from './partners.ts'
+
+// --- the pipe (W9) -----------------------------------------------------------
+export { PostgrestTransport, errorFrom } from './transport/postgrest.ts'
+export type { PostgrestTransportOptions, PostgrestErrorBody } from './transport/postgrest.ts'
+export {
+  IdMap, ID_REPLY_RULES, REKEY_COLUMNS, CLIENT_MINTED_SQL, argsOf, isClientMinted, rekeyLocal,
+} from './dispatch.ts'
+export type { IdReplyRule } from './dispatch.ts'
+export { toScanOp } from './sync.ts'
+export type { SyncEngineOptions } from './sync.ts'
+export {
+  LOCAL_MIGRATIONS, LOCAL_SCHEMA_VERSION, localSchemaVersion, migrateLocal,
+} from './db/migrate.ts'
+export type { LocalMigration, MigrateReport } from './db/migrate.ts'
