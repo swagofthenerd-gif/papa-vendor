@@ -111,10 +111,10 @@ set local role papa_app;
 -- Thirteen as of 0023; 0026 (the ninth edition) adds the three rate tables.
 select is(
   (select count(*)::int from jsonb_object_keys(pull_changes(0) -> 'tables')),
-  16, 'the full pull carries sixteen tables (thirteen as of 0023, plus the 0026 rate tables)');
+  17, 'the full pull carries seventeen tables (thirteen as of 0023, the 0026 rate tables, members as of 0027)');
 select is(
   (select count(*)::int from jsonb_object_keys(pull_changes(999999999) -> 'tables')),
-  16, 'and the early-out names the same sixteen — the two lists are in step');
+  17, 'and the early-out names the same seventeen — the two lists are in step');
 select is(
   jsonb_array_length(pull_changes(0) -> 'tables' -> 'bookings'), 0,
   'no bookings yet: an empty array, not a missing key');

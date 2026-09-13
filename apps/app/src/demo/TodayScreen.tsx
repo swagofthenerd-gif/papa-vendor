@@ -10,6 +10,7 @@ import { KhataChargeSheet } from './SessionScreen.tsx'
 // --- network --- (0025 D7): the crew picker.
 import { CrewPickerSheet } from './CrewChips.tsx'
 import { shareText } from '../share.ts'
+import { useSyncTick } from '../sync-tick.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 import { Sheet, SheetClose } from '../components/Sheet.tsx'
@@ -30,8 +31,11 @@ export function TodayScreen({ store }: { store: DemoStore }) {
   const [lateFeeFor, setLateFeeFor] = useState<string | null>(null)
   const [crewFor, setCrewFor] = useState<string | null>(null) // --- network ---
 
+  // A sync cycle that landed rows re-reads the board (W9).
+  useSyncTick()
   const counts = store.outboxCounts()
   const now = Date.now()
+  const sync = store.syncView()
 
   return (
     <Shell
@@ -56,13 +60,14 @@ export function TodayScreen({ store }: { store: DemoStore }) {
       }
     >
       <SyncStrip
-        // Always "offline": there is no server in the demo, so pretending
-        // to be connected would hide the one thing the strip exists for.
-        online={false}
+        // "Offline" in the demo: there is no server, so pretending to be
+        // connected would hide the one thing the strip exists for. On an
+        // enrolled phone (W9) the loop's own view answers.
+        online={sync?.online ?? false}
         pending={counts.pending}
         oldestAgeMs={counts.oldestAgeMs}
         failures={counts.failures}
-        onOpenFailures={() => {}}
+        onOpenFailures={() => go({ name: 'phone' })}
       />
       <Today
         jobs={store.jobs().map((j) => ({

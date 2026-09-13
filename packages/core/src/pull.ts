@@ -2,6 +2,7 @@ import type { SqlDriver, SqlValue } from './db/driver.ts'
 import { placeholders } from './db/driver.ts'
 import { metaGetNumber, metaSet } from './meta.ts'
 import { projectOp, type ProjectableOp } from './project.ts'
+import { CLIENT_MINTED_SQL } from './dispatch.ts'
 
 /**
  * Applying a pull to the local mirrors.
@@ -81,6 +82,27 @@ const MIRROR_COLUMNS: Record<string, string[]> = {
   ],
   rate_card_entries: ['id', 'org_id', 'rate_card_id', 'product_id', 'day_rate_minor'],
   org_calendar_days: ['id', 'org_id', 'day', 'kind', 'name', 'rate_multiplier'],
+  // Who can pick up this phone (0027, W9): the PIN gate's list. Names and
+  // roles only — the server projects nothing else, and the PII guard
+  // proves it.
+  members: ['id', 'org_id', 'display_name', 'role', 'has_pin'],
+}
+
+/**
+ * Child rows the phone authors as a GUESS beside the op that will create
+ * them (a pencil's lines and claims; a rate typed at the desk), keyed by
+ * the parent whose server-side write mints the real rows. When the server's
+ * row for a parent arrives, the phone's prefixed guesses for that parent
+ * are replaced — the server's lines and claims are the promise now, and a
+ * guess left beside them would count a camera twice on the calendar.
+ * A guess is a prefix (dispatch.ts, rule 3); server rows are bare uuids
+ * and are never touched here.
+ */
+const CHILD_OF: Record<string, string> = {
+  booking_lines: 'booking_id',
+  asset_reservations: 'booking_id',
+  stock_reservations: 'booking_id',
+  rate_card_entries: 'rate_card_id',
 }
 
 /** The primary key each mirror is keyed on locally. */
@@ -98,6 +120,7 @@ const MIRROR_KEY: Record<string, string> = {
   rate_cards: 'id',
   rate_card_entries: 'id',
   org_calendar_days: 'id',
+  members: 'id',
 }
 
 export interface ApplyReport {
@@ -151,7 +174,24 @@ export class PullApplier {
            on conflict (${key}) do update set
              ${columns.filter((c) => c !== key).map((c) => `${c} = excluded.${c}`).join(', ')}`
 
+        const parentCol = CHILD_OF[table]
+        const parentsSeen = new Set<string>()
+
         for (const row of rows) {
+          // The server's children replace the phone's guesses for that
+          // parent — once per parent per page, before the first server row
+          // lands, so a page never holds both.
+          if (parentCol) {
+            const parent = row[parentCol]
+            if (typeof parent === 'string' && !parentsSeen.has(parent)) {
+              parentsSeen.add(parent)
+              this.db.exec(
+                `delete from ${table} where ${parentCol} = ? and ${CLIENT_MINTED_SQL}`,
+                [parent],
+              )
+            }
+          }
+
           // Soft deletes ARE the tombstones: a deleted row keeps syncing, and
           // the client removes it. That is what makes a delete impossible to
           // miss for a device that was offline when it happened.

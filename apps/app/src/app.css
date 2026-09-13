@@ -1676,3 +1676,29 @@ h2.stamp .h-ico { display: none; }
 .weekday-row .filter-chip { padding: 8px 6px; font-size: var(--fs-xs); min-height: 40px; min-width: 48px; }
 .calendar-row-tap { min-height: var(--tap); display: flex; align-items: center; }
 .calendar-row-doors { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--tap-gap-glove); align-items: center; margin-top: var(--sp-1); }
+
+/* --- the pipe (W9): enrol, the PIN gate, This phone ---------------------- */
+.enrol-form { display: flex; flex-direction: column; gap: var(--sp-1); margin-top: var(--sp-4); }
+.enrol-form .field-label { margin-top: var(--sp-3); }
+
+/* The gate covers the whole app until the holder is named: a carbon-copy
+   sheet over the ledger, nothing behind it reachable. */
+.pin-gate {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: var(--bg);
+  padding: var(--sp-4);
+}
+.pin-gate-card { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: var(--sp-3); }
+.pin-gate-title { margin: 0; font-size: var(--fs-lg); font-weight: 800; }
+.pin-gate-people .line-tap { min-height: var(--row-h-glove); }
+.pin-gate-people .line-name, .pin-gate-people .line-note { grid-column: 1; }
+.pin-gate-people .line-code { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+.line-tap.is-picked { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+.pin-gate-input { font-size: var(--fs-lg); letter-spacing: 0.3em; text-align: center; }
+
+.pin-inline { display: grid; grid-template-columns: 1fr auto; gap: var(--sp-2); padding: var(--sp-2) 0 var(--sp-3); }
+.pin-inline .sheet-search { min-width: 0; }
+
+.attention-card { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-2) 0 var(--sp-3); }
+.attention-card .line-note { color: var(--status-attention); }

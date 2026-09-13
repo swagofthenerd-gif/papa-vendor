@@ -29,6 +29,10 @@ import { SehatSection } from './demo/SehatSection.tsx'
 import { PartnerScreen } from './demo/PartnerScreen.tsx'
 import { LendOutSheet } from './demo/LendOutSheet.tsx'
 import { PartnerSendSheet } from './demo/PartnerSendSheet.tsx'
+// --- the pipe (W9)
+import { EnrolScreen } from './demo/EnrolScreen.tsx'
+import { PinGate } from './demo/PinGate.tsx'
+import { ThisPhoneScreen } from './demo/ThisPhoneScreen.tsx'
 
 /**
  * The app shell.
@@ -53,6 +57,12 @@ export function App() {
   const [view, setView] = useState<View>(() => parseHash(window.location.hash))
   const [store, setStore] = useState<DemoStore | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
+  // Bumped when the store changes identity underneath the screens —
+  // enrolling switches it to live — so every mounted screen remounts and
+  // re-reads. The PIN gate (W9) sits over everything on an enrolled phone
+  // until the holder has named themself.
+  const [epoch, setEpoch] = useState(0)
+  const [locked, setLocked] = useState(false)
 
   useEffect(() => {
     const onHash = () => setView(parseHash(window.location.hash))
@@ -63,7 +73,7 @@ export function App() {
   useEffect(() => {
     let cancelled = false
     DemoStore.open()
-      .then((s) => { if (!cancelled) setStore(s) })
+      .then((s) => { if (!cancelled) { setStore(s); setLocked(s.needsPinGate()) } })
       .catch((e: unknown) => {
         if (!cancelled) setFailed(e instanceof Error ? e.message : String(e))
       })
@@ -78,7 +88,11 @@ export function App() {
       {failed ? (
         <Boot title={STR.commonDbWouldNotStart} detail={failed} />
       ) : store ? (
-        <Routed view={view} store={store} />
+        locked ? (
+          <PinGate store={store} onUnlocked={() => { setLocked(false); setEpoch((e) => e + 1) }} />
+        ) : (
+          <Routed key={epoch} view={view} store={store} onEpoch={() => setEpoch((e) => e + 1)} />
+        )
       ) : (
         <Boot title={STR.commonOpeningWarehouse} />
       )}
@@ -246,7 +260,7 @@ function Boot({ title, detail }: { title: string; detail?: string }) {
   )
 }
 
-function Routed({ view, store }: { view: View; store: DemoStore }) {
+function Routed({ view, store, onEpoch }: { view: View; store: DemoStore; onEpoch: () => void }) {
   // The scanner owns the whole viewport — no top bar, no tab bar.
   if (view.name === 'scan') {
     // KEYED, so moving to another job or turning the session around gives a
@@ -363,5 +377,12 @@ function Routed({ view, store }: { view: View; store: DemoStore }) {
     // the tick live in instance state, and two partners must not share one.
     case 'partner':
       return <PartnerScreen key={view.partnerId} store={store} partnerId={view.partnerId} />
+
+    // --- the pipe (W9)
+    case 'enrol':
+      return <EnrolScreen store={store} onDone={onEpoch} />
+
+    case 'phone':
+      return <ThisPhoneScreen store={store} />
   }
 }

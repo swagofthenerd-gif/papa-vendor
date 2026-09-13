@@ -106,8 +106,9 @@ export function Tags({ store }: { store: DemoStore }) {
  * The backed-up chip — the khata apps sell backup as a headline, and the
  * reassurance is worth a line on the settings surface. But this is the DEMO:
  * nothing actually leaves the device, and the wording says exactly that
- * rather than wearing a green tick it has not earned. On a real install the
- * same line reports the real outbox — the number is already the real queue.
+ * rather than wearing a green tick it has not earned. On an ENROLLED phone
+ * (W9) the same line reports the real outbox against the real server — the
+ * number was always the real queue; only the sentence changes.
  */
 export function BackedUpRow({ store }: { store: DemoStore }) {
   const counts = store.outboxCounts()
@@ -119,7 +120,7 @@ export function BackedUpRow({ store }: { store: DemoStore }) {
       <SectionHead
         icon="cloud-queue"
         title={STR.labelsBackedUpHeading}
-        sub={STR.labelsQueueStatus(counts.pending)}
+        sub={store.mode === 'live' ? STR.pipeLiveQueueStatus(counts.pending) : STR.labelsQueueStatus(counts.pending)}
         action={
           <span className="badge">
             <Icon name="clipboard-check" size={12} /> {counts.pending}

@@ -83,6 +83,35 @@ const KHARCHA_EN: Record<string, string> = {
   misc: 'other',
 }
 
+
+/**
+ * The outbox op vocabulary for the "needs attention" cards (W9) — the RPC
+ * name arrives as data; the fallback is the name itself, never a blank card.
+ */
+const OP_EN: Record<string, string> = {
+  submit_scan_batch: 'a scan',
+  void_scan: 'undoing a scan',
+  bind_tag: 'binding a label',
+  create_booking: 'a new booking',
+  confirm_booking: 'confirming a booking',
+  cancel_booking: 'cancelling a booking',
+  extend_booking: 'extending a booking',
+  reallocate_reservation: 'swapping a promised unit',
+  convert_booking_to_job: 'turning a booking into a job',
+  upsert_partner_house: 'a partner house',
+  remove_partner_house: 'removing a partner house',
+  record_sub_hire_in: 'a borrowed unit',
+  record_sub_hire_out: 'a lent unit',
+  close_sub_hire: 'a sub-hire return',
+  assign_attendant: 'the crew',
+  unassign_attendant: 'the crew',
+  upsert_rate_card: 'the rate card',
+  upsert_rate_entry: 'a rate',
+  set_calendar_day: 'a calendar day',
+  clear_calendar_day: 'a calendar day',
+  set_line_rate_override: 'a rate override',
+}
+
 /**
  * The English table. NOT `as const`: the literal types would make every other
  * language table a type error, and nothing consumes the literals. What the
@@ -1270,6 +1299,84 @@ const STR_EN = {
   networkThermalSaved: 'Printer bytes saved (dev only).',
   networkThermalFailed: (reason: string): string => `Print failed: ${reason} — try again, or share the parchi instead.`,
   networkThermalSent: 'Sent to the printer.',
+
+  // --- the pipe (W9): enrolment, the PIN gate, Settings → This phone ---
+  pipeEnrolTitle: 'Enrol this phone',
+  pipeEnrolSubtitle: 'Once, at the desk, on WiFi',
+  pipeEnrolHint: 'Ask the owner to send you a code. It arrives by SMS and lives ten minutes.',
+  pipeServerLabel: 'Server address',
+  pipeServerPlaceholder: 'https://…',
+  pipePhoneLabel: 'Your phone number',
+  pipePhonePlaceholder: '+92 300 1234567',
+  pipeCodeLabel: 'The code from the SMS',
+  pipeCodePlaceholder: '6 digits',
+  pipeOrgLabel: 'House (only if you work at two)',
+  pipeOrgPlaceholder: 'the house name the owner gave you',
+  pipeDeviceLabelLabel: 'What to call this phone',
+  pipeDeviceLabelPlaceholder: 'e.g. Warehouse phone 1',
+  pipePinLabel: 'Your PIN (4 to 6 digits, optional now)',
+  pipePinPlaceholder: 'PIN',
+  pipeEnrolButton: 'Enrol',
+  pipeEnrolling: 'Enrolling…',
+  pipeEnrolBadCode: 'That code did not work. A code lives ten minutes and five wrong tries burn it — ask for a fresh one.',
+  pipeEnrolAmbiguousOrg: 'This number works at more than one house. Type the house below.',
+  pipeEnrolBadPin: 'A PIN is 4 to 6 digits.',
+  pipeEnrolOffline: 'No answer from the server. Check the address and the WiFi.',
+  pipeEnrolRefused: (why: string): string => `The server refused: ${why}`,
+  pipeEnrolClearsDemo: 'Enrolling clears the demo warehouse from this phone, queued demo scans included.',
+  pipeEnrolled: (name: string): string => `Enrolled as ${name}. Pulling the fleet…`,
+  // The PIN gate.
+  pipeGateTitle: 'Who is holding this phone?',
+  pipeGateHint: 'Pick your name and type your PIN.',
+  pipeGateUnlock: 'Unlock',
+  pipeGateChecking: 'Checking…',
+  pipeGateWrongPin: 'Wrong PIN.',
+  pipeGateLockedOut: 'Too many tries — wait a minute.',
+  pipeGateOfflineUnknown: (name: string): string =>
+    `Offline, and ${name}'s PIN has never been checked on this phone. Connect once, or pick someone who has.`,
+  pipeGateNoPin: 'no PIN — tap to continue',
+  pipeGateCheckedOffline: 'PIN checked offline. The server confirms at the next sync.',
+  // Settings → This phone.
+  pipePhoneTitle: 'This phone',
+  pipePhoneSubtitle: 'Who it is, who it talks to, what is waiting',
+  pipePhoneDoorSub: 'Enrolment, the people on it, sync detail',
+  pipeDemoMode: 'Demo mode',
+  pipeDemoModeHint: 'A pretend warehouse on this phone only. Nothing leaves it. Enrol to join a real house.',
+  pipeDeviceHeading: 'Device',
+  pipeDeviceLine: (label: string, id: string): string => `${label} · ${id}`,
+  pipeServerLine: (url: string): string => `Talks to ${url}`,
+  pipeSessionUntil: (when: string): string => `Session good until ${when}`,
+  pipeTokenInMemory: 'Browser build: the session lives in memory and is gone on reload. The Android build keeps it.',
+  pipePeopleHeading: 'People on this phone',
+  pipePeopleSub: 'Tap a name to hand the phone over',
+  pipeHoldingNow: 'holding it now',
+  pipeHasPin: 'PIN set',
+  pipeNoPin: 'no PIN',
+  pipeSyncHeading: 'Sync',
+  pipeSyncLastPull: (when: string): string => `Last heard from the server ${when}`,
+  pipeSyncNever: 'Never heard from the server yet',
+  pipeSyncCursor: (n: number): string => `Cursor ${n}`,
+  pipeSyncQueue: (n: number): string => `${n} write${s(n)} waiting to send`,
+  pipeSyncQueueEmpty: 'Nothing waiting to send',
+  pipeSyncLastError: (msg: string): string => `Last complaint: ${msg}`,
+  pipeSyncNow: 'Sync now',
+  pipeSyncing: 'Syncing…',
+  pipeSessionDead: 'The server no longer recognises this phone. Enrol again.',
+  pipeAttentionHeading: 'Needs attention',
+  pipeAttentionSub: (n: number): string =>
+    `${n} card${s(n)} — the server refused these, and everything queued behind them waits with them`,
+  pipeAttentionNone: 'Nothing parked.',
+  pipeAttentionBehind: (n: number): string => `${n} more behind it`,
+  pipeAttentionDismiss: 'Dismiss',
+  pipeAttentionDismissed: 'Dismissed. The server never took these; nothing on it changed.',
+  pipeSignOut: 'Sign out',
+  pipeSignOutUnsent: (n: number): string => `${n} write${s(n)} still waiting to send — sync first, then sign out.`,
+  pipeSignOutOffline: 'Sign-out needs the server so that it is real. Connect and try again.',
+  pipeSignOutRefused: (why: string): string => `Could not sign out: ${why}`,
+  pipeSignedOut: 'Signed out. This phone forgot the house.',
+  pipeLiveQueueStatus: (n: number): string =>
+    n === 0 ? 'Queue empty · synced with the server' : `${n} write${s(n)} queued · sending when the server answers`,
+  pipeOpName: (op: string): string => OP_EN[op] ?? op,
 }
 
 /**
