@@ -6,6 +6,7 @@ import {
   type ExpenseView,
   type SqlDriver,
 } from '@papa/core'
+import { NAMES, defaultIds, enqueueOp, type OpIds } from './ops.ts'
 
 /**
  * The expense book's read model — the kharcha queries, in a plain .ts
@@ -17,7 +18,11 @@ import {
  * names it (void-pair semantics — see @papa/core expenses.ts). Money the
  * house paid out is a PAST FACT, so by the CONTRIBUTING offline rule
  * everything here works with no server; the server twin is migration
- * 0019's org_expenses and its RPCs.
+ * 0019's org_expenses and its RPCs — and since W11 each insert queues
+ * that RPC (`record_expense` / `reverse_expense`, the 0024 shape with
+ * `p_booking_id` and `p_spent_at`) with the row's phone-minted id as
+ * `client_expense_id`, chained behind the last op naming the job, the
+ * booking, the unit or the row it reverses (ops.ts).
  *
  * MONTH BOUNDARIES ARE THE DEVICE'S CALENDAR (monthBounds — the PKT month
  * the vendor means), computed here at read time from the raw rows. The
@@ -28,6 +33,8 @@ import {
 export interface ExpenseRow extends ExpenseView {
   assetId: string | null
   jobId: string | null
+  /** The booking this cost belongs to (0024 D9). */
+  bookingId: string | null
   counterparty: string | null
   note: string | null
   reversalOf: string | null
@@ -44,6 +51,7 @@ function rowsWhere(db: SqlDriver, where: string, params: (string | number)[]): E
       amount_minor: number
       asset_id: string | null
       job_id: string | null
+      booking_id: string | null
       counterparty: string | null
       note: string | null
       reversal_of: string | null
@@ -51,7 +59,7 @@ function rowsWhere(db: SqlDriver, where: string, params: (string | number)[]): E
       asset_code: string | null
       job_label: string | null
     }>(
-      `select e.id, e.kind, e.amount_minor, e.asset_id, e.job_id,
+      `select e.id, e.kind, e.amount_minor, e.asset_id, e.job_id, e.booking_id,
               e.counterparty, e.note, e.reversal_of, e.created_at,
               a.asset_code, j.label as job_label
          from org_expenses e
@@ -68,6 +76,7 @@ function rowsWhere(db: SqlDriver, where: string, params: (string | number)[]): E
       createdAt: Number(r.created_at),
       assetId: r.asset_id,
       jobId: r.job_id,
+      bookingId: r.booking_id,
       counterparty: r.counterparty,
       note: r.note,
       reversalOf: r.reversal_of,
@@ -99,24 +108,54 @@ export interface RecordExpenseInput {
   createdAt: number
 }
 
+/** `null` = no op: the server mints this row inside ANOTHER op that
+ *  follows (record_sub_hire_in's expense). See khata.ts QueueIds. */
+export type QueueIds = OpIds | null
+
 /** Append one line to the expense book. Returns the id, or null for a
  *  non-positive amount: a zero-rupee expense is a record of nothing, and
- *  a negative one is a reversal wearing a costume. */
-export function recordExpense(db: SqlDriver, input: RecordExpenseInput): string | null {
+ *  a negative one is a reversal wearing a costume. The op rides the
+ *  row's own clock as `p_spent_at`, so a backdated bill is backdated on
+ *  the server too. */
+export function recordExpense(
+  db: SqlDriver,
+  input: RecordExpenseInput,
+  ids: QueueIds = defaultIds(input.createdAt),
+): string | null {
   if (!Number.isFinite(input.amountMinor) || input.amountMinor <= 0) return null
   const id = input.id ?? `exp-${crypto.randomUUID()}`
-  db.exec(
-    `insert into org_expenses
-       (id, org_id, kind, amount_minor, asset_id, job_id, booking_id, counterparty, note,
-        reversal_of, created_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, null, ?)`,
-    [
-      id, input.orgId, input.kind, Math.round(input.amountMinor),
-      input.assetId ?? null, input.jobId ?? null, input.bookingId ?? null,
-      input.counterparty?.trim() || null, input.note?.trim() || null,
-      input.createdAt,
-    ],
-  )
+  const amount = Math.round(input.amountMinor)
+  const counterparty = input.counterparty?.trim() || null
+  const note = input.note?.trim() || null
+  db.transaction(() => {
+    db.exec(
+      `insert into org_expenses
+         (id, org_id, kind, amount_minor, asset_id, job_id, booking_id, counterparty, note,
+          reversal_of, created_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, null, ?)`,
+      [
+        id, input.orgId, input.kind, amount,
+        input.assetId ?? null, input.jobId ?? null, input.bookingId ?? null,
+        counterparty, note, input.createdAt,
+      ],
+    )
+    if (!ids) return
+    enqueueOp(db, ids, 'record_expense', {
+      client_expense_id: id,
+      p_kind: input.kind,
+      p_amount_minor: amount,
+      p_asset_id: input.assetId ?? null,
+      p_job_id: input.jobId ?? null,
+      p_counterparty: counterparty,
+      p_note: note,
+      p_spent_at: new Date(input.createdAt).toISOString(),
+      p_booking_id: input.bookingId ?? null,
+    }, [
+      ...NAMES.job(input.jobId),
+      ...NAMES.booking(input.bookingId),
+      ...NAMES.asset(input.assetId),
+    ])
+  })
   return id
 }
 
@@ -132,6 +171,7 @@ export function reverseExpense(
   expenseId: string,
   note: string | null,
   whenMs: number,
+  ids: OpIds = defaultIds(whenMs),
 ): boolean {
   const t = db.get<{
     kind: string
@@ -152,17 +192,27 @@ export function reverseExpense(
     [expenseId],
   )
   if (already) return false
-  db.exec(
-    `insert into org_expenses
-       (id, org_id, kind, amount_minor, asset_id, job_id, booking_id, counterparty, note,
-        reversal_of, created_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      `exp-${crypto.randomUUID()}`, orgId, t.kind, Number(t.amount_minor),
-      t.asset_id, t.job_id, t.booking_id, t.counterparty, note?.trim() || null,
-      expenseId, whenMs,
-    ],
-  )
+  const id = `exp-${crypto.randomUUID()}`
+  db.transaction(() => {
+    db.exec(
+      `insert into org_expenses
+         (id, org_id, kind, amount_minor, asset_id, job_id, booking_id, counterparty, note,
+          reversal_of, created_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id, orgId, t.kind, Number(t.amount_minor),
+        t.asset_id, t.job_id, t.booking_id, t.counterparty, note?.trim() || null,
+        expenseId, whenMs,
+      ],
+    )
+    // The server copies the target's links itself (0024 reverse_expense);
+    // the op names only the target — behind the op that created it.
+    enqueueOp(db, ids, 'reverse_expense', {
+      client_expense_id: id,
+      p_expense_id: expenseId,
+      p_note: note?.trim() || null,
+    }, NAMES.expense(expenseId))
+  })
   return true
 }
 
@@ -234,13 +284,22 @@ export function monthProfit(db: SqlDriver, nowMs: number): MonthProfit {
 export interface JobMargin {
   /** Live charge-side ledger lines naming the job. */
   incomeMinor: number
-  /** Live expenses naming the job — the sub-hire that rescued it. */
+  /** Live expenses naming the job — the sub-hire that rescued it — or
+   *  the booking it was born from (W11). */
   expenseMinor: number
   marginMinor: number
   expenseCount: number
 }
 
-/** What one job actually made — mirrors the server's job_margin view. */
+/**
+ * What one job actually made — mirrors the server's job_margin view
+ * (0019, widened by 0028). A cost tagged to the BOOKING the job came from
+ * counts too, when it names no other job: the desk borrows at the
+ * enquiry, before the job exists, and tags the bill to the pencil; the
+ * job the pencil becomes must see it (was the year's wall
+ * `subhire-cost-unlinkable`; `booking_sub_hire_cost` already read both
+ * links from the booking's side).
+ */
 export function jobMargin(db: SqlDriver, jobId: string): JobMargin {
   const income = db.get<{ total: number | null }>(
     `select sum(amount_minor) as total from customer_ledger_entries
@@ -249,7 +308,12 @@ export function jobMargin(db: SqlDriver, jobId: string): JobMargin {
                         where reversal_of is not null)`,
     [jobId],
   )
-  const rows = liveExpenses(expenseRows(db)).filter((e) => e.jobId === jobId)
+  const bookingId = db.get<{ booking_id: string | null }>(
+    `select booking_id from jobs where id = ?`, [jobId],
+  )?.booking_id ?? null
+  const rows = liveExpenses(expenseRows(db)).filter(
+    (e) => e.jobId === jobId || (e.jobId === null && bookingId !== null && e.bookingId === bookingId),
+  )
   const incomeMinor = Number(income?.total ?? 0)
   const expenseMinor = rows.reduce((n, e) => n + e.amountMinor, 0)
   return {

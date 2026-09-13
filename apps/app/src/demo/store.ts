@@ -71,6 +71,7 @@ import { DEMO_SCHEMA } from './read-model.ts'
 import { NETWORK_SCHEMA } from './network.ts'
 import { notifySync } from '../sync-tick.ts'
 import { SessionRegistry, type SessionMode } from './sessions.ts'
+import { NAMES, defaultIds, lastOpNaming } from './ops.ts'
 import {
   applyImport,
   assetFacts,
@@ -306,8 +307,11 @@ const APP_REKEY_COLUMNS: Record<string, string[]> = {
   job_meta: ['job_id'],
   scan_sessions: ['job_id'],
   customers: ['id'],
-  customer_ledger_entries: ['customer_id', 'job_id', 'asset_id'],
-  org_expenses: ['asset_id', 'job_id', 'booking_id'],
+  // The money book's own ids cross since W11 (record_ledger_entry /
+  // record_payment / record_expense / reverse_expense name them in their
+  // replies): the row, and every row that points at it, take the server's name.
+  customer_ledger_entries: ['id', 'customer_id', 'job_id', 'asset_id', 'reversal_of'],
+  org_expenses: ['id', 'asset_id', 'job_id', 'booking_id', 'reversal_of'],
   demand_log: ['product_id'],
   partner_customer_links: ['partner_house_id', 'customer_id'],
   product_rates: ['product_id'],
@@ -388,7 +392,7 @@ export class DemoStore {
     if (session) {
       db.exec(DEMO_SCHEMA)
       db.exec(NETWORK_SCHEMA)
-      const store = new DemoStore(db, liveSeed(session), 'live', session.deviceId)
+      const store = new DemoStore(db, liveSeed(db, session), 'live', session.deviceId)
       store.refreshCatalogue()
       store.attachLoop(session)
       return store
@@ -430,6 +434,7 @@ export class DemoStore {
           'job_attendants', 'members', 'outbox', 'id_map', 'pending_uploads', 'condition_photos',
           'voice_notes', 'job_expected', 'job_meta', 'scan_sessions', 'product_rates', 'customers',
           'customer_ledger_entries', 'org_expenses', 'demand_log', 'staff', 'partner_customer_links',
+          'org',
         ]) {
           this.db.exec(`delete from ${t}`)
         }
@@ -437,7 +442,7 @@ export class DemoStore {
       })
     }
     this.mode = 'live'
-    this.seed = liveSeed(session)
+    this.seed = liveSeed(this.db, session)
     this.catalogue = []
     this.sessions = this.registryFor(session.deviceId)
     this.attachLoop(session)
@@ -472,6 +477,10 @@ export class DemoStore {
    */
   private afterSync(): void {
     this.refreshCatalogue()
+    // The house's name arrives with the first pull (the org mirror, 0028):
+    // the letterhead reads it from then on.
+    const session = this.session()
+    if (session) this.seed = liveSeed(this.db, session)
     this.db.transaction(() => {
       this.db.exec(`delete from staff where id not in (select id from members)`)
       this.db.exec(
@@ -519,7 +528,7 @@ export class DemoStore {
     const r = await pinSwitch(this.db, this.transport, userId, pin, {
       online: this.loop?.status().online ?? true,
     })
-    if (r.ok) this.seed = liveSeed(this.session()!)
+    if (r.ok) this.seed = liveSeed(this.db, this.session()!)
     return r
   }
 
@@ -1261,6 +1270,7 @@ export class DemoStore {
       expectedBack: string | null
       customer?: JobCustomerChoice
     },
+    nowMs: number = Date.now(),
   ): { jobId: string; allocated: number; requested: number } {
     const wants = lines
       .filter((l): l is MatchedLine & { productId: string } => !!l.productId)
@@ -1275,6 +1285,8 @@ export class DemoStore {
           : this.createCustomer(choice.name, choice.phone)
 
     const jobId = `job-${crypto.randomUUID()}`
+    // With a clock: the walk-in queues create_job (0028) behind the
+    // customer's op when one was typed fresh at the sheet.
     const result = createJob(this.db, {
       id: jobId,
       orgId: this.seed.orgId,
@@ -1283,7 +1295,7 @@ export class DemoStore {
       expectedBack: input.expectedBack,
       customerId,
       wants,
-    })
+    }, defaultIds(nowMs))
     return { jobId, allocated: result.expected.length, requested: result.requested }
   }
 
@@ -1308,8 +1320,8 @@ export class DemoStore {
   }
 
   /** The undo — the job returns to every board and availability answer. */
-  reopenJob(jobId: string): boolean {
-    return reopenJob(this.db, jobId)
+  reopenJob(jobId: string, nowMs: number = Date.now()): boolean {
+    return reopenJob(this.db, jobId, nowMs)
   }
 
   /** Every closed job, newest first — the "Closed jobs" door. */
@@ -1318,8 +1330,8 @@ export class DemoStore {
   }
 
   /** Set or clear a job's due date. ISO in, honest 'no date' when cleared. */
-  setDueDate(jobId: string, value: string | null): void {
-    setExpectedBack(this.db, jobId, value)
+  setDueDate(jobId: string, value: string | null, nowMs: number = Date.now()): void {
+    setExpectedBack(this.db, jobId, value, defaultIds(nowMs))
   }
 
   /** A session was recorded on this job at some point, so its handover is
@@ -1779,10 +1791,15 @@ export class DemoStore {
           createdAt: whenMs,
         })
       }
+      // The serviced scan names the expense; it is chained behind the
+      // record_expense op so the id it carries is the server's by the time
+      // the scan goes (the pipe rewrites the payload from id_map), and a
+      // refused expense parks the service note beside it as one card.
       recordServiced(this.db, {
         assetId,
         note: input.note ?? null,
         expenseId,
+        dependsOn: expenseId ? lastOpNaming(this.db, NAMES.expense(expenseId)) : null,
         now: () => whenMs,
       })
     })
@@ -2122,13 +2139,15 @@ export function enquiryLines(summary: AvailabilitySummary): EnquiryLine[] {
 /**
  * The seed-shaped facts a live store carries: the org from the session,
  * the person holding the phone, no demo tags and no demo jobs. The house
- * name is the parchi letterhead; the org's name is not mirrored yet, so
- * the enrolled person's org id stands in until a settings row carries it.
+ * name is the parchi letterhead and the money documents' heading: the
+ * ORG's name from the org mirror (0028), never a person's — blank until
+ * the first pull brings it, which is honest where a name would be wrong.
  */
-function liveSeed(session: Session): DemoSeed {
+function liveSeed(db: SqlDriver, session: Session): DemoSeed {
+  const org = db.get<{ name: string }>(`select name from org where id = ?`, [session.orgId])
   return {
     orgId: session.orgId,
-    houseName: session.role ? session.displayName : '',
+    houseName: org?.name ?? '',
     userName: session.displayName,
     tags: [],
     jobs: [],

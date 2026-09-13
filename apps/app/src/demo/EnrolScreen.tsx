@@ -148,14 +148,21 @@ export function EnrolScreen({ store, onDone }: { store: DemoStore; onDone: () =>
   )
 }
 
-/** The pipe's local proof runs PostgREST at this address; a real install
- *  types its own. Read from the page's own origin when it is not a file. */
-function defaultServer(): string {
+/**
+ * The server field's starting value: the page's own origin when the app is
+ * served from a web host (the gateway usually sits beside it), and empty
+ * when it runs from a file or a packaged build — a real install types its
+ * own, and the session remembers it from then on (`server_url`).
+ */
+export function defaultServer(origin: string = pageOrigin()): string {
+  if (!origin || origin === 'null' || /^(file|capacitor|ionic):/.test(origin)) return ''
+  return origin
+}
+
+function pageOrigin(): string {
   try {
-    const stored = localStorage.getItem('papa-server')
-    if (stored) return stored
+    return typeof location === 'undefined' ? '' : `${location.protocol}//${location.host}`
   } catch {
-    // Storage refused: the placeholder stands.
+    return ''
   }
-  return ''
 }

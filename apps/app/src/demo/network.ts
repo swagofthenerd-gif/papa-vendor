@@ -12,7 +12,8 @@ import {
   type StolenBroadcastFacts,
 } from '@papa/core'
 import { closeJob, createJob, parseAttendantNames, stillOutCount } from './read-model.ts'
-import { lastBookingOp, clientNamesFor } from './bookings.ts'
+import { lastBookingOp } from './bookings.ts'
+import { lastOpNaming as lastOpNamingAny } from './ops.ts'
 import { createCustomer, getSetting, isoDate, recordEntry, setSetting } from './khata.ts'
 import { expenseRows, recordExpense } from './kharcha.ts'
 
@@ -295,21 +296,13 @@ export function removePartner(
  * create → edit → sub-hire (a partner) or record → close (a sub-hire) in
  * order. Matched on the client id JSON.stringify writes verbatim. A
  * sub-hire IN that rescues a booking chains behind the booking's own ops
- * instead (and so after the extension screen's sub_rent_intent, ASSUMPTION
+ * instead (and so after the extension screen's set_booking_note intent, ASSUMPTION
  * #sub-rent-intent) — bookings.ts's lastBookingOp, the one home for that match.
  */
 function lastOpNaming(db: SqlDriver, key: 'client_partner_id' | 'client_sub_hire_id', id: string): string | null {
   // Under the server's name too, once the pipe has re-keyed the row (W9) —
-  // bookings.ts lastBookingOp explains.
-  const patterns = [id, ...clientNamesFor(db, id)].map((n) => `%"${key}":"${n}"%`)
-  const row = db.get<{ id: string }>(
-    `select id from outbox
-      where state in ('pending', 'inflight')
-        and (${patterns.map(() => 'payload like ?').join(' or ')})
-      order by seq desc limit 1`,
-    patterns,
-  )
-  return row?.id ?? null
+  // ops.ts lastOpNaming is the one match.
+  return lastOpNamingAny(db, [{ key, id }])
 }
 const lastPartnerOp = (db: SqlDriver, partnerId: string) => lastOpNaming(db, 'client_partner_id', partnerId)
 const lastSubHireOp = (db: SqlDriver, subHireId: string) => lastOpNaming(db, 'client_sub_hire_id', subHireId)
@@ -335,8 +328,10 @@ export function ensurePartnerCustomer(db: SqlDriver, orgId: string, partnerId: s
     `select id from customers where lower(name) = lower(?) order by rowid limit 1`,
     [p.name],
   )
+  // No create_customer op: the server's record_sub_hire_out makes (or
+  // finds) this row itself and its reply names it (client_customer_id).
   const customerId =
-    byName?.id ?? createCustomer(db, { id: `cust-${crypto.randomUUID()}`, orgId, name: p.name, phone: p.phone })
+    byName?.id ?? createCustomer(db, { id: `cust-${crypto.randomUUID()}`, orgId, name: p.name, phone: p.phone }, null)
   if (!customerId) return null
   db.exec(
     `insert into partner_customer_links (partner_house_id, customer_id) values (?, ?)
@@ -612,16 +607,21 @@ export function recordSubHireIn(
       )
     }
     if (cost !== null) {
+      // The booking rides on the expense exactly as the server's
+      // record_sub_hire_in writes it (0024 D9): the job the booking becomes
+      // sees this cost in its margin. No record_expense op — the sub-hire
+      // op below mints the expense server-side and its reply names it.
       expenseId = recordExpense(db, {
         orgId,
         kind: 'sub_hire',
         amountMinor: cost,
         assetId,
         jobId: input.jobId ?? null,
+        bookingId: input.bookingId ?? null,
         counterparty: p.name,
         note: note ?? `Sub-hire in: ${productName}`,
         createdAt: nowMs,
-      })
+      }, null)
     }
     db.exec(
       `insert into sub_hires
@@ -753,6 +753,8 @@ export function recordSubHireOut(
       expectedAssetIds: assetId ? [assetId] : [],
     })
     if (charge !== null) {
+      // No record_ledger_entry op: record_sub_hire_out writes the charge
+      // itself and names it in its reply (client_ledger_entry_id).
       ledgerEntryId = recordEntry(db, {
         orgId,
         customerId,
@@ -762,7 +764,7 @@ export function recordSubHireOut(
         assetId,
         note: note ?? `Sub-hire out: ${productName}`,
         createdAt: nowMs,
-      })
+      }, null)
     }
     db.exec(
       `insert into sub_hires

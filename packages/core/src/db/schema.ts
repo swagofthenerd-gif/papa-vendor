@@ -513,6 +513,19 @@ create table if not exists members (
   role         text not null,
   has_pin      integer not null default 0
 );
+
+/*
+ * The org mirror (0028, W11) — one row: the house's own name, currency and
+ * timezone. The parchi letterhead and every money document say the HOUSE's
+ * name, never the enrolled person's; until this row arrives the letterhead
+ * is blank rather than wrong.
+ */
+create table if not exists org (
+  id       text primary key,
+  name     text not null,
+  currency text,
+  timezone text
+);
 `
 
 /** Device-only tables, i.e. what a wipe would destroy irrecoverably. */
@@ -537,5 +550,5 @@ export const MIRROR_TABLES = [
   'assets', 'asset_tags', 'asset_containment', 'locations', 'jobs', 'products',
   'bookings', 'booking_lines', 'asset_reservations', 'stock_reservations',
   'stock_lots', 'rate_cards', 'rate_card_entries', 'org_calendar_days',
-  'members',
+  'members', 'org',
 ] as const

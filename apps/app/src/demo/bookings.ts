@@ -31,6 +31,7 @@ import {
 } from '@papa/core'
 import { createJob } from './read-model.ts'
 import { getSetting, isoDate, setSetting } from './khata.ts'
+import { clientNamesFor, defaultIds, type OpIds } from './ops.ts'
 import type { StrTable } from '../strings.ts'
 
 /**
@@ -113,15 +114,10 @@ const iso = (ms: number): string => new Date(ms).toISOString()
 const tstzrange = (fromMs: number, untilMs: number): string =>
   `["${iso(fromMs)}","${iso(untilMs)}")`
 
-export interface BookingIds {
-  now: () => number
-  newId: () => string
-}
-
-export const defaultIds = (nowMs: number): BookingIds => ({
-  now: () => nowMs,
-  newId: () => crypto.randomUUID(),
-})
+/** The clock and id mint every write takes — ops.ts's, under the name
+ *  the booking wave gave it. */
+export type BookingIds = OpIds
+export { defaultIds, clientNamesFor }
 
 export interface BookingLineView extends BookingLine {
   productName: string
@@ -366,18 +362,6 @@ export function lastBookingOp(db: SqlDriver, bookingId: string): string | null {
     patterns,
   )
   return row?.id ?? null
-}
-
-/** The phone's own earlier names for a server id, from the pipe's id map
- *  (empty when the table is absent or the id was never renamed). */
-export function clientNamesFor(db: SqlDriver, serverId: string): string[] {
-  try {
-    return db.all<{ client_id: string }>(
-      `select client_id from id_map where server_id = ?`, [serverId],
-    ).map((r) => r.client_id)
-  } catch {
-    return []
-  }
 }
 
 export function enqueueBookingOp(
@@ -1146,10 +1130,14 @@ export interface SubRentIntent {
 
 /**
  * The sub-rent door records INTENT: a line on the extending booking's note
- * ('Sub-rent FX9 ×1 for #5') and a `sub_rent_intent` op chained under it,
- * so the extension queued next replays only after the pipe has honoured
- * the intent (W7 wires the partner network). Nothing on the calendar
- * moves — the other client's claim stands until a real unit covers it.
+ * ('Sub-rent FX9 ×1 for #5') and a `set_booking_note` op (0028, appending
+ * that line to the server's note) chained under it, so the extension
+ * queued next replays only after the intent is on the server's booking.
+ * Nothing on the calendar moves — the other client's claim stands until a
+ * real unit covers it (a sub-hire IN tagged to the booking chains behind
+ * this op too, network.ts). Was the year's wall
+ * `sub-rent-intent-unreplayable`: the old `sub_rent_intent` op had no RPC
+ * and would have parked the extension with it.
  */
 export function noteSubRent(
   db: SqlDriver,
@@ -1165,13 +1153,15 @@ export function noteSubRent(
   const note = b.note ? `${b.note}\n${line}` : line
   db.transaction(() => {
     db.exec(`update bookings set note = ?, updated_at = ? where id = ?`, [note, iso(nowMs), bookingId])
-    enqueueBookingOp(db, ids, 'sub_rent_intent', bookingId, {
-      client_booking_id: bookingId,
+    enqueueBookingOp(db, ids, 'set_booking_note', bookingId, {
       p_booking_id: bookingId,
-      p_product_id: intent.productId,
-      p_qty: intent.qty,
-      p_for_booking_id: intent.forBookingId,
       p_note: line,
+      p_append: true,
+      // Not RPC arguments (the dispatcher sends only `p_*`): the intent's
+      // facts, kept on the op so the queue can still say what was meant.
+      for_booking_id: intent.forBookingId,
+      product_id: intent.productId,
+      qty: intent.qty,
     })
   })
   return { ok: true, note }
