@@ -433,7 +433,7 @@ const STR_EN = {
   hisaabStatOnTrust: 'on trust',
   hisaabStatPhotos: 'photos',
   hisaabCopied: 'Copied — paste it in WhatsApp',
-  hisaabCopyTheDaysAccount: "Copy the day's account",
+  hisaabCopyTheDaysAccount: 'Copy the day’s account',
   hisaabUnknownLabelsScanned: (n: number): string =>
     `${n} unknown label${s(n)} scanned today.`,
   hisaabLabelsNeverSeen:
@@ -555,6 +555,7 @@ const STR_EN = {
   customerOwedTitle: 'Owed to me',
   customerOwedSubtitle: (n: number): string => `${n} customer${s(n)} owing`,
   customerNobodyOwes: 'Nobody owes anything right now.',
+  customerOwedDoorToday: 'Today’s jobs',
   customerOwedTapOne: 'Tap a name to open the khata',
   customerCardTitle: (name: string): string => `Hisaab — ${name}`,
   customerStatementTitle: (name: string, month: string): string =>
@@ -627,6 +628,7 @@ const STR_EN = {
   closedJobsSubtitle: (n: number): string => `${n} job${s(n)} finished`,
   closedJobsEmpty: 'No closed jobs yet.',
   closedJobsEmptyHint: 'Close a job from its card once everything is back.',
+  closedJobsDoorToday: 'Today’s jobs',
   closedJobsDoor: 'Closed jobs',
   closedJobsReopen: 'Reopen',
   closedJobsClosedOn: (date: string): string => `Closed ${date}`,
@@ -705,6 +707,7 @@ const STR_EN = {
   fleetGintiSubtitle: 'Count a shelf against the book',
   fleetGintiScanShelf: 'Scan a shelf tag, or pick a shelf, to start',
   fleetGintiPickShelf: 'Pick a shelf',
+  fleetGintiNoShelves: 'No shelves yet — they arrive with the gear list you load.',
   fleetGintiCounting: (shelf: string): string => `Counting ${shelf}`,
   fleetGintiSeen: (n: number): string => `${n} seen`,
   fleetGintiOk: (n: number): string => `${n} matched`,
@@ -839,6 +842,7 @@ const STR_EN = {
   bookingLegendPencilled: 'pencilled',
   bookingDayHeading: (day: string): string => `On ${day}`,
   bookingNothingThatDay: 'Nothing promised that day.',
+  bookingNoneThisMonth: 'Nothing promised this month yet.',
   bookingTapADay: 'Tap a day to see what is promised on it.',
   bookingMonthCounts: (confirmed: number, pencilled: number): string =>
     `${confirmed} confirmed · ${pencilled} pencilled`,
@@ -1070,6 +1074,7 @@ const STR_EN = {
   quoteCardSave: 'Save the card',
   quoteCardSaved: 'Card saved — waiting to send',
   quoteRatesListHeading: 'Day rates',
+  quoteRatesNoCard: 'No day rates until the card above is saved.',
   quoteRatesListSub: (priced: number, total: number): string => `${priced} of ${total} priced`,
   quoteRatesSearch: 'Search a product',
   quoteRateUnpriced: 'unpriced',
@@ -1263,7 +1268,7 @@ const STR_EN = {
   networkThermalPrint: 'Thermal print',
   networkThermalNoPrinter: 'No printer connected — the bytes are built, the Bluetooth link is the Android build.',
   networkThermalSaved: 'Printer bytes saved (dev only).',
-  networkThermalFailed: (reason: string): string => `Print failed: ${reason}`,
+  networkThermalFailed: (reason: string): string => `Print failed: ${reason} — try again, or share the parchi instead.`,
   networkThermalSent: 'Sent to the printer.',
 }
 

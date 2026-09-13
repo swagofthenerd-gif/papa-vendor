@@ -217,6 +217,10 @@ body {
   gap: var(--sp-3); padding: var(--sp-8); text-align: center; color: var(--muted);
 }
 .empty p { margin: 0; }
+/* Inside a section the empty state is a paragraph with a door, not a
+   whole screen's worth of air. */
+.section > .empty { padding: var(--sp-5) var(--sp-3); }
+.empty .btn { margin-top: var(--sp-1); }
 /* An empty state is where the hand-drawn set gets shown off, the way
    the marketplace shows its glyphs large in the category chips: the
    duotone glyph big in a warm tinted circle. The ring keeps the circle

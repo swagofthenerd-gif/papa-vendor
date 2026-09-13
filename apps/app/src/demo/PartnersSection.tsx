@@ -37,6 +37,9 @@ export function PartnersSection({ store }: { store: DemoStore }) {
           <div className="empty">
             <Icon name="handshake" size={32} />
             <p>{STR.networkPartnersNone}</p>
+            <button className="btn btn-outline" onClick={() => setAdding(true)}>
+              <Icon name="handshake" size={18} /> {STR.networkAddPartner}
+            </button>
           </div>
         ) : (
           <ul className="line-list partner-list">

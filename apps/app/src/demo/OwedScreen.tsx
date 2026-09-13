@@ -67,6 +67,9 @@ export function OwedScreen({ store }: { store: DemoStore }) {
         <div className="empty">
           <Icon name="clipboard-check" size={36} />
           <p>{STR.customerNobodyOwes}</p>
+          <button className="btn btn-outline" onClick={() => go({ name: 'jobs' })}>
+            <Icon name="home" size={18} /> {STR.customerOwedDoorToday}
+          </button>
         </div>
       ) : null}
 

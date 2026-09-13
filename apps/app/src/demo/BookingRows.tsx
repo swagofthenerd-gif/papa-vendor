@@ -60,12 +60,26 @@ export function BookingListRow({ row }: { row: BookingRow }) {
   )
 }
 
-export function BookingList({ rows }: { rows: BookingRow[] }) {
+export function BookingList({
+  rows,
+  onNew,
+  emptyText = STR.bookingNoneYet,
+}: {
+  rows: BookingRow[]
+  /** The one door that fills an empty list: the new-booking sheet. */
+  onNew?: () => void
+  emptyText?: string
+}) {
   if (rows.length === 0) {
     return (
       <div className="empty">
         <Icon name="calendar" size={36} />
-        <p>{STR.bookingNoneYet}</p>
+        <p>{emptyText}</p>
+        {onNew ? (
+          <button className="btn btn-outline" onClick={onNew}>
+            <Icon name="clapperboard" size={18} /> {STR.bookingNew}
+          </button>
+        ) : null}
       </div>
     )
   }

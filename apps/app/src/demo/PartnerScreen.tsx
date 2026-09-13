@@ -118,7 +118,13 @@ export function PartnerScreen({ store, partnerId }: { store: DemoStore; partnerI
       <section className="section">
         <SectionHead icon="repeat" title={STR.networkOpenHeading} sub={STR.networkOpenSub(open.length)} />
         {open.length === 0 ? (
-          <p className="section-sub">{STR.networkNothingOpen}</p>
+          <div className="empty">
+            <Icon name="repeat" size={32} />
+            <p>{STR.networkNothingOpen}</p>
+            <button className="btn btn-outline" onClick={() => setSheet('in')}>
+              <Icon name="handshake" size={18} /> {STR.networkSubHireInTitle}
+            </button>
+          </div>
         ) : (
           <ul className="line-list">
             {open.map((r) => (

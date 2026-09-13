@@ -159,6 +159,18 @@ export function RatesScreen({ store }: { store: DemoStore }) {
         ) : null}
       </section>
 
+      {!card ? (
+        <section className="section">
+          <SectionHead icon="coins" title={STR.quoteRatesListHeading} />
+          <div className="empty">
+            <Icon name="coins" size={32} />
+            <p>{STR.quoteRatesNoCard}</p>
+            <button className="btn btn-outline" onClick={saveCard}>
+              <Icon name="check" size={18} /> {STR.quoteCardSave}
+            </button>
+          </div>
+        </section>
+      ) : null}
       {card ? (
         <section className="section">
           <SectionHead

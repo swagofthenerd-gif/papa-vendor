@@ -522,6 +522,7 @@ export const STR_UR: StrTable = {
   customerOwedSubtitle: (n: number): string =>
     `${n} customer${n === 1 ? '' : 's'} par udhaar`,
   customerNobodyOwes: 'Abhi kisi par kuch nahi.',
+  customerOwedDoorToday: 'Aaj ki jobs',
   customerOwedTapOne: 'Naam par tap karein, khata khulega',
   customerCardTitle: (name: string): string => `Hisaab — ${name}`,
   customerStatementTitle: (name: string, month: string): string =>
@@ -577,6 +578,7 @@ export const STR_UR: StrTable = {
     n === 1 ? '1 job mukammal' : `${n} jobs mukammal`,
   closedJobsEmpty: 'Abhi koi band job nahi.',
   closedJobsEmptyHint: 'Sab kuch wapas aa jaye to job ke card se band karein.',
+  closedJobsDoorToday: 'Aaj ki jobs',
   closedJobsDoor: 'Band jobs',
   closedJobsReopen: 'Dobara kholein',
   closedJobsClosedOn: (date: string): string => `${date} ko band hui`,
@@ -645,6 +647,7 @@ export const STR_UR: StrTable = {
   fleetGintiSubtitle: 'Kitaab ke against shelf ginein',
   fleetGintiScanShelf: 'Shuru karne ke liye shelf tag scan karein ya shelf chunein',
   fleetGintiPickShelf: 'Shelf chunein',
+  fleetGintiNoShelves: 'Abhi koi shelf nahi — saaman ki list ke saath aati hain.',
   fleetGintiCounting: (shelf: string): string => `${shelf} gin rahe hain`,
   fleetGintiSeen: (n: number): string => `${n} dekhi`,
   fleetGintiOk: (n: number): string => `${n} mil gayi`,
@@ -760,6 +763,7 @@ export const STR_UR: StrTable = {
   bookingLegendPencilled: 'pencil',
   bookingDayHeading: (day: string): string => `${day} ko`,
   bookingNothingThatDay: 'Us din kuch wada nahi.',
+  bookingNoneThisMonth: 'Is mahine abhi koi wada nahi.',
   bookingTapADay: 'Din pe tap karo — dekho us din kya wada hai.',
   bookingMonthCounts: (confirmed: number, pencilled: number): string =>
     `${confirmed} pakki · ${pencilled} pencil`,
@@ -971,6 +975,7 @@ export const STR_UR: StrTable = {
   quoteCardSave: 'Card save karo',
   quoteCardSaved: 'Card save ho gaya — bhejne ka intezaar',
   quoteRatesListHeading: 'Din ke rates',
+  quoteRatesNoCard: 'Upar wala card save hone tak din ke rates nahi.',
   quoteRatesListSub: (priced: number, total: number): string => `${total} mein se ${priced} priced`,
   quoteRatesSearch: 'Cheez dhoondo',
   quoteRateUnpriced: 'bina rate',
@@ -1152,6 +1157,6 @@ export const STR_UR: StrTable = {
   networkThermalPrint: 'Thermal print',
   networkThermalNoPrinter: 'Printer juda nahi — bytes ban gaye, Bluetooth link Android build mein hai.',
   networkThermalSaved: 'Printer bytes save ho gaye (sirf dev).',
-  networkThermalFailed: (reason: string): string => `Print nahi hua: ${reason}`,
+  networkThermalFailed: (reason: string): string => `Print nahi hua: ${reason} — dobara try karein, ya parchi share karein.`,
   networkThermalSent: 'Printer ko bhej diya.',
 }
