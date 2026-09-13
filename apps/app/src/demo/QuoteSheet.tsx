@@ -6,6 +6,7 @@ import type { DemoStore } from './store.ts'
 import type { EnquiryLine, QuoteView } from './quotes.ts'
 import { shareText } from '../share.ts'
 import { STR } from '../strings.ts'
+import { Sheet, SheetClose } from '../components/Sheet.tsx'
 
 /** What the sheet prices: a booking on this phone, or a kit list that
  *  is not a booking yet. */
@@ -63,17 +64,13 @@ export function QuoteSheet({
 
   if (!quote || quote.lines.length === 0) {
     return (
-      <div className="sheet-backdrop" role="dialog" aria-label={title}>
-        <div className="sheet">
-          <header className="sheet-head">
-            <span className="sheet-title">{title}</span>
-            <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
-              <Icon name="x" size={22} />
-            </button>
-          </header>
-          <p className="sheet-hint">{quote ? STR.quoteNoLines : STR.bookingNotFound}</p>
-        </div>
-      </div>
+      <Sheet label={title} onClose={onClose}>
+        <header className="sheet-head">
+          <span className="sheet-title">{title}</span>
+          <SheetClose />
+        </header>
+        <p className="sheet-hint">{quote ? STR.quoteNoLines : STR.bookingNotFound}</p>
+      </Sheet>
     )
   }
 
@@ -116,194 +113,190 @@ export function QuoteSheet({
   }
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label={title}>
-      <div className="sheet quote-sheet">
-        <header className="sheet-head">
-          <span className="sheet-title">{title}</span>
-          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
-            <Icon name="x" size={22} />
-          </button>
-        </header>
+    <Sheet label={title} onClose={onClose} className="quote-sheet">
+      <header className="sheet-head">
+        <span className="sheet-title">{title}</span>
+        <SheetClose />
+      </header>
 
-        <div className="quote-head">
-          <span className="code">
-            {bookingDateLabel(quote.customerStartMs)} → {bookingDateLabel(quote.customerEndMs)}
-          </span>
-          <span className="quote-stamps">
-            {t.indicative ? <span className="stamp stamp-pencil stamp-small">{STR.quoteStampIndicative}</span> : null}
-            {quote.flags?.verified && !quote.flags.blacklisted
-              ? <span className="stamp stamp-small">{STR.quoteStampVerified}</span> : null}
-          </span>
-        </div>
-        {quote.customerName ? <p className="section-sub">{quote.customerName}</p> : null}
+      <div className="quote-head">
+        <span className="code">
+          {bookingDateLabel(quote.customerStartMs)} → {bookingDateLabel(quote.customerEndMs)}
+        </span>
+        <span className="quote-stamps">
+          {t.indicative ? <span className="stamp stamp-pencil stamp-small">{STR.quoteStampIndicative}</span> : null}
+          {quote.flags?.verified && !quote.flags.blacklisted
+            ? <span className="stamp stamp-small">{STR.quoteStampVerified}</span> : null}
+        </span>
+      </div>
+      {quote.customerName ? <p className="section-sub">{quote.customerName}</p> : null}
 
-        <ul className="line-list quote-lines">
-          {quote.lines.map((l, i) => {
-            const key = l.lineId ?? `${l.productId ?? 'x'}-${i}`
-            const name = quoteLineName(l)
-            // The card rate the override replaced — struck through beside
-            // the owner's number so the discount is always legible.
-            const struck = l.override?.originalRateMinor ?? null
-            return (
-              <li key={key} className={`line quote-line${l.priced ? '' : ' is-unpriced'}`}>
-                <span className="line-name">{name}</span>
-                {l.priced && l.effectiveRateMinor !== null ? (
-                  <>
-                    <span className="line-code code quote-line-total">{rs(l.lineTotalMinor ?? 0)}</span>
-                    <span className="line-note code">
-                      {struck !== null ? <><s className="quote-strike">{rs(struck)}</s>{' '}</> : null}
-                      {STR.quoteLineDays(l.qty, l.billableDays, rs(l.effectiveRateMinor))}
-                      {l.multiplierApplied && l.multiplier !== 1 ? ` × ${trimNumber(l.multiplier)}` : ''}
-                    </span>
-                    {l.override?.reason ? (
-                      <span className="line-note">{STR.quoteLineOverridden(l.override.reason)}</span>
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    <span className="line-code quote-line-total">
-                      <span className="stamp stamp-small">{STR.quoteStampUnpriced}</span>
-                    </span>
-                    <span className="line-note code">{STR.quoteLineDays(l.qty, l.billableDays, '—')}</span>
-                    {l.productId && !l.override ? (
-                      <span className="quote-rate-field">
-                        <input
-                          className="sheet-search code"
-                          inputMode="numeric"
-                          aria-label={STR.quoteRateFieldLabel(l.productName)}
-                          placeholder={STR.quoteRateFieldPlaceholder}
-                          value={rateDraft[l.productId] ?? ''}
-                          onChange={(e) => setRateDraft((d) => ({ ...d, [l.productId as string]: e.target.value }))}
-                          onKeyDown={(e) => { if (e.key === 'Enter') setRate(l) }}
-                        />
-                        <button className="btn btn-sm btn-outline" onClick={() => setRate(l)}>
-                          {STR.quoteRateSave}
-                        </button>
-                      </span>
-                    ) : null}
-                  </>
-                )}
-                {overriding && l.lineId && editing !== l.lineId ? (
-                  <span className="quote-rate-field">
-                    <button className="btn btn-sm btn-ghost" onClick={() => openOverride(l)}>
-                      <Icon name="wrench" size={16} /> {STR.quoteOverrideDoor}
-                    </button>
+      <ul className="line-list quote-lines">
+        {quote.lines.map((l, i) => {
+          const key = l.lineId ?? `${l.productId ?? 'x'}-${i}`
+          const name = quoteLineName(l)
+          // The card rate the override replaced — struck through beside
+          // the owner's number so the discount is always legible.
+          const struck = l.override?.originalRateMinor ?? null
+          return (
+            <li key={key} className={`line quote-line${l.priced ? '' : ' is-unpriced'}`}>
+              <span className="line-name">{name}</span>
+              {l.priced && l.effectiveRateMinor !== null ? (
+                <>
+                  <span className="line-code code quote-line-total">{rs(l.lineTotalMinor ?? 0)}</span>
+                  <span className="line-note code">
+                    {struck !== null ? <><s className="quote-strike">{rs(struck)}</s>{' '}</> : null}
+                    {STR.quoteLineDays(l.qty, l.billableDays, rs(l.effectiveRateMinor))}
+                    {l.multiplierApplied && l.multiplier !== 1 ? ` × ${trimNumber(l.multiplier)}` : ''}
                   </span>
-                ) : null}
-                {editing === l.lineId && l.lineId ? (
-                  <div className="quote-override">
-                    <span className="field-label">{STR.quoteOverrideTitle(name)}</span>
-                    <label className="field-label" htmlFor={`ov-rate-${l.lineId}`}>{STR.quoteOverrideRateLabel}</label>
-                    <input
-                      id={`ov-rate-${l.lineId}`}
-                      className="sheet-search code"
-                      inputMode="numeric"
-                      value={ovRate}
-                      onChange={(e) => setOvRate(e.target.value)}
-                    />
-                    <label className="field-label" htmlFor={`ov-reason-${l.lineId}`}>{STR.quoteOverrideReasonLabel}</label>
-                    <input
-                      id={`ov-reason-${l.lineId}`}
-                      className="sheet-search"
-                      value={ovReason}
-                      onChange={(e) => setOvReason(e.target.value)}
-                      placeholder={STR.quoteOverrideReasonPlaceholder}
-                      autoCorrect="off"
-                      spellCheck={false}
-                    />
-                    <div className="session-actions">
-                      <button className="btn btn-primary btn-block" onClick={() => saveOverride(l, false)}>
-                        {STR.quoteOverrideSave}
+                  {l.override?.reason ? (
+                    <span className="line-note">{STR.quoteLineOverridden(l.override.reason)}</span>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <span className="line-code quote-line-total">
+                    <span className="stamp stamp-small">{STR.quoteStampUnpriced}</span>
+                  </span>
+                  <span className="line-note code">{STR.quoteLineDays(l.qty, l.billableDays, '—')}</span>
+                  {l.productId && !l.override ? (
+                    <span className="quote-rate-field">
+                      <input
+                        className="sheet-search code"
+                        inputMode="numeric"
+                        aria-label={STR.quoteRateFieldLabel(l.productName)}
+                        placeholder={STR.quoteRateFieldPlaceholder}
+                        value={rateDraft[l.productId] ?? ''}
+                        onChange={(e) => setRateDraft((d) => ({ ...d, [l.productId as string]: e.target.value }))}
+                        onKeyDown={(e) => { if (e.key === 'Enter') setRate(l) }}
+                      />
+                      <button className="btn btn-sm btn-outline" onClick={() => setRate(l)}>
+                        {STR.quoteRateSave}
                       </button>
-                      {l.override ? (
-                        <button className="btn btn-ghost btn-block" onClick={() => saveOverride(l, true)}>
-                          {STR.quoteOverrideClear}
-                        </button>
-                      ) : null}
-                    </div>
+                    </span>
+                  ) : null}
+                </>
+              )}
+              {overriding && l.lineId && editing !== l.lineId ? (
+                <span className="quote-rate-field">
+                  <button className="btn btn-sm btn-ghost" onClick={() => openOverride(l)}>
+                    <Icon name="wrench" size={16} /> {STR.quoteOverrideDoor}
+                  </button>
+                </span>
+              ) : null}
+              {editing === l.lineId && l.lineId ? (
+                <div className="quote-override">
+                  <span className="field-label">{STR.quoteOverrideTitle(name)}</span>
+                  <label className="field-label" htmlFor={`ov-rate-${l.lineId}`}>{STR.quoteOverrideRateLabel}</label>
+                  <input
+                    id={`ov-rate-${l.lineId}`}
+                    className="sheet-search code"
+                    inputMode="numeric"
+                    value={ovRate}
+                    onChange={(e) => setOvRate(e.target.value)}
+                  />
+                  <label className="field-label" htmlFor={`ov-reason-${l.lineId}`}>{STR.quoteOverrideReasonLabel}</label>
+                  <input
+                    id={`ov-reason-${l.lineId}`}
+                    className="sheet-search"
+                    value={ovReason}
+                    onChange={(e) => setOvReason(e.target.value)}
+                    placeholder={STR.quoteOverrideReasonPlaceholder}
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                  <div className="session-actions">
+                    <button className="btn btn-primary btn-block" onClick={() => saveOverride(l, false)}>
+                      {STR.quoteOverrideSave}
+                    </button>
+                    {l.override ? (
+                      <button className="btn btn-ghost btn-block" onClick={() => saveOverride(l, true)}>
+                        {STR.quoteOverrideClear}
+                      </button>
+                    ) : null}
                   </div>
-                ) : null}
-              </li>
-            )
-          })}
-        </ul>
-
-        <div className="tally quote-tally">
-          <p className="tally-line">
-            <span>{STR.quoteTotalLabel}</span>
-            <strong className="code">
-              {rs(t.subtotalMinor)}
-              {t.unpricedCount > 0 ? <span className="tally-short"> {STR.quoteTotalUnpriced(t.unpricedCount)}</span> : null}
-            </strong>
-          </p>
-          {t.subHireCostMinor > 0 ? (
-            <p className="tally-sub code">{STR.quoteSubHireLine(rs(t.subHireCostMinor), rs(t.marginMinor))}</p>
-          ) : null}
-          {quote.flags ? (
-            <p className="tally-sub">{STR.quoteDepositLabel}: {STR.quoteDepositHint(quote.flags.depositHint)}</p>
-          ) : null}
-          {t.unpricedCount > 0 ? (
-            <p className="tally-sub">{STR.quoteIndicativeUnpriced(t.unpricedCount)}</p>
-          ) : t.indicative ? (
-            <p className="tally-sub">{STR.quoteIndicativeNotConfirmed}</p>
-          ) : null}
-        </div>
-
-        <details className="quote-trace">
-          <summary>{STR.quoteHowHeading}</summary>
-          <ol className="quote-steps">
-            <li>{STR.quoteStepDays(s1.calendarDays, s1.firstDay)}</li>
-            {s1.weekendDaysDropped > 0 ? (
-              <li>{STR.quoteStepWeekendDropped(s1.weekendDaysDropped, s1.droppedDates.join(', '))}</li>
-            ) : null}
-            {s1.minApplied ? <li>{STR.quoteStepMinApplied(s1.minBillableDays)}</li> : null}
-            <li>
-              {s2.weeks === 0
-                ? STR.quoteStepWeekRuleShort(s2.billableDays)
-                : STR.quoteStepWeekRule(s2.billableDays, s1.countedDays, s2.weeks, s2.weekEqualsDays, s2.remainderDays)}
+                </div>
+              ) : null}
             </li>
-            <li>
-              {quote.rateCard
-                ? STR.quoteStepCardRates(s3.pricedLines, s3.unpricedLines, quote.rateCard.name)
-                : STR.quoteStepNoCard}
-            </li>
-            <li>
-              {s4.drivenBy && s4.multiplier !== 1
-                ? STR.quoteStepMultiplier(s4.drivenBy.name, s4.drivenBy.day, `×${trimNumber(s4.multiplier)}`)
-                : STR.quoteStepMultiplierNone}
-            </li>
-            {s5.overriddenLines > 0 ? <li>{STR.quoteStepOverrides(s5.overriddenLines)}</li> : null}
-          </ol>
-        </details>
+          )
+        })}
+      </ul>
 
-        {said ? (
-          <div className="notice notice-warn" role="status">
-            <Icon name="warning" size={18} />
-            <div><strong>{said}</strong></div>
-          </div>
+      <div className="tally quote-tally">
+        <p className="tally-line">
+          <span>{STR.quoteTotalLabel}</span>
+          <strong className="code">
+            {rs(t.subtotalMinor)}
+            {t.unpricedCount > 0 ? <span className="tally-short"> {STR.quoteTotalUnpriced(t.unpricedCount)}</span> : null}
+          </strong>
+        </p>
+        {t.subHireCostMinor > 0 ? (
+          <p className="tally-sub code">{STR.quoteSubHireLine(rs(t.subHireCostMinor), rs(t.marginMinor))}</p>
         ) : null}
-
-        <div className="session-actions">
-          <button className="btn btn-primary btn-block" onClick={onSend}>
-            <Icon name="send" size={18} /> {STR.quoteDoorSend}
-          </button>
-          {source.kind === 'enquiry' && onBook ? (
-            <button
-              className="btn btn-outline btn-block"
-              onClick={() => onBook(source.lines, source.startMs, source.endMs)}
-            >
-              <Icon name="calendar" size={18} /> {STR.quoteDoorBook}
-            </button>
-          ) : null}
-        </div>
-
-        {source.kind === 'booking' && !overriding ? (
-          <div className="fleet-disclosure quote-override-door">
-            <p className="section-sub">{STR.quoteOverrideHint}</p>
-            <HoldToFinish label={STR.quoteOverrideDoor} onFinish={() => setOverriding(true)} />
-          </div>
+        {quote.flags ? (
+          <p className="tally-sub">{STR.quoteDepositLabel}: {STR.quoteDepositHint(quote.flags.depositHint)}</p>
+        ) : null}
+        {t.unpricedCount > 0 ? (
+          <p className="tally-sub">{STR.quoteIndicativeUnpriced(t.unpricedCount)}</p>
+        ) : t.indicative ? (
+          <p className="tally-sub">{STR.quoteIndicativeNotConfirmed}</p>
         ) : null}
       </div>
-    </div>
+
+      <details className="quote-trace">
+        <summary>{STR.quoteHowHeading}</summary>
+        <ol className="quote-steps">
+          <li>{STR.quoteStepDays(s1.calendarDays, s1.firstDay)}</li>
+          {s1.weekendDaysDropped > 0 ? (
+            <li>{STR.quoteStepWeekendDropped(s1.weekendDaysDropped, s1.droppedDates.join(', '))}</li>
+          ) : null}
+          {s1.minApplied ? <li>{STR.quoteStepMinApplied(s1.minBillableDays)}</li> : null}
+          <li>
+            {s2.weeks === 0
+              ? STR.quoteStepWeekRuleShort(s2.billableDays)
+              : STR.quoteStepWeekRule(s2.billableDays, s1.countedDays, s2.weeks, s2.weekEqualsDays, s2.remainderDays)}
+          </li>
+          <li>
+            {quote.rateCard
+              ? STR.quoteStepCardRates(s3.pricedLines, s3.unpricedLines, quote.rateCard.name)
+              : STR.quoteStepNoCard}
+          </li>
+          <li>
+            {s4.drivenBy && s4.multiplier !== 1
+              ? STR.quoteStepMultiplier(s4.drivenBy.name, s4.drivenBy.day, `×${trimNumber(s4.multiplier)}`)
+              : STR.quoteStepMultiplierNone}
+          </li>
+          {s5.overriddenLines > 0 ? <li>{STR.quoteStepOverrides(s5.overriddenLines)}</li> : null}
+        </ol>
+      </details>
+
+      {said ? (
+        <div className="notice notice-warn" role="status">
+          <Icon name="warning" size={18} />
+          <div><strong>{said}</strong></div>
+        </div>
+      ) : null}
+
+      <div className="session-actions">
+        <button className="btn btn-primary btn-block" onClick={onSend}>
+          <Icon name="send" size={18} /> {STR.quoteDoorSend}
+        </button>
+        {source.kind === 'enquiry' && onBook ? (
+          <button
+            className="btn btn-outline btn-block"
+            onClick={() => onBook(source.lines, source.startMs, source.endMs)}
+          >
+            <Icon name="calendar" size={18} /> {STR.quoteDoorBook}
+          </button>
+        ) : null}
+      </div>
+
+      {source.kind === 'booking' && !overriding ? (
+        <div className="fleet-disclosure quote-override-door">
+          <p className="section-sub">{STR.quoteOverrideHint}</p>
+          <HoldToFinish label={STR.quoteOverrideDoor} onFinish={() => setOverriding(true)} />
+        </div>
+      ) : null}
+    </Sheet>
   )
 }

@@ -19,17 +19,19 @@ import { STR } from '../strings.ts'
 export function BookingStamp({ row }: { row: Pick<BookingRow, 'stamp' | 'pencil'> }) {
   switch (row.stamp) {
     case 'confirmed':
-      return <span className="stamp">{STR.bookingStatusConfirmed}</span>
+      // Keyed by status: a change of word is a fresh stamp, and the
+      // 120ms landing (app.css .stamp) plays exactly then.
+      return <span key="confirmed" className="stamp">{STR.bookingStatusConfirmed}</span>
     case 'pencil':
       return (
-        <span className="stamp stamp-pencil">
+        <span key="pencil" className="stamp stamp-pencil">
           {STR.bookingPencilLeft(row.pencil.hours, row.pencil.minutes)}
         </span>
       )
     case 'expired':
-      return <span className="stamp stamp-struck">{STR.bookingStatusExpired}</span>
+      return <span key="expired" className="stamp stamp-struck">{STR.bookingStatusExpired}</span>
     case 'cancelled':
-      return <span className="stamp stamp-struck">{STR.bookingStatusCancelled}</span>
+      return <span key="cancelled" className="stamp stamp-struck">{STR.bookingStatusCancelled}</span>
     default:
       return <span className="badge">{STR.bookingStatusDraft}</span>
   }

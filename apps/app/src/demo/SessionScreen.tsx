@@ -13,6 +13,7 @@ import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 // --- network --- (0025): the thermal printer seam.
 import { printThermal } from '../print/thermal.ts'
+import { Sheet, SheetClose } from '../components/Sheet.tsx'
 
 /**
  * The handover summary — live session or long finished.
@@ -278,49 +279,45 @@ export function KhataChargeSheet({
   const valid = Number.isFinite(rupees) && rupees > 0
 
   return (
-    <div className="sheet-backdrop" role="dialog" aria-label={title}>
-      <div className="sheet">
-        <header className="sheet-head">
-          <span className="sheet-title">{title}</span>
-          <button className="icon-btn" onClick={onClose} aria-label={STR.commonClose}>
-            <Icon name="x" size={22} />
-          </button>
-        </header>
+    <Sheet label={title} onClose={onClose}>
+      <header className="sheet-head">
+        <span className="sheet-title">{title}</span>
+        <SheetClose />
+      </header>
 
-        <p className="sheet-hint">{hint}</p>
-        {sub ? <p className="sheet-hint">{sub}</p> : null}
+      <p className="sheet-hint">{hint}</p>
+      {sub ? <p className="sheet-hint">{sub}</p> : null}
 
-        <label className="field-label" htmlFor="charge-amount">{STR.sessionChargeAmount}</label>
-        <input
-          id="charge-amount"
-          className="sheet-search code"
-          type="number"
-          inputMode="decimal"
-          min="0"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          autoFocus
-        />
+      <label className="field-label" htmlFor="charge-amount">{STR.sessionChargeAmount}</label>
+      <input
+        id="charge-amount"
+        className="sheet-search code"
+        type="number"
+        inputMode="decimal"
+        min="0"
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        autoFocus
+      />
 
-        <label className="field-label" htmlFor="charge-note">{STR.sessionChargeNoteOptional}</label>
-        <input
-          id="charge-note"
-          className="sheet-search"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          autoCorrect="off"
-          spellCheck={false}
-        />
+      <label className="field-label" htmlFor="charge-note">{STR.sessionChargeNoteOptional}</label>
+      <input
+        id="charge-note"
+        className="sheet-search"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        autoCorrect="off"
+        spellCheck={false}
+      />
 
-        <button
-          className="btn btn-primary btn-lg sheet-submit"
-          disabled={!valid}
-          onClick={() => onSave(Math.round(rupees * 100), note.trim() || null)}
-        >
-          {STR.sessionWriteInKhata}
-        </button>
-      </div>
-    </div>
+      <button
+        className="btn btn-primary btn-lg sheet-submit"
+        disabled={!valid}
+        onClick={() => onSave(Math.round(rupees * 100), note.trim() || null)}
+      >
+        {STR.sessionWriteInKhata}
+      </button>
+    </Sheet>
   )
 }
 

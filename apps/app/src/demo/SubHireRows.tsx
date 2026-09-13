@@ -52,7 +52,7 @@ export function SubHireLine({
   return (
     <li className={`line line-stack sub-hire-line${open ? '' : ' is-closed'}`}>
       <span className="line-name">
-        <span className={`stamp stamp-small${open ? '' : ' stamp-struck'}`}>
+        <span key={open ? 'open' : 'closed'} className={`stamp stamp-small${open ? '' : ' stamp-struck'}`}>
           {row.direction === 'in' ? STR.networkBorrowedStamp : STR.networkLentStamp}
         </span>{' '}
         {showPartner ? what : `${row.qty} × ${row.productName}`}

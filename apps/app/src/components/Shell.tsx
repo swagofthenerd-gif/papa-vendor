@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { Icon, type AnyIconName } from '@papa/icons'
 import { go, type View } from '../nav.ts'
 import { STR } from '../strings.ts'
@@ -37,6 +37,13 @@ const TABS: Tab[] = [
   { view: { name: 'owed' }, label: STR.commonTabKhata, icon: 'scroll', matches: ['owed', 'customer', 'hisaab', 'partner'] },
 ]
 
+/**
+ * The column the tab pill was last seen in. Module-level on purpose: every
+ * screen mounts its own Shell, so the slide from the previous tab to this
+ * one has to be remembered across mounts, not inside one.
+ */
+let lastTabIndex = -1
+
 /** The settings door every tab's top bar carries — one glyph, one place. */
 export function SettingsButton() {
   return (
@@ -64,6 +71,13 @@ export function Shell({
   action?: ReactNode
   children: ReactNode
 }) {
+  const activeIndex = TABS.findIndex((tab) => tab.matches.includes(view.name))
+  // Where the pill starts its slide: the remembered column, or this one
+  // on a cold start (no slide from nowhere).
+  const fromRef = useRef(lastTabIndex >= 0 ? lastTabIndex : activeIndex)
+  useEffect(() => {
+    if (activeIndex >= 0) lastTabIndex = activeIndex
+  }, [activeIndex])
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -83,6 +97,17 @@ export function Shell({
       <main className="app-main view">{children}</main>
 
       <nav className="bottom-nav" aria-label={STR.commonNavMainAria}>
+        {activeIndex >= 0 ? (
+          <span
+            className="nav-pill"
+            aria-hidden="true"
+            style={{
+              ['--tabs' as string]: TABS.length,
+              ['--from' as string]: fromRef.current,
+              ['--to' as string]: activeIndex,
+            }}
+          />
+        ) : null}
         {TABS.map((tab) => {
           const active = tab.matches.includes(view.name)
           return (

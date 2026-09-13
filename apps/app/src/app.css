@@ -317,7 +317,7 @@ body {
 .scan-row.is-unknown_tag { border-left: 3px solid var(--accent); }
 .scan-row.is-conflict { border-left: 3px solid var(--status-attention); }
 
-.scan-row.is-pulsing { animation: pulse 400ms var(--ease-out); }
+.scan-row.is-pulsing { animation: pulse 240ms var(--ease-out); }
 @keyframes pulse {
   0%, 100% { background: transparent; }
   40% { background: var(--accent-soft); }
@@ -413,35 +413,60 @@ body {
 }
 
 /* ---- manual add sheet --------------------------------------- */
+/* The veil behind a sheet. --sheet-veil is the drag's dial (Sheet.tsx
+   turns it down as the sheet is pulled), so the backdrop thins with the
+   thumb instead of cutting out at the end. */
 .sheet-backdrop {
+  --sheet-veil: 1;
   position: fixed; inset: 0; z-index: 20;
   display: flex; align-items: flex-end;
-  background: rgb(0 0 0 / 0.5);
-  animation: backdrop-in var(--dur) var(--ease-out);
+  background: rgb(0 0 0 / calc(0.5 * var(--sheet-veil)));
+  animation: backdrop-in var(--dur-sheet-in) var(--ease-out);
 }
 @keyframes backdrop-in { from { opacity: 0; } }
-/* Sheets arrive the way the sibling's do: generous 28px shoulders, the
-   deep layered shadow, and a slide-up that settles on the spring. */
+/* Sheets arrive in 200ms on the ease-out — a rise with a fade, over
+   before it is watched — and leave in 150ms on an ease-in, the way a
+   dropped thing accelerates. The generous 28px shoulders and the deep
+   layered shadow stay from the sibling. Transform and opacity only:
+   nothing here asks the layout engine for anything mid-frame. */
 .sheet {
+  --dur-sheet-in: 200ms;
+  --dur-sheet-out: 150ms;
   display: flex; flex-direction: column;
   width: 100%; max-height: 82dvh;
   /* A sheet taller than the phone scrolls INSIDE its 82dvh: without this
      the challan's foot (Book it, the override door) and a long booking
      sheet's submit ran off the bottom of the screen, unreachable. */
   overflow-y: auto; overscroll-behavior: contain;
-  padding: var(--sp-4);
+  /* The grip carries the top padding; the bottom keeps the phone's
+     gesture bar off the last button. */
+  padding: 0 var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom));
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   background: var(--card); color: var(--ink);
   box-shadow: var(--shadow-lg);
-  animation: sheet-in var(--dur-slow) var(--ease-spring);
+  animation: sheet-in var(--dur-sheet-in) var(--ease-out);
+  outline: none;
 }
-@keyframes sheet-in { from { transform: translateY(56px); opacity: 0; } }
-/* The drag handle: both sheets are flex columns, so the pseudo-element
-   is simply the first flex item — no markup needed. */
-.sheet::before, .photo-sheet::before {
-  content: '';
-  align-self: center; flex: none;
-  width: 36px; height: 4px; margin-bottom: var(--sp-2);
+.sheet-backdrop { --dur-sheet-in: 200ms; --dur-sheet-out: 150ms; }
+@keyframes sheet-in { from { transform: translateY(32px); opacity: 0; } }
+.sheet-backdrop.is-closing { animation: backdrop-out var(--dur-sheet-out) ease-in forwards; }
+@keyframes backdrop-out { to { opacity: 0; } }
+.sheet-backdrop.is-closing .sheet { animation: sheet-out var(--dur-sheet-out) ease-in forwards; }
+@keyframes sheet-out { to { transform: translateY(100%); } }
+/* Mid-drag the sheet is the thumb's: no transition fights the pointer,
+   and the browser is told the strip is not for scrolling. */
+.sheet.is-dragging { transition: none; }
+.sheet-grip, .sheet-head { touch-action: none; }
+/* The drag handle: a glove-height strip with the bar in it, so a pull
+   does not have to land on four pixels. It is the first flex item and
+   carries the sheet's top padding. */
+.sheet-grip {
+  display: grid; place-items: center; flex: none;
+  height: 28px; margin: 0 calc(-1 * var(--sp-4)); padding-top: 4px;
+  cursor: grab;
+}
+.sheet-grip > span {
+  width: 36px; height: 4px;
   border-radius: var(--r-pill);
   background: var(--line-strong);
 }
@@ -533,6 +558,11 @@ body {
      row of a list, and a fixed footer over a scroll area always eventually
      does. */
   grid-template-rows: auto 1fr auto;
+  /* minmax(0, 1fr), not the implicit auto: an auto column is sized to its
+     content's min-content, and a long nowrap title beside two header
+     buttons made the whole shell 56px wider than the phone — every page
+     scrolled sideways by exactly that. Zero lets the title ellipsise. */
+  grid-template-columns: minmax(0, 1fr);
   height: 100dvh;
 }
 
@@ -591,12 +621,14 @@ body {
 }
 
 .bottom-nav {
+  position: relative;
   display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
   border-top: var(--line-w) solid var(--line);
   background: var(--bg);
   padding-bottom: env(safe-area-inset-bottom);
 }
 .nav-tab {
+  position: relative;
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   min-height: var(--tap);
   padding: var(--sp-2) 0 calc(var(--sp-2) + 2px);
@@ -606,31 +638,49 @@ body {
   color: var(--muted); font: inherit; font-size: var(--fs-xs); font-weight: 700;
   cursor: pointer;
 }
-/* The icon rides in a capsule, like the sibling's nav. Inactive it is
-   invisible; active it takes the accent tint and pops in on the spring.
-   The tint moved from the whole tab into the capsule — same amount of
-   accent, drawn smaller and warmer. */
+/* The icon rides in a capsule, like the sibling's nav. The capsule
+   itself is transparent on every tab: the accent tint is ONE pill
+   (.nav-pill) that slides to the active place. Same amount of accent,
+   drawn smaller and warmer — and it moves, so a tab change reads as
+   going somewhere rather than as two lights swapping. */
 .nav-ico {
   display: inline-flex; line-height: 0;
   padding: 4px 14px;
   border-radius: var(--r-pill);
   border: var(--line-w) solid transparent;
+  position: relative;
 }
-/* The active place: the capsule glows accent-soft, a 2px rail meets the
-   top hairline, and the AA-safe accent alias inks icon and label. This
-   is one of the two places accent is allowed to live. The ring keeps
-   the capsule visible in sun mode, where accent-soft is white. */
+/* The active place: a 2px rail meets the top hairline and the AA-safe
+   accent alias inks icon and label. This is one of the two places
+   accent is allowed to live. */
 .nav-tab.is-active {
   color: var(--accent-strong);
   box-shadow: inset 0 2px 0 var(--accent-strong);
   font-weight: 800;
 }
-.nav-tab.is-active .nav-ico {
-  background: var(--accent-soft);
-  border-color: color-mix(in srgb, currentColor var(--tint-border), transparent);
-  animation: pop-in 0.35s var(--ease-spring);
+/* The pill: a column-wide track that translates by whole columns, with
+   the capsule centred in it. It slides from the tab it was on (--from)
+   to the one it is on (--to) in 250ms on the family spring, and the
+   ring keeps it visible in sun mode, where accent-soft is white. Each
+   screen mounts its own Shell, so the slide is a keyframe from the
+   remembered column rather than a transition — see Shell.tsx. */
+.nav-pill {
+  position: absolute; top: var(--sp-2); left: 0;
+  width: calc(100% / var(--tabs, 4)); height: 32px;
+  display: grid; place-items: center;
+  pointer-events: none;
+  transform: translateX(calc(var(--to, 0) * 100%));
+  animation: nav-slide var(--dur) var(--ease-spring);
 }
-@keyframes pop-in { from { transform: scale(0.85); } }
+@keyframes nav-slide { from { transform: translateX(calc(var(--from, 0) * 100%)); } }
+.nav-pill::before {
+  content: '';
+  width: 52px; height: 32px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  border: var(--line-w) solid
+    color-mix(in srgb, var(--accent-strong) var(--tint-border), transparent);
+}
 .nav-tab:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: -3px; }
 
 /* ---- motion ------------------------------------------------ */
@@ -639,7 +689,7 @@ body {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
 }
-.stagger { animation: fadeUp 0.34s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 35ms); }
+.stagger { animation: fadeUp 0.3s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 30ms); }
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: none; }
@@ -760,9 +810,11 @@ body {
   box-shadow: inset 0 0 0 1px
     color-mix(in srgb, currentColor 28%, transparent);
   /* The one deliberate moment of load motion in the app: the stamp
-     LANDS — a fast press from slightly above, settling into its
-     crooked rest. Nothing else animates on load. */
-  animation: stamp-in 0.18s var(--ease-out) 0.12s backwards;
+     LANDS — a 120ms press from slightly above, settling into its
+     crooked rest, once. A status change re-keys the stamp (BookingRows,
+     SubHireRows) so it lands again exactly when the word changes, and
+     never otherwise. Nothing else animates on load. */
+  animation: stamp-in 120ms var(--ease-out) 60ms backwards;
 }
 @keyframes stamp-in {
   from { transform: rotate(-0.5deg) scale(1.15); opacity: 0.3; }
@@ -1081,15 +1133,9 @@ h2.stamp .h-ico { display: none; }
 .row-photo.has-photo { border-color: var(--accent); color: var(--accent); }
 .row-photo-n { font-size: var(--fs-xs); font-weight: 800; }
 
-.photo-sheet {
-  display: flex; flex-direction: column; gap: var(--sp-3);
-  width: 100%; max-height: 92dvh;
-  padding: var(--sp-4) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom));
-  border-radius: var(--r-xl) var(--r-xl) 0 0;
-  background: var(--card); color: var(--ink);
-  box-shadow: var(--shadow-lg);
-  animation: sheet-in var(--dur-slow) var(--ease-spring);
-}
+/* The photo sheet is a .sheet with more height and a gapped column —
+   the same arrival, the same grip, the same exit. */
+.photo-sheet { gap: var(--sp-3); max-height: 92dvh; }
 .photo-side { margin: 2px 0 0; color: var(--muted); font-size: var(--fs-sm); font-weight: 600; }
 .photo-view {
   position: relative; overflow: hidden;
@@ -1346,8 +1392,10 @@ h2.stamp .h-ico { display: none; }
   font-size: var(--fs-xs);
   padding: 1px 6px;
   border-width: 1.5px;
-  animation: none;
 }
+/* The scan row's annotation stays still: nothing on the scan screen
+   competes with the camera. */
+.scan-row .stamp { animation: none; }
 
 /* The month. Wedding season shades the page a step darker with the
    ink — the busy months read as busy before a cell is read. */
