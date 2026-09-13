@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import QRCode from 'qrcode'
 import { Icon } from '@papa/icons'
+import { SectionHead } from '../components/Shell.tsx'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 import { getLang, setLang, type Lang } from '../lang.ts'
@@ -110,16 +111,22 @@ export function Tags({ store }: { store: DemoStore }) {
  */
 export function BackedUpRow({ store }: { store: DemoStore }) {
   const counts = store.outboxCounts()
+  // The same header rhythm as every other group on the page — icon,
+  // title, subtitle, rule — with the queue count riding as the action
+  // slot; the section has no body because the count IS the fact.
   return (
-    <div className="tags-bar">
-      <p className="tags-hint">
-        <strong>{STR.labelsBackedUpHeading}</strong>{' '}
-        {STR.labelsQueueStatus(counts.pending)}
-      </p>
-      <span className="badge">
-        <Icon name="clipboard-check" size={12} /> {counts.pending}
-      </span>
-    </div>
+    <section className="section">
+      <SectionHead
+        icon="cloud-queue"
+        title={STR.labelsBackedUpHeading}
+        sub={STR.labelsQueueStatus(counts.pending)}
+        action={
+          <span className="badge">
+            <Icon name="clipboard-check" size={12} /> {counts.pending}
+          </span>
+        }
+      />
+    </section>
   )
 }
 
@@ -159,8 +166,8 @@ export function PaymentRow({ store }: { store: DemoStore }) {
   }
 
   return (
-    <section className="tag-shelf">
-      <h2 className="tag-shelf-name">{STR.labelsPaymentHeading}</h2>
+    <section className="section">
+      <SectionHead icon="coins" title={STR.labelsPaymentHeading} sub={STR.labelsPaymentSub} />
 
       <label className="field-label" htmlFor="payment-line">
         {STR.labelsPaymentLineLabel}
@@ -239,9 +246,9 @@ export function LanguageRow() {
     { value: 'ur', label: STR.commonLanguageRomanUrdu },
   ]
   return (
-    <div className="tags-bar" role="group" aria-label={STR.commonLanguage}>
-      <p className="tags-hint">{STR.commonLanguage}</p>
-      <div className="chip-row">
+    <section className="section">
+      <SectionHead icon="chat" title={STR.commonLanguage} sub={STR.commonLanguageSub} />
+      <div className="chip-row" role="group" aria-label={STR.commonLanguage}>
         {options.map((o) => (
           <button
             key={o.value}
@@ -253,6 +260,6 @@ export function LanguageRow() {
           </button>
         ))}
       </div>
-    </div>
+    </section>
   )
 }

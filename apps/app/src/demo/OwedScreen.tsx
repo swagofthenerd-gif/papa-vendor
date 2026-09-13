@@ -37,12 +37,10 @@ export function OwedScreen({ store }: { store: DemoStore }) {
       subtitle={STR.customerOwedSubtitle(owing.length)}
       action={
         <>
-          <button
-            className="icon-btn"
-            onClick={() => setAdding(true)}
-            aria-label={STR.kharchaAddExpense}
-          >
-            <Icon name="receipt" size={22} />
+          {/* Labelled, not a bare glyph: a receipt icon alone did not say
+              'expense' to anyone who had not been told. */}
+          <button className="btn btn-sm btn-ghost topbar-btn" onClick={() => setAdding(true)}>
+            <Icon name="receipt" size={16} /> {STR.kharchaAddExpense}
           </button>
           <SettingsButton />
         </>

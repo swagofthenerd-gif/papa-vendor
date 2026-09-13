@@ -650,6 +650,10 @@ body {
 /* ---- sections ---------------------------------------------- */
 /* Space over borders: sections separate by breathing room. */
 .section { margin-top: var(--sp-8); }
+.app-main > .section:first-child { margin-top: var(--sp-2); }
+/* A worded door in the top bar (Khata's 'Add expense'): the small pill,
+   kept off the title's line-height so the bar does not grow. */
+.topbar-btn { flex: none; white-space: nowrap; }
 /* A section header is the heading line of a ledger block: sentence-case
    ink at a real scale step, sitting ON a feint rule the way a written
    heading sits on the printed line. The rule belongs to the paper, so
@@ -1382,9 +1386,15 @@ h2.stamp .h-ico { display: none; }
   background: transparent; color: var(--ink);
   font: inherit; text-align: left; cursor: pointer;
 }
+/* Today wears a small ring as well as the underline — a circled date
+   is how a hand marks today on a paper calendar, and the ring survives
+   the underline being read as a link. */
 .cal-day.is-today .cal-daynum {
   color: var(--accent-strong);
   text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px;
+  margin: -2px -5px; padding: 2px 5px;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 1.5px var(--accent-strong);
 }
 .cal-day.is-selected { background: var(--card-2); box-shadow: inset 0 0 0 2px var(--ink); }
 .cal-daynum { font-size: var(--fs-sm); font-weight: 700; }

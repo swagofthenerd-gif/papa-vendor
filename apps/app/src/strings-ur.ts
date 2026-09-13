@@ -48,6 +48,14 @@ const KIND_UR: Record<string, string> = {
  * The expense book's row vocabulary (0019) — 'marammat' for a repair,
  * loanwords where the trade uses them (sub-hire, transport).
  */
+/** Overdue ladder ke rung — us din ka kaam. */
+const ESCALATION_UR: Record<string, string> = {
+  whatsapp_nudge: 'pehla nudge',
+  call: 'call karo',
+  late_fee_draft: 'late fee lagao',
+  manager_escalation: 'manager ke paas',
+}
+
 const KHARCHA_UR: Record<string, string> = {
   repair: 'marammat',
   sub_hire: 'sub-hire',
@@ -80,6 +88,7 @@ export const STR_UR: StrTable = {
   commonLanguage: 'Zubaan',
   commonLanguageEnglish: 'English',
   commonLanguageRomanUrdu: 'Roman Urdu',
+  commonLanguageSub: 'Aik baar chuno — app usi zubaan mein dobara khulti hai',
 
   // ---------------------------------------------------------------- today
   todaySearchGearAria: 'Saaman dhoondein',
@@ -472,6 +481,7 @@ export const STR_UR: StrTable = {
       ? 'Queue khali · demo mode — is device se kuch nahi jata'
       : `${n} scan queue mein · demo mode — is device se kuch nahi jata`,
   labelsPaymentHeading: 'Paise lene ka tareeqa',
+  labelsPaymentSub: 'Har statement pe likhi line aur QR',
   labelsPaymentLineLabel: 'Statement ke liye payment line',
   labelsPaymentLinePlaceholder: 'maslan JazzCash: 0300 1234567',
   labelsPaymentLineHint:
@@ -860,8 +870,8 @@ export const STR_UR: StrTable = {
   todayPromisedHeading: 'Wade',
   todayPromisedSub: 'Agle do din mein shuru, aur aaj khatam hoti pencils',
   todayStartsAt: (when: string): string => `${when} se shuru`,
-  todayPencilDies: (hours: number, minutes: number): string => `Pencil ${hours}h ${minutes}m mein khatam`,
-  todayEscalationStep: (step: number, days: number): string => `Step ${step} · ${days} din late`,
+  todayEscalationStep: (days: number, action: string): string =>
+    `Din ${days} — ${ESCALATION_UR[action] ?? action}`,
   todayEscalated: (when: string): string => `${when} se manager ke paas`,
   todayEscalateConsiderBlacklist: 'Din 14 — manager dekhe to blacklist ka bhi socho',
   bookingManagerEscalationText: (job: string, days: number, items: string, customer: string | null): string =>
@@ -899,6 +909,7 @@ export const STR_UR: StrTable = {
   quoteStepMinApplied: (min: number): string => `${min} din ke minimum se kam — ${min} bill hua`,
   quoteStepWeekRule: (billable: number, counted: number, weeks: number, weekDays: number, remainder: number): string =>
     `${billable} bill wale din: ${counted} din = ${weeks} hafta (${weeks * weekDays}) + ${remainder}`,
+  quoteStepWeekRuleShort: (billable: number): string => `${billable} bill wale din`,
   quoteStepCardRates: (priced: number, unpriced: number, card: string): string =>
     `${priced} line “${card}” card se priced, ${unpriced} bina rate`,
   quoteStepNoCard: 'Abhi koi rate card nahi — Settings → Rates mein banao, tab tak har line bina rate hai',

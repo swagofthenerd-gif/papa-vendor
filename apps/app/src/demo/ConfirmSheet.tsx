@@ -54,8 +54,8 @@ export function ConfirmSheet({
 
   const layers = useMemo(
     () => booking.lines.map((l) => {
-      const productId = l.productId ?? productOfAsset(store, l.assetId)
-      return productId ? store.availabilityFor(productId, holdStart, holdEnd, nowMs) : null
+      // The view already resolved a demanded unit's product (bookings.ts).
+      return l.productId ? store.availabilityFor(l.productId, holdStart, holdEnd, nowMs) : null
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [store, booking, holdStart, holdEnd],
@@ -192,9 +192,4 @@ export function ConfirmSheet({
       ) : null}
     </div>
   )
-}
-
-function productOfAsset(store: DemoStore, assetId: string | null): string | null {
-  if (!assetId) return null
-  return store.assetView(assetId)?.productId ?? null
 }

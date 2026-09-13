@@ -335,7 +335,9 @@ export function Today({
               </PromisedLine>
             ))}
             {promised.pencilsToday.map((b) => (
-              <PromisedLine key={b.id} row={b} note={STR.todayPencilDies(b.pencil.hours, b.pencil.minutes)} />
+              // One countdown per row: the stamp already counts the pencil
+              // down, so the subline says when it starts and what it holds.
+              <PromisedLine key={b.id} row={b} note={STR.todayStartsAt(bookingDateLabel(b.customerStartMs))} />
             ))}
           </ul>
         </section>
@@ -663,7 +665,7 @@ function EscalationRow({
   return (
     <div className="escalation-row">
       <span className="escalation-step">
-        {STR.todayEscalationStep(step.step, days)}
+        {STR.todayEscalationStep(days, step.action)}
         {step.considerBlacklist ? (
           <span className="line-note"> · {STR.todayEscalateConsiderBlacklist}</span>
         ) : null}

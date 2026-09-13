@@ -257,7 +257,11 @@ export function QuoteSheet({
               <li>{STR.quoteStepWeekendDropped(s1.weekendDaysDropped, s1.droppedDates.join(', '))}</li>
             ) : null}
             {s1.minApplied ? <li>{STR.quoteStepMinApplied(s1.minBillableDays)}</li> : null}
-            <li>{STR.quoteStepWeekRule(s2.billableDays, s1.countedDays, s2.weeks, s2.weekEqualsDays, s2.remainderDays)}</li>
+            <li>
+              {s2.weeks === 0
+                ? STR.quoteStepWeekRuleShort(s2.billableDays)
+                : STR.quoteStepWeekRule(s2.billableDays, s1.countedDays, s2.weeks, s2.weekEqualsDays, s2.remainderDays)}
+            </li>
             <li>
               {quote.rateCard
                 ? STR.quoteStepCardRates(s3.pricedLines, s3.unpricedLines, quote.rateCard.name)
