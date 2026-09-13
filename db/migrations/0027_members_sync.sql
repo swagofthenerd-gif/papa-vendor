@@ -16,6 +16,8 @@
 --       read from the INVOKER function. A display-name change touches the
 --       person's memberships so it reaches every phone; a suspended
 --       membership is projected as a tombstone.
+--       ASSUMPTION: names and roles on every phone, drivers included. See
+--       docs/assumptions.md#members-mirror
 --
 --   D2  EXACTLY ONCE. submit_scan_batch is idempotent per (device,
 --       client_seq); nothing else is. A pencil placed offline goes to
