@@ -357,9 +357,7 @@ export class DemoStore {
     this.seed = seed
     this.mode = mode
     this.catalogue = demoCatalogue()
-    this.sessions = new SessionRegistry(db, deviceId, (jobId, mode) =>
-      this.expectedFor(jobId, mode),
-    )
+    this.sessions = this.registryFor(deviceId)
     // A deliberately small budget in the demo — a few megabytes rather than
     // 512 — so the "device full" refusal is reachable by a person trying the
     // app for ten minutes, instead of being a branch nobody ever sees.
@@ -367,6 +365,12 @@ export class DemoStore {
     // Same reasoning for the voice budget: ~2MB is twenty-odd notes, so the
     // honest refusal is a reachable demo state, not a theoretical branch.
     this.voice = new VoiceNoteStore(db, { budgetBytes: 2 * 1024 * 1024 })
+  }
+
+  /** The session registry for a device id — rebuilt whenever the phone
+   *  changes identity (enrol, sign out), always the same way. */
+  private registryFor(deviceId: string): SessionRegistry {
+    return new SessionRegistry(this.db, deviceId, (jobId, mode) => this.expectedFor(jobId, mode))
   }
 
   /**
@@ -435,9 +439,7 @@ export class DemoStore {
     this.mode = 'live'
     this.seed = liveSeed(session)
     this.catalogue = []
-    this.sessions = new SessionRegistry(this.db, session.deviceId, (jobId, mode) =>
-      this.expectedFor(jobId, mode),
-    )
+    this.sessions = this.registryFor(session.deviceId)
     this.attachLoop(session)
   }
 
@@ -491,10 +493,6 @@ export class DemoStore {
     return this.loop?.status() ?? null
   }
 
-  deviceId(): string {
-    return metaGet(this.db, 'device_id') ?? 'demo-device'
-  }
-
   deviceLabel(): string {
     return metaGet(this.db, 'device_label') ?? ''
   }
@@ -539,9 +537,7 @@ export class DemoStore {
     this.db.exec(`delete from staff`)
     this.seed = seedDemo(this.db)
     this.catalogue = demoCatalogue()
-    this.sessions = new SessionRegistry(this.db, 'demo-device', (jobId, mode) =>
-      this.expectedFor(jobId, mode),
-    )
+    this.sessions = this.registryFor('demo-device')
     return r
   }
 

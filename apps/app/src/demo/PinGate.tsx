@@ -1,7 +1,23 @@
 import { useState } from 'react'
 import { Icon } from '@papa/icons'
 import type { DemoStore, MemberRow } from './store.ts'
+import type { PinSwitchResult } from '@papa/core'
 import { STR } from '../strings.ts'
+
+/**
+ * What the screen says about a PIN switch's answer: null for a clean
+ * server-verified unlock, the offline notice for an echo, the reason
+ * otherwise. The gate and Settings → This phone say the same words.
+ */
+export function pinSwitchSaid(r: PinSwitchResult, name: string): string | null {
+  if (r.ok) return r.verifiedBy === 'echo' ? STR.pipeGateCheckedOffline : null
+  switch (r.reason) {
+    case 'wrong_pin': return STR.pipeGateWrongPin
+    case 'locked_out': return STR.pipeGateLockedOut
+    case 'offline_unknown': return STR.pipeGateOfflineUnknown(name)
+    case 'refused': return r.message
+  }
+}
 
 /**
  * The PIN gate (W9) — the shared-phone model, on open.
@@ -34,18 +50,9 @@ export function PinGate({ store, onUnlocked }: { store: DemoStore; onUnlocked: (
     setSaid(null)
     const r = await store.pinSwitch(picked.id, pin)
     setBusy(false)
-    if (r.ok) {
-      if (r.verifiedBy === 'echo') setSaid(STR.pipeGateCheckedOffline)
-      onUnlocked()
-      return
-    }
+    setSaid(pinSwitchSaid(r, picked.name))
+    if (r.ok) { onUnlocked(); return }
     setPin('')
-    switch (r.reason) {
-      case 'wrong_pin': setSaid(STR.pipeGateWrongPin); break
-      case 'locked_out': setSaid(STR.pipeGateLockedOut); break
-      case 'offline_unknown': setSaid(STR.pipeGateOfflineUnknown(picked.name)); break
-      case 'refused': setSaid(r.message); break
-    }
   }
 
   return (

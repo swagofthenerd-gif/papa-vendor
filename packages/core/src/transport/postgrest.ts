@@ -92,15 +92,15 @@ export class PostgrestTransport implements Transport {
         signal: controller?.signal,
       })
     } catch (err) {
-      if (timer) clearTimeout(timer)
       const aborted = err instanceof Error && err.name === 'AbortError'
       throw new TransportError(
         aborted ? `timeout after ${this.timeoutMs}ms` : (err instanceof Error ? err.message : String(err)),
         aborted ? 'timeout' : 'network',
         true,
       )
+    } finally {
+      if (timer) clearTimeout(timer)
     }
-    if (timer) clearTimeout(timer)
 
     const text = await response.text()
     if (response.ok) {

@@ -227,9 +227,7 @@ export class SyncEngine {
    * the failure mode that gets an app uninstalled.
    */
   private async parkOrBisect(rows: OutboxRow[], err: unknown, report: FlushReport, now: number): Promise<void> {
-    const code = err instanceof TransportError ? err.code : 'unknown'
-    const retryable = err instanceof TransportError ? err.retryable : true
-    const detail = err instanceof Error ? err.message : String(err)
+    const { code, retryable, detail } = errorFacts(err)
 
     if (retryable) {
       for (const row of rows) this.outbox.retryLater(row.id, code, detail, now)
@@ -313,9 +311,7 @@ export class SyncEngine {
         p_args: args,
       })
     } catch (err) {
-      const code = err instanceof TransportError ? err.code : 'unknown'
-      const retryable = err instanceof TransportError ? err.retryable : true
-      const detail = err instanceof Error ? err.message : String(err)
+      const { code, retryable, detail } = errorFacts(err)
       if (retryable) {
         this.outbox.retryLater(row.id, code, detail, now)
         report.stopped = 'retry_later'
@@ -376,6 +372,19 @@ export class SyncEngine {
  */
 function emptyReport(): FlushReport {
   return { sent: 0, acked: 0, duplicates: 0, failed: [], alerts: [], dispatched: 0, mapped: 0 }
+}
+
+/**
+ * What the queue records about a send error. Anything that is not a
+ * TransportError is treated as the network's fault (retryable): the op is
+ * innocent until the server says otherwise.
+ */
+function errorFacts(err: unknown): { code: string; retryable: boolean; detail: string } {
+  return {
+    code: err instanceof TransportError ? err.code : 'unknown',
+    retryable: err instanceof TransportError ? err.retryable : true,
+    detail: err instanceof Error ? err.message : String(err),
+  }
 }
 
 /**

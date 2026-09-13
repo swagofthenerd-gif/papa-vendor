@@ -31,8 +31,7 @@ export function TodayScreen({ store }: { store: DemoStore }) {
   const [crewFor, setCrewFor] = useState<string | null>(null) // --- network ---
 
   // A sync cycle that landed rows re-reads the board (W9).
-  const syncTick = useSyncTick()
-  void syncTick
+  useSyncTick()
   const counts = store.outboxCounts()
   const now = Date.now()
   const sync = store.syncView()

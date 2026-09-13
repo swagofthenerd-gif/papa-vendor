@@ -139,12 +139,6 @@ export class IdMap {
     )?.server_id ?? null
   }
 
-  clientIdFor(serverId: string): string | null {
-    return this.db.get<{ client_id: string }>(
-      `select client_id from id_map where server_id = ?`, [serverId],
-    )?.client_id ?? null
-  }
-
   record(clientId: string, serverId: string, kind: string): void {
     this.db.exec(
       `insert into id_map (client_id, server_id, kind, mapped_at) values (?, ?, ?, ?)

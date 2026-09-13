@@ -1,5 +1,5 @@
 import type { SqlDriver } from './db/driver.ts'
-import { metaGet, metaGetNumber, metaSet } from './meta.ts'
+import { metaGet, metaSet } from './meta.ts'
 import { Outbox, syncStatus, type SyncTone } from './outbox.ts'
 import { PullApplier, type PullPayload } from './pull.ts'
 import { SyncEngine, TransportError, type FlushReport, type Transport } from './sync.ts'
@@ -164,7 +164,7 @@ export class SyncLoop {
     if (!this.online()) return report
     let changed = false
     try {
-      changed = await this.pullAll(report) || changed
+      changed = await this.pullAll(report)
       let mapped = 0
       for (let i = 0; i < MAX_FLUSHES_PER_CYCLE; i++) {
         const f = await this.engine.flush(true, this.flushLimit, this.now())
@@ -236,11 +236,10 @@ export class SyncLoop {
   }
 }
 
+/** A stored timestamp, or null when absent, blank, unparseable or zero. */
 function metaNumberOrNull(db: SqlDriver, key: string): number | null {
-  const raw = metaGet(db, key)
-  if (raw === undefined || raw === '') return null
-  const n = metaGetNumber(db, key)
-  return n === 0 ? null : n
+  const n = Number(metaGet(db, key) ?? '')
+  return Number.isFinite(n) && n !== 0 ? n : null
 }
 
 function defaultOnline(): boolean {

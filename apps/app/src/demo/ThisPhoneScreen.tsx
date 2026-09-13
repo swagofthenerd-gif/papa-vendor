@@ -4,6 +4,7 @@ import { Shell, SectionHead } from '../components/Shell.tsx'
 import { HoldToFinish } from '../components/HoldToFinish.tsx'
 import { go } from '../nav.ts'
 import { useSyncTick } from '../sync-tick.ts'
+import { pinSwitchSaid } from './PinGate.tsx'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 
@@ -21,11 +22,11 @@ import { STR } from '../strings.ts'
  */
 export function ThisPhoneScreen({ store }: { store: DemoStore }) {
   const [tick, setTick] = useState(0)
-  const syncTick = useSyncTick()
+  useSyncTick()
   const [said, setSaid] = useState<string | null>(null)
   const [switching, setSwitching] = useState<string | null>(null)
   const [pin, setPin] = useState('')
-  void tick; void syncTick
+  void tick
   const refresh = () => setTick((t) => t + 1)
 
   const session = store.session()
@@ -35,11 +36,8 @@ export function ThisPhoneScreen({ store }: { store: DemoStore }) {
   const handOver = async (userId: string) => {
     const r = await store.pinSwitch(userId, pin)
     setPin('')
-    if (r.ok) { setSwitching(null); setSaid(r.verifiedBy === 'echo' ? STR.pipeGateCheckedOffline : null) }
-    else if (r.reason === 'wrong_pin') setSaid(STR.pipeGateWrongPin)
-    else if (r.reason === 'locked_out') setSaid(STR.pipeGateLockedOut)
-    else if (r.reason === 'offline_unknown') setSaid(STR.pipeGateOfflineUnknown(store.members().find((m) => m.id === userId)?.name ?? ''))
-    else setSaid(r.message)
+    if (r.ok) setSwitching(null)
+    setSaid(pinSwitchSaid(r, store.members().find((m) => m.id === userId)?.name ?? ''))
     refresh()
   }
 
