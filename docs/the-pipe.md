@@ -16,6 +16,7 @@ proof runs. The code is the law; this page is the map.
 | On-device migration | `packages/core/src/db/migrate.ts` |
 | Server: members mirror, `replay_op` | `db/migrations/0027_members_sync.sql` |
 | Server: the doors the money book and the walk-in needed, the org mirror | `db/migrations/0028_every_write_crosses.sql` |
+| Server: the do-not-rent decision — the gate's switch | `db/migrations/0029_do_not_rent.sql` |
 | The chain on the phone: `lastOpNaming` / `enqueueOp` / `APP_REKEY_COLUMNS` | `apps/app/src/demo/ops.ts` |
 | The proof | `db/pipe-up.sh`, `apps/app/test/pipe/pipe.pipe.mjs` |
 
@@ -142,7 +143,12 @@ its payload the RPC's own `p_*` arguments, the phone's id beside them as
 | `createCustomer` (khata.ts) | `create_customer` | `create_customer` (0028) | `cust-…` → `id` | — |
 | `recordEntry` kind `payment` | `record_payment` | `record_payment` (0017) | `led-…` → `id` | the customer's op, the job's op |
 | `recordEntry` charge / late_fee / damage_charge / write_off / adjustment / reversal | `record_ledger_entry` | `record_ledger_entry` (0018, with `p_reversal_of`) | `led-…` → `id` | the customer's, the job's, the line reversed |
-| `recordEntry` deposit kinds | — | hold/apply/refund_deposit (0017) | — | no phone door yet (`no-deposit-door`); only the seed writes them |
+| `holdDeposit` (deposits.ts) | `hold_deposit` | `hold_deposit` (0017 D4) | `dep-…` → `id` | the customer's op, the job's op |
+| `applyDeposit` | `apply_deposit` | `apply_deposit` (0017 D4) | — | the deposit's op (the hold) |
+| `refundDeposit` | `refund_deposit` | `refund_deposit` (0017 D4) | — | the deposit's op |
+| `recordEntry` deposit kinds | — | (written INSIDE the three deposit RPCs) | — | the deposit op carries the line; a second op would be a second row (ASSUMPTION `#deposit-line-ids`) |
+| `setBlacklisted` (khata.ts) | `set_customer_blacklisted` | `set_customer_blacklisted` (0029) | — | the customer's op |
+| `markHealth` (core fleet.ts) | `submit_scan_batch` | the 0003 health verbs — `quarantine` / `send_to_service` / `release` | — | (a scan-kind op, in seq) |
 | `recordExpense` (kharcha.ts) | `record_expense` | `record_expense` (0024 shape: `p_spent_at`, `p_booking_id`) | `exp-…` → `id` | the job's, the booking's, the unit's op |
 | `reverseExpense` | `reverse_expense` | `reverse_expense` (0024) | `exp-…` (the reversal row) → `id` | the expense's op |
 | `recordServiced` with a cost (store.ts) | `record_expense` **then** the `serviced` scan | `record_expense`, `submit_scan_batch` | the scan's `payload.expense_id` is rewritten to the server's | the scan depends on the expense op |
@@ -166,6 +172,13 @@ row pointing at one take the server's name in the ack's transaction.
 view) counts a bill tagged to the booking a job was born from — the
 vendor borrows at the enquiry and tags the pencil; the job the pencil
 becomes sees it (was the year's wall `subhire-cost-unlinkable`).
+
+W13's money doors added no new op SHAPE: seven of the eight doors ride
+RPCs that already existed, the health door is an ordinary scan event, and
+the one new RPC (0029) is a plain `p_*` call like every other. The only
+new **id kind** is `deposit` — `hold_deposit`'s reply names the row it
+minted, and `deposits` joins `APP_REKEY_COLUMNS` so the apply and the
+refund queued behind the hold go out under the server's name.
 
 Known gap, on purpose: `record_ledger_entry` has no timestamp argument, so
 a backdated ledger line is stamped with the server's clock on the server
@@ -227,7 +240,7 @@ role per request.
 ## The local proof
 
 ```
-npm run test:pipe          # db/pipe-test.sh: up → ten scenarios → down
+npm run test:pipe          # db/pipe-test.sh: up → the scenarios → down
 KEEP=1 npm run test:pipe   # leave the containers up
 npm run pipe:up / pipe:down
 ```
@@ -275,6 +288,15 @@ by side.
 10. the owner's phone borrows a body against a pencil (the bill tagged to
     the booking, no expense op of its own), confirms, converts → the
     server's `job_margin` reads the bill through `jobs.booking_id`, and
-    so does the phone's under the server's name.
+    so does the phone's under the server's name;
+11. (W13) a deposit taken offline crosses as ONE op — the ledger line
+    rides inside the RPC — and lands as a `held` deposits row on the
+    right customer and job, its line stamped with the session's user and
+    pointing back at the deposit. The phone adopts the server's name for
+    the row AND for the line that points at it, `customer_balances`
+    agrees with the phone's pot to the rupee, and an apply queued behind
+    the hold (under the server's new name — the chain survived the
+    rename) moves the pot and the debt by the same rupee on both sides,
+    exactly once.
 
 CI runs it as its own `pipe` job on `ubuntu-latest` with docker.
