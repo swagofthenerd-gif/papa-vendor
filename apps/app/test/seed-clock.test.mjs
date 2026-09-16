@@ -63,6 +63,13 @@ const SEEDS_WITHOUT_A_CLOCK = new Map([
   ['year-in-the-life.test.mjs', 'fixed test era, seeded-deterministic'],
 ])
 
+/**
+ * A one-argument seedDemo call — the database and no clock. Any identifier,
+ * not just `db`: demo-seed.test.mjs seeds a second driver it calls `other`,
+ * and a guard that only knew the name `db` would wave the next one through.
+ */
+const SEEDS_UNCLOCKED = /seedDemo\(\s*[A-Za-z_$][\w$]*\s*\)/
+
 /** The reads that make a file care what time it is. */
 const CLOCK_READS =
   /\b(dueStatus|dueBoard|dayAccount|dayLabel|dayBounds|monthAccount|monthProfit|moneyStrip|sehat|listBookings|bookingView|promisedStrip|pruneExpiredPencils|calendar)\s*\(/
@@ -102,7 +109,7 @@ describe('a test that cares what time it is says which time', () => {
     const undocumented = []
     for (const file of testFiles) {
       const src = readFileSync(join(HERE, file), 'utf8')
-      if (!/seedDemo\(\s*db\s*\)/.test(src)) continue
+      if (!SEEDS_UNCLOCKED.test(src)) continue
       if (!SEEDS_WITHOUT_A_CLOCK.has(file)) undocumented.push(file)
     }
     assert.deepEqual(
@@ -132,7 +139,7 @@ describe('a test that cares what time it is says which time', () => {
     for (const file of SEEDS_WITHOUT_A_CLOCK.keys()) {
       assert.ok(testFiles.includes(file), `${file} is listed but does not exist`)
       const src = readFileSync(join(HERE, file), 'utf8')
-      assert.match(src, /seedDemo\(\s*db\s*\)/, `${file} is listed but no longer seeds without a clock`)
+      assert.match(src, SEEDS_UNCLOCKED, `${file} is listed but no longer seeds without a clock`)
     }
   })
 })
