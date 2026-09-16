@@ -399,6 +399,31 @@ describe('the wipe, which is the one unrecoverable act', () => {
     db.exec(`update condition_photos set uploaded = 1`)
     assert.equal(unsentEvidence(db), 2, 'an uploaded photo exists somewhere else')
   })
+
+  test('a database with no tables yet has nothing to lose', async () => {
+    const bridge = fakeBridge()
+    const { db } = await openFake(bridge)
+    assert.equal(unsentEvidence(db), 0, 'before migrateLocal, genuinely nothing')
+  })
+
+  // The difference that decides whether a wipe is allowed. "The table is not
+  // there" is nothing to lose; "the query failed" is a question that could
+  // not be answered, and answering "nothing" to it would be the automatic
+  // response to a transient condition that device-key.ts forbids.
+  test('a query that fails for any other reason answers null, not zero', () => {
+    const angry = new CapacitorSqlcipherDriver({
+      all: () => JSON.stringify({ error: 'database is locked' }),
+    })
+    assert.equal(unsentEvidence(angry), null)
+  })
+
+  test('and null refuses the wipe', async () => {
+    const bridge = fakeBridge()
+    const keys = new CapacitorKeyProvider(bridge, () => unsentEvidence(
+      new CapacitorSqlcipherDriver({ all: () => JSON.stringify({ error: 'database is locked' }) }),
+    ))
+    await assert.rejects(() => keys.wipe(), UnsentEvidenceError)
+  })
 })
 
 describe('rows and values crossing the bridge', () => {

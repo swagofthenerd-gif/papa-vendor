@@ -359,29 +359,38 @@ export function capacitorSqlcipherFactory(bridge: PapaSqlBridge): DeviceDriverFa
 }
 
 /**
- * How much evidence exists ONLY on this phone.
+ * How much evidence exists ONLY on this phone — or null if it cannot be told.
  *
  * The three device-only kinds that a wipe destroys irrecoverably: queued
  * writes (the outbox keeps only what the server has not provably taken —
  * delivered rows are deleted), un-uploaded condition photos, and un-uploaded
  * voice notes. `sync_meta` and `id_map` are device-only too but they are
  * memory, not evidence: losing them costs a re-sync, not a fact.
+ *
+ * A MISSING TABLE IS ZERO; ANY OTHER FAILURE IS NULL. The difference
+ * matters, because null refuses the wipe. A database opened before
+ * `migrateLocal` genuinely has nothing to lose. A query that fails for any
+ * other reason — the file locked, the database half-open, something nobody
+ * has thought of — is a question that could not be answered, and answering
+ * "nothing" to it would be the automatic response to a transient condition
+ * that device-key.ts's comment on `wipe()` forbids in as many words.
  */
-export function unsentEvidence(db: SqlDriver): number {
+export function unsentEvidence(db: SqlDriver): number | null {
+  let unknown = false
   const count = (sql: string): number => {
     try {
       return Number(db.get<{ n: number }>(sql)?.n ?? 0)
-    } catch {
-      // A table that does not exist yet (a database opened before
-      // migrateLocal) reads as nothing to lose, which it is.
+    } catch (e) {
+      if (/no such table/i.test(e instanceof Error ? e.message : String(e))) return 0
+      unknown = true
       return 0
     }
   }
-  return (
+  const total =
     count(`select count(*) as n from outbox`) +
     count(`select count(*) as n from condition_photos where uploaded = 0`) +
     count(`select count(*) as n from voice_notes where uploaded = 0`)
-  )
+  return unknown ? null : total
 }
 
 /**
