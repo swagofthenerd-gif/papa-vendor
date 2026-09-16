@@ -1729,6 +1729,11 @@ h2.stamp .h-ico { display: none; }
 .line-settled .line-code { color: var(--muted); text-decoration: line-through; }
 .line-settled .line-why { text-decoration: none; }
 
+/* Every book row is a door to the correction sheet, so every book row
+   takes a gloved thumb: the two-line rows already clear the floor, a
+   one-line row would not. */
+.khata-book .line-tap { min-height: var(--row-h-glove); }
+
 /* The month picker on Din ka hisaab: a back/forward pair around the
    month's own name, in the mono voice the dates use. Disabled forward
    on the current month — there is no account of a month that has not

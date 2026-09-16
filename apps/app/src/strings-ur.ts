@@ -48,6 +48,15 @@ const KIND_UR: Record<string, string> = {
  * The expense book's row vocabulary (0019) — 'marammat' for a repair,
  * loanwords where the trade uses them (sub-hire, transport).
  */
+/** Darusti kyun mana hui (khata.ts SettleRefusal). */
+const SETTLE_REFUSAL_UR: Record<string, string> = {
+  not_found: 'Woh line ab khate mein nahi hai.',
+  no_reason: 'Wajah likhein — woh line ke saath rehti hai.',
+  already_settled: 'Yeh line pehle hi theek ho chuki hai.',
+  is_settlement: 'Darusti ki darusti nahi hoti.',
+  deposit_line: 'Zamanat ka paisa Lagayein aur Wapas se chalta hai, yahan se nahi.',
+}
+
 /** Overdue ladder ke rung — us din ka kaam. */
 const ESCALATION_UR: Record<string, string> = {
   whatsapp_nudge: 'pehla nudge',
@@ -1332,5 +1341,26 @@ export const STR_UR: StrTable = {
   moneyDepositServerChecksAgain:
     'Jab yeh jati hai to server job dobara dekhta hai. Jo refund woh mana kare woh ek card ban kar aata hai, paisa gum nahi hota.',
   moneyDepositRefundNothingLeft: 'Wapas karne ko kuch nahi — sab lag chuki hai.',
+  // --- 2. Darusti aur write off (`no-adjustment-door`) — 0018 D6.
+  moneyLineDoorHint: 'Line theek karne ya write off karne ke liye us par dabayein',
+  moneyLineTitle: 'Yeh line',
+  moneyCorrectThis: 'Yeh theek karein',
+  moneyWriteItOff: 'Write off karein',
+  moneyCorrectTitle: 'Yeh line theek karein',
+  moneyWriteOffTitle: 'Is ko write off karein',
+  moneyCorrectWhat: 'Ghalti thi — line khate se nikal jati hai aur client ko dono rows dikhti hain.',
+  moneyWriteOffWhat: 'Ghalti nahi — woh paisa jo house ne na maangne ka faisla kiya.',
+  moneyReasonLabel: 'Wajah (line ke saath rehti hai)',
+  moneyReasonPlaceholder: 'jaise: dock par do dafa lag gayi',
+  moneyCorrectHold: (rupees: string): string => `${rupees} wapas likhne ke liye dabaye rakhein`,
+  moneyWriteOffHold: (rupees: string): string => `${rupees} maaf karne ke liye dabaye rakhein`,
+  moneySettledLine: (word: string, date: string, why: string | null): string =>
+    why ? `${date} ko ${word} — ${why}` : `${date} ko ${word}`,
+  moneySettleRefused: (reason: string): string => SETTLE_REFUSAL_UR[reason] ?? reason,
+  moneyDuplicateNotice: (kind: string, rupees: string, seconds: number): string =>
+    `${rupees} ki do ${kind} lines, ${seconds} second ke faasle par. Do dafa hua tha?`,
+  moneyDuplicateKeep: 'Dono asli hain',
+  moneyDuplicateKept: 'Rakh liya — dono lines qaim hain',
+
   // ======================================================================
 }

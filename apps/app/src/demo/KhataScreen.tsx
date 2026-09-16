@@ -5,6 +5,7 @@ import {
   formatRupees,
   ledgerDate,
   signedRupees,
+  type LedgerEntryKind,
 } from '@papa/core'
 import { Shell, SectionHead } from '../components/Shell.tsx'
 import { ReversalNotices } from '../components/ReversalNotice.tsx'
@@ -16,6 +17,8 @@ import { STR } from '../strings.ts'
 import { Sheet, SheetClose } from '../components/Sheet.tsx'
 // --- W13 the money doors
 import { DepositSection } from './DepositSection.tsx'
+import { LineSheet } from './CorrectionSheet.tsx'
+import type { LedgerRow } from './khata.ts'
 
 /**
  * One customer's khata — the page the whole money book opens to.
@@ -34,11 +37,31 @@ import { DepositSection } from './DepositSection.tsx'
  * The share pair follows the app's one sharing rule: WhatsApp where it
  * exists, clipboard where it does not — and the app only DRAFTS; the send
  * stays the owner's, because the message's authority lives in who sent it.
+ *
+ * SINCE W13 EVERY LINE IS A DOOR. Tapping a row opens the correction
+ * sheet — "correct this" or "write it off", both with a reason and both
+ * behind a hold. A settled line reads as one story: struck through, with
+ * the settlement's own words beneath it, the settling row not repeated
+ * below. Deposits get their own section above the book, because security
+ * money is not debt in either direction.
  */
+
+/** Kinds a correction door opens on: money the desk wrote, not money the
+ *  deposit machine moved and not a correction itself. */
+const CORRECTABLE: ReadonlySet<LedgerEntryKind> = new Set([
+  'charge', 'late_fee', 'damage_charge', 'payment',
+])
 export function KhataScreen({ store, customerId }: { store: DemoStore; customerId: string }) {
   const view: View = { name: 'customer', customerId }
   const [tick, setTick] = useState(0)
   const [paying, setPaying] = useState(false)
+  // The line the correction door is open on (W13) — instance state, which
+  // is why the route keys this screen by customer.
+  const [settling, setSettling] = useState<LedgerRow | null>(null)
+  // Duplicate questions the owner has answered with "both are real". Local
+  // to the visit on purpose: it is an acknowledgement, not a ledger fact,
+  // and nothing about the book changed.
+  const [keptDuplicates, setKeptDuplicates] = useState<string[]>([])
   const [copied, setCopied] = useState(false)
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -74,6 +97,13 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
   }
 
   const now = Date.now()
+
+  // The settlement rows — the lines the book renders as sub-lines of what
+  // they settled rather than as rows of their own.
+  const settlementIds = new Set([...customer.settled.values()].map((v) => v.byId))
+  const duplicates = store
+    .duplicateEntries({ customerId })
+    .filter((d) => !keptDuplicates.includes(d.entryId) && !customer.settled.has(d.entryId))
 
   return (
     <Shell
@@ -139,6 +169,43 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
         onWrite={() => setTick((t) => t + 1)}
       />
 
+      {/* The double-tap question (W13, the second half of
+          `no-adjustment-door`): two identical charge lines seconds apart
+          are worth asking about, never worth refusing — two cracked
+          filters is a real answer. The correction behind it is the
+          ordinary one. */}
+      {duplicates.map((d) => (
+        <div className="notice notice-warn" key={d.entryId}>
+          <Icon name="question" size={18} />
+          <div>
+            <strong>
+              {STR.moneyDuplicateNotice(
+                STR.customerKindLabel(d.kind),
+                formatRupees(d.amountMinor),
+                d.secondsApart,
+              )}
+            </strong>
+          </div>
+          <div className="row-actions">
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={() => {
+                const line = customer.entries.find((e) => e.id === d.entryId)
+                if (line) setSettling(line)
+              }}
+            >
+              {STR.moneyCorrectThis}
+            </button>
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={() => setKeptDuplicates((k) => [...k, d.entryId])}
+            >
+              {STR.moneyDuplicateKeep}
+            </button>
+          </div>
+        </div>
+      ))}
+
       <section className="section">
         <SectionHead
           icon="scroll"
@@ -146,22 +213,57 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
           sub={
             customer.entries.length === 0
               ? STR.customerNothingInBook
-              : STR.customerEntriesNewestFirst(customer.entries.length)
+              : STR.moneyLineDoorHint
           }
         />
         {customer.entries.length === 0 ? null : (
-          <ul className="line-list">
-            {customer.entries.map((e) => (
-              <li key={e.id} className="line">
-                <span className="line-name">{STR.customerKindLabel(e.kind)}</span>
-                <span className="line-note">
-                  {[ledgerDate(e.createdAt), e.jobLabel, e.note]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
-                <span className="line-code code">{signedRupees(e.amountMinor)}</span>
-              </li>
-            ))}
+          <ul className="line-list khata-book">
+            {customer.entries.map((e) => {
+              // A settlement is not its own row: it is the sub-line under
+              // the line it settled, so a correction reads as ONE story
+              // instead of two mystery rows (W13). Both are still in the
+              // book, and every projection still sums both.
+              if (settlementIds.has(e.id)) return null
+              const settled = customer.settled.get(e.id)
+              const openable = settled === undefined && CORRECTABLE.has(e.kind) && e.depositId === null
+              const body = (
+                <>
+                  <span className="line-name">{STR.customerKindLabel(e.kind)}</span>
+                  <span className="line-note">
+                    {[ledgerDate(e.createdAt), e.jobLabel, e.note]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                  <span className="line-code code">{signedRupees(e.amountMinor)}</span>
+                  {settled ? (
+                    <ul className="line-why">
+                      <li>
+                        {STR.moneySettledLine(
+                          STR.customerKindLabel(settled.kind),
+                          ledgerDate(settled.createdAt),
+                          settled.note,
+                        )}
+                      </li>
+                    </ul>
+                  ) : null}
+                </>
+              )
+              const cls = `line line-stack${settled ? ' line-settled' : ''}`
+              return (
+                <li key={e.id}>
+                  {openable ? (
+                    <button
+                      className={`${cls} line-tap pressable`}
+                      onClick={() => setSettling(e)}
+                    >
+                      {body}
+                    </button>
+                  ) : (
+                    <div className={cls}>{body}</div>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         )}
       </section>
@@ -198,6 +300,23 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
           {copied ? STR.customerCopied : STR.customerMonthlyStatement}
         </button>
       </div>
+
+      {settling ? (
+        <LineSheet
+          line={settling}
+          onCorrect={(reason) => {
+            store.correctEntry(settling.id, reason)
+            setSettling(null)
+            setTick((t) => t + 1)
+          }}
+          onWriteOff={(reason) => {
+            store.writeOffEntry(settling.id, reason)
+            setSettling(null)
+            setTick((t) => t + 1)
+          }}
+          onClose={() => setSettling(null)}
+        />
+      ) : null}
 
       {paying ? (
         <PaymentSheet

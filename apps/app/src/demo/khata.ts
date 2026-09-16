@@ -596,11 +596,144 @@ export function chargedButReturned(db: SqlDriver): ChargedButReturned[] {
   return out
 }
 
+// ------------------------------------ W13: the correction door (0018 D6)
+
 /**
- * Write the correction the notice drafted: a `reversal` naming the charge.
+ * Why a line cannot be settled. Every one of these is the phone refusing
+ * BEFORE the write, matching what the server would say — a refusal the
+ * desk can read is worth more than a parked card an hour later.
+ */
+export type SettleRefusal =
+  | 'not_found'
+  /** A reason is the point: override 18 says the owner's judgement is
+   *  never fought and always RECORDED, and the server's own
+   *  ledger_override_has_reason constraint refuses a note-less write-off. */
+  | 'no_reason'
+  | 'already_settled'
+  /** A reversal or a write-off is itself a settlement; settling one would
+   *  be a correction of a correction, which reads as nothing at all. */
+  | 'is_settlement'
+  /** Deposit money moves only through hold/apply/refund (0017 D4). */
+  | 'deposit_line'
+
+export type SettleResult =
+  | { ok: true; id: string }
+  | { ok: false; reason: SettleRefusal }
+
+const SETTLEMENT_KINDS: ReadonlySet<string> = new Set(['reversal', 'write_off', 'adjustment'])
+
+/** The five checks both doors share, and the target's own facts. */
+function settleTarget(
+  db: SqlDriver,
+  entryId: string,
+  reason: string | null,
+):
+  | { ok: true; row: { customerId: string; amountMinor: number; jobId: string | null; assetId: string | null }; note: string }
+  | { ok: false; reason: SettleRefusal } {
+  const note = (reason ?? '').trim()
+  if (note.length === 0) return { ok: false, reason: 'no_reason' }
+  const e = db.get<{
+    customer_id: string
+    kind: string
+    amount_minor: number
+    job_id: string | null
+    asset_id: string | null
+    deposit_id: string | null
+  }>(
+    `select customer_id, kind, amount_minor, job_id, asset_id, deposit_id
+       from customer_ledger_entries where id = ?`,
+    [entryId],
+  )
+  if (!e) return { ok: false, reason: 'not_found' }
+  if (e.deposit_id !== null) return { ok: false, reason: 'deposit_line' }
+  if (SETTLEMENT_KINDS.has(e.kind)) return { ok: false, reason: 'is_settlement' }
+  const already = db.get<{ one: number }>(
+    `select 1 as one from customer_ledger_entries
+      where reversal_of = ? or corrects_entry_id = ?`,
+    [entryId, entryId],
+  )
+  if (already) return { ok: false, reason: 'already_settled' }
+  return {
+    ok: true,
+    note,
+    row: {
+      customerId: e.customer_id,
+      amountMinor: Number(e.amount_minor),
+      jobId: e.job_id,
+      assetId: e.asset_id,
+    },
+  }
+}
+
+/**
+ * "Correct this" — a `reversal` naming the line, negating it exactly
+ * (0018 D6). The line the desk got wrong: a double-tapped charge, a
+ * payment that bounced, a charge for an item that turned up.
+ *
  * POLICY (owner may overrule): runs only from the owner's confirm tap —
- * nothing calls this automatically. Refuses a second reversal of the same
- * entry, so a double-tap cannot flip the correction into a discount.
+ * nothing calls this automatically. Refuses a second settlement of the
+ * same entry, so a double-tap cannot flip the correction into a discount.
+ * The amount is COPIED from the target and negated here, so no caller can
+ * mis-type it — the same discipline reverseExpense keeps.
+ */
+export function correctEntry(
+  db: SqlDriver,
+  input: { orgId: string; entryId: string; reason: string | null; whenMs: number },
+  ids: QueueIds = defaultIds(input.whenMs),
+): SettleResult {
+  const t = settleTarget(db, input.entryId, input.reason)
+  if (!t.ok) return t
+  const id = recordEntry(db, {
+    orgId: input.orgId,
+    customerId: t.row.customerId,
+    kind: 'reversal',
+    amountMinor: -t.row.amountMinor,
+    jobId: t.row.jobId,
+    assetId: t.row.assetId,
+    note: t.note,
+    reversalOf: input.entryId,
+    createdAt: input.whenMs,
+  }, ids)
+  return { ok: true, id }
+}
+
+/**
+ * "Write it off" — debt the house has GIVEN UP collecting, which is not
+ * the same act as a correction and must never print as one (ledger.ts: a
+ * write-off is goodwill or an absconded client; an adjustment is a data
+ * fix). The line is named through `corrects_entry_id`, the server's own
+ * forward-pointing link, because `record_ledger_entry` allows
+ * `p_reversal_of` on kind 'reversal' alone.
+ *
+ * Refused for a line the customer does not owe on: writing off a payment
+ * would hand the client money they never asked for.
+ */
+export function writeOffEntry(
+  db: SqlDriver,
+  input: { orgId: string; entryId: string; reason: string | null; whenMs: number },
+  ids: QueueIds = defaultIds(input.whenMs),
+): SettleResult {
+  const t = settleTarget(db, input.entryId, input.reason)
+  if (!t.ok) return t
+  if (t.row.amountMinor <= 0) return { ok: false, reason: 'is_settlement' }
+  const id = recordEntry(db, {
+    orgId: input.orgId,
+    customerId: t.row.customerId,
+    kind: 'write_off',
+    amountMinor: -t.row.amountMinor,
+    jobId: t.row.jobId,
+    assetId: t.row.assetId,
+    note: t.note,
+    correctsEntryId: input.entryId,
+    createdAt: input.whenMs,
+  }, ids)
+  return { ok: true, id }
+}
+
+/**
+ * Write the correction a charged-then-returned notice drafted. The older,
+ * narrower door, kept as the notice's one-tap: same machinery, the app's
+ * own words as the reason.
  */
 export function recordReversalOf(
   db: SqlDriver,
@@ -609,34 +742,80 @@ export function recordReversalOf(
   note: string | null,
   whenMs: number,
 ): boolean {
-  const e = db.get<{
+  return correctEntry(db, { orgId, entryId, reason: note, whenMs }, defaultIds(whenMs)).ok
+}
+
+export interface DuplicateEntry {
+  /** The SECOND line — the one a correction would settle. */
+  entryId: string
+  firstId: string
+  customerId: string
+  customerName: string
+  kind: LedgerEntryKind
+  amountMinor: number
+  /** How far apart the two were written, in seconds. */
+  secondsApart: number
+}
+
+/**
+ * The double-tap guard, as a NOTICE rather than a refusal (year finding
+ * `no-adjustment-door`, second half: "same customer + amount + kind
+ * within a few seconds is a confirmable duplicate, not a silent second
+ * line").
+ *
+ * A write is never blocked — the dock's charge sheet must not argue with
+ * a person who says the client owes it twice, and two identical charges
+ * genuinely happen (two cracked filters). But two identical charge-side
+ * lines on one khata within `withinMs` are worth a question, so the pair
+ * surfaces on the page with the ordinary one-tap correction behind it,
+ * exactly like the charged-then-returned notice. Settled lines are out:
+ * a corrected duplicate is a story that finished.
+ *
+ * ASSUMPTION: 20 seconds is the double-tap window. Unvalidated — a desk
+ * that enters two real charges a few seconds apart would see one extra
+ * question. See docs/assumptions.md#duplicate-window
+ */
+export const DUPLICATE_WINDOW_MS = 20_000
+
+export function duplicateEntries(
+  db: SqlDriver,
+  withinMs: number = DUPLICATE_WINDOW_MS,
+): DuplicateEntry[] {
+  const rows = db.all<{
+    id: string
     customer_id: string
+    customer_name: string
+    kind: string
     amount_minor: number
-    job_id: string | null
-    asset_id: string | null
+    created_at: number
   }>(
-    `select customer_id, amount_minor, job_id, asset_id
-       from customer_ledger_entries where id = ?`,
-    [entryId],
+    `select e.id, e.customer_id, c.name as customer_name, e.kind,
+            e.amount_minor, e.created_at
+       from customer_ledger_entries e
+       join customers c on c.id = e.customer_id
+      where e.kind in ('charge', 'late_fee', 'damage_charge')
+        and e.id not in (${SETTLED_ENTRY_IDS_SQL})
+      order by e.customer_id, e.kind, e.amount_minor, e.created_at, e.rowid`,
   )
-  if (!e) return false
-  const already = db.get<{ one: number }>(
-    `select 1 as one from customer_ledger_entries where reversal_of = ?`,
-    [entryId],
-  )
-  if (already) return false
-  recordEntry(db, {
-    orgId,
-    customerId: e.customer_id,
-    kind: 'reversal',
-    amountMinor: -Number(e.amount_minor),
-    jobId: e.job_id,
-    assetId: e.asset_id,
-    note,
-    reversalOf: entryId,
-    createdAt: whenMs,
-  }, defaultIds(whenMs))
-  return true
+  const out: DuplicateEntry[] = []
+  for (let i = 1; i < rows.length; i++) {
+    const a = rows[i - 1]
+    const b = rows[i]
+    if (a.customer_id !== b.customer_id || a.kind !== b.kind) continue
+    if (Number(a.amount_minor) !== Number(b.amount_minor)) continue
+    const gap = Number(b.created_at) - Number(a.created_at)
+    if (gap < 0 || gap > withinMs) continue
+    out.push({
+      entryId: b.id,
+      firstId: a.id,
+      customerId: b.customer_id,
+      customerName: b.customer_name,
+      kind: b.kind as LedgerEntryKind,
+      amountMinor: Number(b.amount_minor),
+      secondsApart: Math.round(gap / 1000),
+    })
+  }
+  return out
 }
 
 export interface LateFeeDraftView {

@@ -129,6 +129,9 @@ import {
   lateFeeDraftFor,
   moneyStrip,
   recordReversalOf,
+  correctEntry,
+  writeOffEntry,
+  duplicateEntries,
   paymentLine,
   paymentQr,
   recordEntry,
@@ -141,8 +144,10 @@ import {
   type ChargedButReturned,
   type CustomerListRow,
   type CustomerView,
+  type DuplicateEntry,
   type LateFeeDraftView,
   type MoneyStrip,
+  type SettleResult,
 } from './khata.ts'
 // --- W13 the money doors: the deposit state machine (0017 D4).
 import {
@@ -1492,6 +1497,31 @@ export class DemoStore {
       (n) =>
         (filter.jobId === undefined || n.jobId === filter.jobId) &&
         (filter.customerId === undefined || n.customerId === filter.customerId),
+    )
+  }
+
+  // -------------------------- W13: the correction door (`no-adjustment-door`)
+
+  /**
+   * "Correct this" — a reversal naming the line, with the reason kept.
+   * The amount is copied from the target inside khata.ts; the caller
+   * supplies only the judgement.
+   */
+  correctEntry(entryId: string, reason: string, whenMs: number = Date.now()): SettleResult {
+    return correctEntry(this.db, { orgId: this.seed.orgId, entryId, reason, whenMs })
+  }
+
+  /** "Write it off" — debt the house has decided not to chase, named
+   *  onto the line it forgives. Never printed as the house's own error. */
+  writeOffEntry(entryId: string, reason: string, whenMs: number = Date.now()): SettleResult {
+    return writeOffEntry(this.db, { orgId: this.seed.orgId, entryId, reason, whenMs })
+  }
+
+  /** Identical charge-side lines a few seconds apart — the double-tap
+   *  question, for one khata or the whole book. Never a refusal. */
+  duplicateEntries(filter: { customerId?: string } = {}): DuplicateEntry[] {
+    return duplicateEntries(this.db).filter(
+      (d) => filter.customerId === undefined || d.customerId === filter.customerId,
     )
   }
 

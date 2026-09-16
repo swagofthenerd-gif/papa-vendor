@@ -77,6 +77,15 @@ const REFUND_BLOCKER_EN: Record<string, (n: number) => string> = {
   damage_unresolved: (n) => `${n} item${s(n)} flagged on this job ${n === 1 ? 'is' : 'are'} still not OK`,
 }
 
+/** A refused correction, in the desk's words (khata.ts SettleRefusal). */
+const SETTLE_REFUSAL_EN: Record<string, string> = {
+  not_found: 'That line is not in the book any more.',
+  no_reason: 'Say why — the reason is kept with the line.',
+  already_settled: 'This line has already been corrected.',
+  is_settlement: 'A correction cannot itself be corrected.',
+  deposit_line: 'Deposit money moves through Apply and Refund, not here.',
+}
+
 /** The overdue ladder's rungs, by the action each day asks for. */
 const ESCALATION_EN: Record<string, string> = {
   whatsapp_nudge: 'first nudge',
@@ -1455,6 +1464,33 @@ const STR_EN = {
   moneyDepositServerChecksAgain:
     'The server checks the job again when this sends. A refund it refuses comes back as one card, not as lost money.',
   moneyDepositRefundNothingLeft: 'Nothing left to refund — it has all been applied.',
+  // --- 2. Corrections and write-offs (`no-adjustment-door`) — 0018 D6.
+  // Every line is a door: tapping one opens the two things a desk does to
+  // money already written. Both need a reason (override 18: the owner's
+  // judgement is never fought and always recorded) and both sit behind a
+  // hold, because the ledger is append-only and a correction is forever.
+  moneyLineDoorHint: 'Tap a line to correct it or write it off',
+  moneyLineTitle: 'This line',
+  moneyCorrectThis: 'Correct this',
+  moneyWriteItOff: 'Write it off',
+  moneyCorrectTitle: 'Correct this line',
+  moneyWriteOffTitle: 'Write this off',
+  moneyCorrectWhat: 'A mistake — the line comes off the book and the client sees both rows.',
+  moneyWriteOffWhat: 'Not a mistake — money the house has decided not to chase.',
+  moneyReasonLabel: 'Why (kept with the line)',
+  moneyReasonPlaceholder: 'e.g. Entered twice at the dock',
+  moneyCorrectHold: (rupees: string): string => `Hold to write ${rupees} back`,
+  moneyWriteOffHold: (rupees: string): string => `Hold to forgive ${rupees}`,
+  moneySettledLine: (word: string, date: string, why: string | null): string =>
+    why ? `${word} on ${date} — ${why}` : `${word} on ${date}`,
+  moneySettleRefused: (reason: string): string => SETTLE_REFUSAL_EN[reason] ?? reason,
+  // The double-tap guard as a question, never a refusal: two identical
+  // charges do genuinely happen, and only a person knows which this is.
+  moneyDuplicateNotice: (kind: string, rupees: string, seconds: number): string =>
+    `Two ${kind} lines of ${rupees}, ${seconds} second${s(seconds)} apart. Was that twice?`,
+  moneyDuplicateKeep: 'Both are real',
+  moneyDuplicateKept: 'Kept — both lines stand',
+
   // ======================================================================
 }
 

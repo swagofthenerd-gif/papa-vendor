@@ -133,6 +133,9 @@ export interface RefundBlocker {
  * phone does not carry, and the desk is told so out loud: the sheet says
  * the server checks again, so a refund that looks clear here can still be
  * refused there — which parks one card, not a lost rupee.
+ *
+ * ASSUMPTION: three of the seven reasons are mirrorable and the desk is
+ * told so. See docs/assumptions.md#refund-gate-local-half
  */
 export function refundBlockers(db: SqlDriver, jobId: string | null): RefundBlocker[] {
   if (!jobId) return []
