@@ -152,6 +152,8 @@ function AssetRoute({ store, assetId }: { store: DemoStore; assetId: string }) {
         money={money}
         promised={store.promisedSoon(assetId)}
         service={store.serviceFacts(assetId)}
+        // W13 how hard it works: days out, the meter, earnings per day.
+        work={store.utilisation(assetId)}
         voiceNotes={store.voiceNotesFor(assetId)}
         photoPairs={store.photoPairs(assetId)}
         onProveIt={() => {
@@ -300,7 +302,9 @@ function Routed({ view, store, onEpoch }: { view: View; store: DemoStore; onEpoc
           {/* Sehat (0021): the fleet's health — service due, cycle
               ceilings, dead stock — on the search surface because fleet
               health is a gear question, beside the ginti it feeds. */}
-          <SehatSection sehat={store.sehat()} />
+          {/* W13: the fleet ranked by how hard it works rides the same
+              section — the AUG question, answered in one glance. */}
+          <SehatSection sehat={store.sehat()} workers={store.workedHardest()} />
           {/* The smallest honest door to finished jobs: off the boards is
               not gone. Lives on the search surface because "where did that
               job go" is a search question. */}

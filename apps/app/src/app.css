@@ -1761,3 +1761,9 @@ h2.stamp .h-ico { display: none; }
    the consequence spelled out under the one that is picked. */
 .health-door { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-3); }
 .health-door .section-sub { margin: 0; }
+
+/* How hard a unit works (W13): three margin lines, two money rows, and
+   the limit under them — a report, not a dashboard. */
+.work-lines { display: flex; flex-direction: column; gap: var(--gap-hair); margin-bottom: var(--sp-3); }
+.work-lines .section-sub { margin: 0; }
+.work-lines .line-list { margin-top: var(--sp-2); }

@@ -1573,6 +1573,48 @@ const STR_EN = {
   moneyMonthBilled: (rupees: string, paid: string): string =>
     `Billed ${rupees} · paid ${paid}`,
   moneyMonthCopied: 'Copied — paste it in WhatsApp',
+  // --- 7. What this client has been worth (`no-lifetime-value-view`).
+  // Every figure is a sum over the book the khata page already loads.
+  moneyWorthHeading: 'What this client has been worth',
+  moneyWorthCharged: 'Billed, all time',
+  moneyWorthPaid: 'Paid',
+  moneyWorthWrittenOff: 'Written off',
+  moneyWorthJobs: 'Jobs',
+  moneyWorthAverage: 'Average job',
+  moneyWorthSpan: (first: string, last: string): string => `${first} → ${last}`,
+  moneyWorthFirstOnly: (first: string): string => `Since ${first}`,
+  moneyWorthNothing: 'Nothing on the book yet — no history to show.',
+  // The honest limit, on the screen rather than in a comment.
+  moneyWorthLimit:
+    'From this phone\u2019s book. A khata that started before the app, or one that has not synced, is longer than this.',
+  moneyWorthNoAverage: 'no priced job yet',
+  // --- 8. How hard it works (`no-utilization-read`).
+  // Four numbers from things that already exist, and the two honest
+  // limits said out loud: the phone's log is not the unit's life, and
+  // there is no acquisition date on this side of the pipe.
+  moneyWorkHeading: 'How hard it works',
+  moneyWorkDaysOut: (days: number, window: number): string =>
+    `Out ${days} of the last ${window} days`,
+  moneyWorkBusy: (pct: number): string => `Busy ${pct}% of the window`,
+  moneyWorkNeverOut: 'This phone has not seen it go out.',
+  moneyWorkOutNow: 'Out right now.',
+  moneyWorkIdle: (days: number): string => `Idle ${days} day${s(days)} since it last left`,
+  moneyWorkSinceService: (days: number, due: number | null): string =>
+    due === null
+      ? `${days} rental day${s(days)} since its last service`
+      : `${days} of ${due} rental days since its last service`,
+  moneyWorkEarned: 'Earned',
+  moneyWorkPerDay: 'A day, since this phone first saw it',
+  moneyWorkPerDayUnknown: 'no date to divide by',
+  moneyWorkLimit:
+    'Days out come from this phone\u2019s own queue, and there is no purchase date on this side — so these are a floor, not a lifetime.',
+  // The Sehat group: the fleet ranked, which is the AUG question.
+  moneyWorkersHeading: 'Hardest workers',
+  moneyWorkersSub: (window: number): string => `Days out in the last ${window}`,
+  moneyWorkersRow: (days: number, rupees: string): string => `${days} days out · ${rupees}`,
+  moneyWorkersNobody: 'Nothing has been out long enough to rank yet.',
+
+
 
 
 

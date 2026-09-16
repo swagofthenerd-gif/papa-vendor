@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Icon } from '@papa/icons'
 import { bookingDateLabel, formatRupees, type Disposition as MarkDisposition, type HealthCall, type PromisedSoon } from '@papa/core'
+import type { Utilisation } from '../demo/utilisation.ts'
 import { go } from '../nav.ts'
 import { dayLabel } from '../booking-view.ts'
 import { SectionHead } from '../components/Shell.tsx'
@@ -163,6 +164,53 @@ function AssetMoneySection({
 }
 
 /**
+ * How hard this unit works (W13, `no-utilization-read`) — days out in
+ * the window, 0021's service meter, what it earned and per day, and
+ * idle days.
+ *
+ * EVERY LINE CARRIES ITS OWN HONESTY. "Never seen it go out" is not
+ * "idle 90 days", a per-day figure with no date to divide by says so
+ * rather than showing zero, and the section closes with the limit the
+ * numbers actually have: the phone's log is a floor, not a lifetime.
+ */
+function WorkLines({ work }: { work: Utilisation }) {
+  return (
+    <div className="work-lines">
+      <p className="section-sub">
+        {work.daysOut === 0 && work.idleDays === null
+          ? STR.moneyWorkNeverOut
+          : `${STR.moneyWorkDaysOut(work.daysOut, work.windowDays)} · ${STR.moneyWorkBusy(work.busyPct)}`}
+      </p>
+      <p className="section-sub">
+        {work.outNow
+          ? STR.moneyWorkOutNow
+          : work.idleDays === null
+            ? STR.moneyWorkNeverOut
+            : STR.moneyWorkIdle(work.idleDays)}
+      </p>
+      <p className="section-sub">
+        {STR.moneyWorkSinceService(work.rentalDaysSinceService, work.serviceDueAfter)}
+      </p>
+      <ul className="line-list">
+        <li className="line">
+          <span className="line-name">{STR.moneyWorkEarned}</span>
+          <span className="line-code code">{formatRupees(work.earnedMinor)}</span>
+        </li>
+        <li className="line">
+          <span className="line-name">{STR.moneyWorkPerDay}</span>
+          <span className="line-code code">
+            {work.earnedPerDayMinor === null
+              ? STR.moneyWorkPerDayUnknown
+              : formatRupees(work.earnedPerDayMinor)}
+          </span>
+        </li>
+      </ul>
+      <p className="section-sub">{STR.moneyWorkLimit}</p>
+    </div>
+  )
+}
+
+/**
  * "How is it?" — the standalone health door (W13, `no-health-door`).
  *
  * Availability honesty DEPENDS on health: the shelf offers a unit only
@@ -257,6 +305,7 @@ function HealthDoor({
 function AssetSehatSection({
   asset,
   service,
+  work,
   voiceNotes,
   onServiced,
   onMarkHealth,
@@ -264,6 +313,7 @@ function AssetSehatSection({
 }: {
   asset: AssetView
   service: ServiceFacts | null
+  work?: Utilisation | null
   voiceNotes: VoiceNoteRow[]
   onServiced: () => void
   /** W13: set this unit's health with no swap behind it. */
@@ -303,6 +353,13 @@ function AssetSehatSection({
           </div>
         </div>
       ) : null}
+
+      {/* How hard it works (W13, `no-utilization-read`): the four numbers
+          the AUG question wanted, each from something that already
+          exists — and the two limits named, because the phone's queue is
+          not the unit's life and there is no purchase date on this side
+          of the pipe. */}
+      {work ? <WorkLines work={work} /> : null}
 
       {/* The health door (W13, `no-health-door`): the tech who drops a
           lens on the bench says so HERE, with no swap and no job needed.
@@ -545,6 +602,7 @@ export function Asset({
   money,
   promised,
   service,
+  work,
   voiceNotes,
   photoPairs,
   onProveIt,
@@ -567,6 +625,9 @@ export function Asset({
   promised: PromisedSoon | null
   /** The unit's wear facts (0021) — the service and cycle lines. */
   service: ServiceFacts | null
+  /** How hard this unit works (W13) — days out, the meter, earnings per
+   *  day and idle days, with the two honest limits said on screen. */
+  work?: Utilisation | null
   /** Spoken evidence over this unit, newest first — played inline. */
   voiceNotes: VoiceNoteRow[]
   photoPairs: PhotoPair[]
@@ -686,6 +747,7 @@ export function Asset({
         <AssetSehatSection
           asset={asset}
           service={service}
+          work={work}
           onMarkHealth={onMarkHealth}
           voiceNotes={voiceNotes}
           onServiced={onServiced}

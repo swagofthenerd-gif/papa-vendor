@@ -869,6 +869,88 @@ export function waivedFees(db: SqlDriver, customerId: string): WaivedFee[] {
   return out
 }
 
+// ------------------- W13: what this client has been worth (`no-lifetime-value-view`)
+
+export interface LifetimeValue {
+  /** Live charge-side money ever written on this khata — what the house
+   *  billed them, with anything reversed or waived left out. */
+  chargedMinor: number
+  /** Money received, all time. */
+  paidMinor: number
+  /** Debt the house gave up — write-offs, the honest other column. */
+  writtenOffMinor: number
+  /** Money held as security right now (the pot, not the balance). */
+  depositHeldMinor: number
+  /** Distinct jobs the money touched. NOT the jobs table's count: a job
+   *  with no money on it earned the house nothing, and this number is
+   *  about worth. */
+  jobs: number
+  /** The first and last money this khata ever saw, epoch ms — null on an
+   *  empty book. The book's own dates, not a jobs-table guess. */
+  firstAt: number | null
+  lastAt: number | null
+  /** charged ÷ jobs, or null with no jobs — never a zero-denominator
+   *  average dressed up as 'Rs 0'. */
+  averageJobMinor: number | null
+}
+
+/**
+ * What this client has been worth (year finding
+ * `no-lifetime-value-view`: "sitting in the entries every khata page
+ * already loads; the owed list just doesn't show it").
+ *
+ * Every figure is a sum over the append-only book — no new table, no
+ * stored total, nothing that can drift. The charge side uses the one
+ * settled rule (SETTLED_ENTRY_IDS_SQL), so a reversed charge and a
+ * waived fee are not "worth": the house never had that money.
+ *
+ * THE HONEST LIMIT, said on the screen: this is what THIS PHONE's book
+ * knows. A khata that predates the app, or a ledger that has not synced
+ * back, is a shorter history than the client's real one — the numbers
+ * are a floor, not a lifetime.
+ */
+export function lifetimeValue(db: SqlDriver, customerId: string): LifetimeValue {
+  const row = db.get<{
+    charged: number | null
+    paid: number | null
+    written_off: number | null
+    jobs: number
+    first_at: number | null
+    last_at: number | null
+  }>(
+    `select
+       (select sum(e.amount_minor) from customer_ledger_entries e
+         where e.customer_id = ? and e.kind in ('charge', 'late_fee', 'damage_charge')
+           and e.id not in (${SETTLED_ENTRY_IDS_SQL})) as charged,
+       (select sum(-e.amount_minor) from customer_ledger_entries e
+         where e.customer_id = ? and e.kind = 'payment') as paid,
+       (select sum(-e.amount_minor) from customer_ledger_entries e
+         where e.customer_id = ? and e.kind = 'write_off') as written_off,
+       (select count(distinct e.job_id) from customer_ledger_entries e
+         where e.customer_id = ? and e.job_id is not null
+           and e.kind in ('charge', 'late_fee', 'damage_charge')
+           and e.id not in (${SETTLED_ENTRY_IDS_SQL})) as jobs,
+       (select min(e.created_at) from customer_ledger_entries e
+         where e.customer_id = ?) as first_at,
+       (select max(e.created_at) from customer_ledger_entries e
+         where e.customer_id = ?) as last_at`,
+    [customerId, customerId, customerId, customerId, customerId, customerId],
+  )
+  const charged = Number(row?.charged ?? 0)
+  const jobs = Number(row?.jobs ?? 0)
+  const p = projectLedger(rowsFor(db, customerId))
+  return {
+    chargedMinor: charged,
+    paidMinor: Number(row?.paid ?? 0),
+    writtenOffMinor: Number(row?.written_off ?? 0),
+    depositHeldMinor: p.depositHeldMinor,
+    jobs,
+    firstAt: row?.first_at === null || row?.first_at === undefined ? null : Number(row.first_at),
+    lastAt: row?.last_at === null || row?.last_at === undefined ? null : Number(row.last_at),
+    averageJobMinor: jobs === 0 ? null : Math.round(charged / jobs),
+  }
+}
+
 // --------------------------- W13: the do-not-rent decision (0029)
 
 export type BlacklistResult =

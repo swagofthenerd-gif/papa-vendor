@@ -19,7 +19,7 @@ import { Sheet, SheetClose } from '../components/Sheet.tsx'
 import { DepositSection } from './DepositSection.tsx'
 import { LineSheet } from './CorrectionSheet.tsx'
 import { BlacklistSection } from './BlacklistSection.tsx'
-import type { LedgerRow } from './khata.ts'
+import type { LedgerRow, LifetimeValue } from './khata.ts'
 
 /**
  * One customer's khata — the page the whole money book opens to.
@@ -295,6 +295,13 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
         )}
       </section>
 
+      {/* What this client has been worth (W13, `no-lifetime-value-view`):
+          the figures were always in the entries this page already loads;
+          the page just never showed them. Below the book, because it is
+          a summary OF the book, and above the jobs, because "is this
+          client worth keeping" is the question the jobs answer. */}
+      <WorthSection worth={store.lifetimeValue(customerId)} />
+
       {customer.jobs.length > 0 ? (
         <section className="section">
           <SectionHead icon="clipboard-check" title={STR.customerLinkedJobs} />
@@ -369,6 +376,72 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
         />
       ) : null}
     </Shell>
+  )
+}
+
+/**
+ * What this client has been worth (W13, `no-lifetime-value-view`).
+ *
+ * Billed, paid, written off, the jobs the money touched, the span of the
+ * relationship and the average job — every one a sum over the
+ * append-only book, so nothing here can drift from the rows above it. A
+ * reversed charge and a waived fee are not worth: the house never had
+ * that money.
+ *
+ * THE LIMIT IS ON THE SCREEN. This is what this phone's book knows, and
+ * the section says so under the figures: a khata that started before the
+ * app is a longer relationship than the numbers can show.
+ */
+function WorthSection({ worth }: { worth: LifetimeValue }) {
+  if (worth.firstAt === null) {
+    return (
+      <section className="section">
+        <SectionHead icon="trophy" title={STR.moneyWorthHeading} sub={STR.moneyWorthNothing} />
+      </section>
+    )
+  }
+  const span =
+    worth.lastAt === null || worth.lastAt === worth.firstAt
+      ? STR.moneyWorthFirstOnly(ledgerDate(worth.firstAt))
+      : STR.moneyWorthSpan(ledgerDate(worth.firstAt), ledgerDate(worth.lastAt))
+
+  return (
+    <section className="section">
+      <SectionHead icon="trophy" title={STR.moneyWorthHeading} sub={span} />
+      <ul className="line-list">
+        <li className="line">
+          <span className="line-name">{STR.moneyWorthCharged}</span>
+          <span className="line-code code">{formatRupees(worth.chargedMinor)}</span>
+        </li>
+        <li className="line">
+          <span className="line-name">{STR.moneyWorthPaid}</span>
+          <span className="line-code code">{formatRupees(worth.paidMinor)}</span>
+        </li>
+        {/* Only when there is one: a zero write-off column invites the
+            reader to wonder what it means. */}
+        {worth.writtenOffMinor > 0 ? (
+          <li className="line">
+            <span className="line-name">{STR.moneyWorthWrittenOff}</span>
+            <span className="line-code code">{formatRupees(worth.writtenOffMinor)}</span>
+          </li>
+        ) : null}
+        <li className="line">
+          <span className="line-name">{STR.moneyWorthJobs}</span>
+          <span className="line-code code">{worth.jobs}</span>
+        </li>
+        <li className="line">
+          <span className="line-name">{STR.moneyWorthAverage}</span>
+          {/* No average against a zero denominator — the honesty rule the
+              payback bar keeps (@papa/core paybackPercent). */}
+          <span className="line-code code">
+            {worth.averageJobMinor === null
+              ? STR.moneyWorthNoAverage
+              : formatRupees(worth.averageJobMinor)}
+          </span>
+        </li>
+      </ul>
+      <p className="section-sub">{STR.moneyWorthLimit}</p>
+    </section>
   )
 }
 

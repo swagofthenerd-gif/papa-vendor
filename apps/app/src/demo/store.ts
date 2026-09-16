@@ -111,6 +111,13 @@ import {
   type SubstituteRow,
 } from './read-model.ts'
 import { dayAccount, monthAccount, type DayAccount, type MonthAccount } from './hisaab.ts'
+// --- W13: how hard a unit works (`no-utilization-read`).
+import {
+  utilisation,
+  workedHardest,
+  type Utilisation,
+  type WorkerRow,
+} from './utilisation.ts'
 import {
   jobMargin,
   monthProfit,
@@ -137,6 +144,7 @@ import {
   waiveLateFee,
   waivedFees,
   setBlacklisted,
+  lifetimeValue,
   paymentLine,
   paymentQr,
   recordEntry,
@@ -153,6 +161,7 @@ import {
   type LateFeeDraftView,
   type MoneyStrip,
   type BlacklistResult,
+  type LifetimeValue,
   type SettleResult,
   type WaivedFee,
 } from './khata.ts'
@@ -1556,6 +1565,14 @@ export class DemoStore {
     return waiveLateFee(this.db, { orgId: this.seed.orgId, jobId, amountMinor, reason, whenMs })
   }
 
+  /**
+   * What this client has been worth (W13, `no-lifetime-value-view`) —
+   * every figure a sum over the book the page already loads.
+   */
+  lifetimeValue(customerId: string): LifetimeValue {
+    return lifetimeValue(this.db, customerId)
+  }
+
   /** Fees this client has been forgiven — the goodwill, in one read. */
   waivedFees(customerId: string): WaivedFee[] {
     return waivedFees(this.db, customerId)
@@ -1904,6 +1921,22 @@ export class DemoStore {
   // ---- the living fleet (Wave 3, migration 0021) -------------------------
 
   /** One unit's wear facts — the asset page's service and cycle lines. */
+  /**
+   * How hard one unit works (W13, `no-utilization-read`) — days out in
+   * the window, the service meter, what it earned and per day, and idle
+   * days. Every figure from something that already exists; the two
+   * honest limits ride on the screen beside them.
+   */
+  utilisation(assetId: string, nowMs: number = Date.now()): Utilisation {
+    return utilisation(this.db, assetId, nowMs)
+  }
+
+  /** The fleet ranked by how hard it works — the AUG question ("which
+   *  camera earned best") that used to mean opening pages one at a time. */
+  workedHardest(nowMs: number = Date.now(), limit = 5): WorkerRow[] {
+    return workedHardest(this.db, nowMs, limit)
+  }
+
   serviceFacts(assetId: string): ServiceFacts | null {
     return serviceFacts(this.db, assetId)
   }

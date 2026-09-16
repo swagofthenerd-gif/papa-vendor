@@ -1433,6 +1433,42 @@ export const STR_UR: StrTable = {
   moneyMonthBilled: (rupees: string, paid: string): string =>
     `Bill ${rupees} · wusooli ${paid}`,
   moneyMonthCopied: 'Copy ho gaya — WhatsApp mein paste karein',
+  // --- 7. Yeh client kitna ka raha (`no-lifetime-value-view`).
+  moneyWorthHeading: 'Yeh client kitna ka raha',
+  moneyWorthCharged: 'Kul bill',
+  moneyWorthPaid: 'Wusooli',
+  moneyWorthWrittenOff: 'Write off',
+  moneyWorthJobs: 'Jobs',
+  moneyWorthAverage: 'Ausat job',
+  moneyWorthSpan: (first: string, last: string): string => `${first} → ${last}`,
+  moneyWorthFirstOnly: (first: string): string => `${first} se`,
+  moneyWorthNothing: 'Khate par abhi kuch nahi — dikhane ko tareekh nahi.',
+  moneyWorthLimit:
+    'Is phone ke khate se. Jo khata app se pehle shuru hua, ya jo sync nahi hua, woh is se lamba hai.',
+  moneyWorthNoAverage: 'abhi koi priced job nahi',
+  // --- 8. Yeh kitna kaam karta hai (`no-utilization-read`).
+  moneyWorkHeading: 'Yeh kitna kaam karta hai',
+  moneyWorkDaysOut: (days: number, window: number): string =>
+    `Pichle ${window} dinon mein ${days} din bahar`,
+  moneyWorkBusy: (pct: number): string => `Window ka ${pct}% masroof`,
+  moneyWorkNeverOut: 'Is phone ne is ko bahar jate nahi dekha.',
+  moneyWorkOutNow: 'Abhi bahar hai.',
+  moneyWorkIdle: (days: number): string => `Aakhri dafa jane ke baad ${days} din khali`,
+  moneyWorkSinceService: (days: number, due: number | null): string =>
+    due === null
+      ? `Aakhri service ke baad ${days} kiraye ke din`
+      : `Aakhri service ke baad ${due} mein se ${days} kiraye ke din`,
+  moneyWorkEarned: 'Kamai',
+  moneyWorkPerDay: 'Roz, jab se is phone ne dekha',
+  moneyWorkPerDayUnknown: 'taqseem karne ko tareekh nahi',
+  moneyWorkLimit:
+    'Bahar ke din is phone ki apni queue se aate hain, aur is taraf khareed ki tareekh nahi hai — to yeh kam se kam hai, poori umar nahi.',
+  moneyWorkersHeading: 'Sab se zyada kaam karne wale',
+  moneyWorkersSub: (window: number): string => `Pichle ${window} dinon mein bahar ke din`,
+  moneyWorkersRow: (days: number, rupees: string): string => `${days} din bahar · ${rupees}`,
+  moneyWorkersNobody: 'Abhi koi itna bahar nahi raha ke rank bane.',
+
+
 
 
 
