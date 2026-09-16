@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core'
 import type { SqlDriver, StorageProtection } from '@papa/core'
 import { openDeviceDatabase } from '@papa/core'
 import { SqlJsDriver } from '../demo/sqljs-driver.ts'
@@ -5,6 +6,7 @@ import {
   CAPACITOR_SQLCIPHER,
   CapacitorKeyProvider,
   CapacitorSqlcipherDriver,
+  DeviceSqlError,
   capacitorSqlcipherFactory,
   papaSqlBridge,
   unsentEvidence,
@@ -100,6 +102,21 @@ export async function openAppDatabase(): Promise<SqlDriver> {
   const bridge = papaSqlBridge()
 
   if (!bridge) {
+    // ON A PHONE THERE IS NO FALLBACK. The bridge is injected in
+    // MainActivity.onCreate, and `addJavascriptInterface` after a page has
+    // begun loading would not appear in that page — so absence here on a
+    // native platform is a wiring fault, not a browser. Falling back to
+    // sql.js would give a phone that scans all day and forgets everything
+    // the moment Android kills it: a whole day's evidence, lost quietly,
+    // which docs/principles.md #3 forbids outright. Better a screen that
+    // refuses to open and says why.
+    if (Capacitor.isNativePlatform()) {
+      throw new DeviceSqlError(
+        'The Android SQL bridge is missing, so there is no encrypted database to open. ' +
+          'This build of the app shell and this web bundle do not match — reinstall the app. ' +
+          'Nothing was opened in memory: a phone that forgets a day of scans is worse than one that will not start.',
+      )
+    }
     const db = await SqlJsDriver.open()
     storage = BROWSER
     opened = db

@@ -97,9 +97,16 @@ export const PLAINTEXT_MAGIC_HEX = '53514c69746520666f726d6174203300'
 
 /** Anything the bridge refused: a failed statement, a failed open, a wipe. */
 export class DeviceSqlError extends Error {
-  constructor(message: string, readonly sql?: string) {
+  // Explicit field + assignment, never a constructor parameter property:
+  // Node strips types but cannot EMIT code, and a parameter property is a
+  // code transform. The same constraint packages/core lives under, and it
+  // is what lets this module be tested under Node at all.
+  readonly sql: string | undefined
+
+  constructor(message: string, sql?: string) {
     super(sql ? `${message} — while running: ${sql.slice(0, 200)}` : message)
     this.name = 'DeviceSqlError'
+    this.sql = sql
   }
 }
 
@@ -113,7 +120,9 @@ export class DeviceSqlError extends Error {
  * deliberate act; this error is what happens without it.
  */
 export class UnsentEvidenceError extends Error {
-  constructor(readonly unsent: number | null) {
+  readonly unsent: number | null
+
+  constructor(unsent: number | null) {
     super(
       unsent === null
         ? 'Refusing to wipe: this phone has not been opened, so what is still unsent cannot be counted. ' +
@@ -122,6 +131,7 @@ export class UnsentEvidenceError extends Error {
             `un-uploaded photos or voice notes) exist only on this phone. Sync first, or pass force.`,
     )
     this.name = 'UnsentEvidenceError'
+    this.unsent = unsent
   }
 }
 
@@ -252,9 +262,12 @@ export function encodeParams(params: SqlValue[]): string {
  * one commit, with the outbox tests re-run.
  */
 export class CapacitorSqlcipherDriver implements SqlDriver {
+  private readonly bridge: PapaSqlBridge
   private depth = 0
 
-  constructor(private readonly bridge: PapaSqlBridge) {}
+  constructor(bridge: PapaSqlBridge) {
+    this.bridge = bridge
+  }
 
   exec(sql: string, params: SqlValue[] = []): void {
     // Params belong to ONE statement: a script with placeholders is a caller
@@ -395,10 +408,13 @@ export class CapacitorKeyProvider implements DeviceKeyProvider {
    *   not open and it cannot be known. Null refuses a wipe: "cannot count"
    *   is not "nothing to lose".
    */
-  constructor(
-    private readonly bridge: PapaSqlBridge,
-    private readonly unsent: () => number | null = () => null,
-  ) {}
+  private readonly bridge: PapaSqlBridge
+  private readonly unsent: () => number | null
+
+  constructor(bridge: PapaSqlBridge, unsent: () => number | null = () => null) {
+    this.bridge = bridge
+    this.unsent = unsent
+  }
 
   async getKey(): Promise<string> {
     const raw = this.bridge.key()
