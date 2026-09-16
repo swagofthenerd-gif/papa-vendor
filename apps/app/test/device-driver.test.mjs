@@ -668,7 +668,10 @@ describe('the plaintext detector can fail', () => {
     assert.equal(db.header(), PLAINTEXT_MAGIC_HEX)
     assert.equal(
       Buffer.from(PLAINTEXT_MAGIC_HEX, 'hex').toString('latin1'),
-      'SQLite format 3 ',
+      // The NUL as an ESCAPE, not as a raw byte in this file: one NUL
+      // makes the whole file binary to grep and ripgrep, and "grep for
+      // the rule" is how docs/principles.md #4 is checked.
+      'SQLite format 3\u0000',
       'the magic is what the file actually says',
     )
   })

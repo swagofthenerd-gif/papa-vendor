@@ -89,9 +89,6 @@ export interface PapaSqlBridge {
 /** The name the refusal error and the This-phone screen both use. */
 export const CAPACITOR_SQLCIPHER = 'capacitor-sqlcipher'
 
-/** How many bytes `header()` is asked for, and the screen compares. */
-export const HEADER_BYTES = 16
-
 /** The magic a PLAINTEXT SQLite file starts with. Never seen on a device. */
 export const PLAINTEXT_MAGIC_HEX = '53514c69746520666f726d6174203300'
 
@@ -132,6 +129,40 @@ export class UnsentEvidenceError extends Error {
     )
     this.name = 'UnsentEvidenceError'
     this.unsent = unsent
+  }
+}
+
+/**
+ * The `''`-means-it-worked convention, in one place.
+ *
+ * open/exec/begin/commit/rollback/wipe all answer an empty string for
+ * success and the error message otherwise, so every caller of one of them
+ * makes the same decision. It was written out three times; three copies of
+ * one rule is three places to keep in step (docs/principles.md #4).
+ */
+function said(answer: string, sql?: string): void {
+  if (answer === '') return
+  throw new DeviceSqlError(answer, sql)
+}
+
+/**
+ * The JSON convention's first half: parse, or say what came back instead of
+ * guessing at it.
+ *
+ * `all` and `key` are the two methods that answer JSON, and they fail the
+ * same way — a bridge half-installed, a dev proxy serving an HTML error
+ * page. The quoted answer is capped because that page is not worth pasting
+ * into a screen. What a PARSED answer means differs between the two, so
+ * only the parse is shared.
+ */
+function parseAnswer(raw: string, whose: string, sql?: string): unknown {
+  try {
+    return JSON.parse(raw)
+  } catch {
+    throw new DeviceSqlError(
+      `The ${whose} bridge answered with something that is not JSON: ${raw.slice(0, 200)}`,
+      sql,
+    )
   }
 }
 
@@ -273,22 +304,17 @@ export class CapacitorSqlcipherDriver implements SqlDriver {
     // Params belong to ONE statement: a script with placeholders is a caller
     // error, not something to guess at, so it is passed through whole.
     if (params.length > 0) {
-      this.said(this.bridge.exec(sql, encodeParams(params)), sql)
+      said(this.bridge.exec(sql, encodeParams(params)), sql)
       return
     }
     for (const statement of splitStatements(sql)) {
-      this.said(this.bridge.exec(statement, '[]'), statement)
+      said(this.bridge.exec(statement, '[]'), statement)
     }
   }
 
   all<T = Row>(sql: string, params: SqlValue[] = []): T[] {
     const raw = this.bridge.all(sql, encodeParams(params))
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(raw)
-    } catch {
-      throw new DeviceSqlError(`The SQL bridge answered with something that is not JSON: ${raw.slice(0, 200)}`, sql)
-    }
+    const parsed = parseAnswer(raw, 'SQL', sql)
     if (Array.isArray(parsed)) return parsed as T[]
     const message = (parsed as { error?: unknown } | null)?.error
     throw new DeviceSqlError(typeof message === 'string' ? message : `Unexpected answer: ${raw.slice(0, 200)}`, sql)
@@ -303,17 +329,17 @@ export class CapacitorSqlcipherDriver implements SqlDriver {
       this.depth++
       try { return fn() } finally { this.depth-- }
     }
-    this.said(this.bridge.begin())
+    said(this.bridge.begin())
     this.depth = 1
     try {
       const out = fn()
-      this.said(this.bridge.commit())
+      said(this.bridge.commit())
       return out
     } catch (err) {
       // A rollback that itself fails must not replace the real error: the
       // caller needs to know what went wrong inside the transaction, not
       // that the cleanup was also unhappy.
-      try { this.said(this.bridge.rollback()) } catch { /* the original error wins */ }
+      try { said(this.bridge.rollback()) } catch { /* the original error wins */ }
       throw err
     } finally {
       this.depth = 0
@@ -323,11 +349,6 @@ export class CapacitorSqlcipherDriver implements SqlDriver {
   /** The first bytes of the file on disk, as hex. `''` before any write. */
   header(): string {
     return this.bridge.header()
-  }
-
-  private said(answer: string, sql?: string): void {
-    if (answer === '') return
-    throw new DeviceSqlError(answer, sql)
   }
 }
 
@@ -351,8 +372,7 @@ export function capacitorSqlcipherFactory(bridge: PapaSqlBridge): DeviceDriverFa
           'Refusing to open the device database with an empty key: SQLCipher would open it in plaintext and say nothing.',
         )
       }
-      const said = bridge.open(key)
-      if (said !== '') throw new DeviceSqlError(said)
+      said(bridge.open(key))
       return new CapacitorSqlcipherDriver(bridge)
     },
   }
@@ -431,14 +451,7 @@ export class CapacitorKeyProvider implements DeviceKeyProvider {
   }
 
   async getKey(): Promise<string> {
-    const raw = this.bridge.key()
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(raw)
-    } catch {
-      throw new DeviceSqlError(`The Keystore bridge answered with something that is not JSON: ${raw.slice(0, 200)}`)
-    }
-    const answer = parsed as { key?: unknown; error?: unknown } | null
+    const answer = parseAnswer(this.bridge.key(), 'Keystore') as { key?: unknown; error?: unknown } | null
     if (typeof answer?.error === 'string') throw new DeviceSqlError(answer.error)
     if (typeof answer?.key !== 'string') throw new DeviceSqlError('The Keystore bridge returned no key.')
     // Not a length check on a secret's contents — a check that the provider
@@ -460,7 +473,6 @@ export class CapacitorKeyProvider implements DeviceKeyProvider {
       const unsent = this.unsent()
       if (unsent === null || unsent > 0) throw new UnsentEvidenceError(unsent)
     }
-    const said = this.bridge.wipe()
-    if (said !== '') throw new DeviceSqlError(said)
+    said(this.bridge.wipe())
   }
 }
