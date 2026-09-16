@@ -18,6 +18,7 @@ import { Sheet, SheetClose } from '../components/Sheet.tsx'
 // --- W13 the money doors
 import { DepositSection } from './DepositSection.tsx'
 import { LineSheet } from './CorrectionSheet.tsx'
+import { BlacklistSection } from './BlacklistSection.tsx'
 import type { LedgerRow } from './khata.ts'
 
 /**
@@ -136,6 +137,21 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
             : null}
         </p>
       </div>
+
+      {/* The do-not-rent stamp (W13, `no-blacklist`): the loudest thing
+          the page can say, so it is a rubber stamp and it sits directly
+          under the figure, where the eye already is. */}
+      {customer.blacklisted ? (
+        <p className="khata-refused">
+          <span className="stamp">{STR.moneyBlacklistStamp}</span>
+          <span className="line-note">
+            {STR.moneyBlacklistLine(
+              customer.blacklistedAt === null ? '—' : ledgerDate(customer.blacklistedAt),
+              customer.blacklistReason,
+            )}
+          </span>
+        </p>
+      ) : null}
 
       <button className="btn btn-primary btn-block" onClick={() => setPaying(true)}>
         <Icon name="clipboard-check" size={18} /> {STR.customerRecordPayment}
@@ -300,6 +316,18 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
           </ul>
         </section>
       ) : null}
+
+      {/* The decision itself (W13): at the bottom, because it is the
+          rarest act on the page and the one that must never be a
+          mis-tap — behind a hold, with a reason, like every refusal. */}
+      <BlacklistSection
+        store={store}
+        customerId={customerId}
+        blacklisted={customer.blacklisted}
+        reason={customer.blacklistReason}
+        sinceMs={customer.blacklistedAt}
+        onWrite={() => setTick((t) => t + 1)}
+      />
 
       {/* The share pair — drafts only, and far from the write button. */}
       <div className="session-actions">

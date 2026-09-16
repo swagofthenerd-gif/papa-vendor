@@ -42,6 +42,9 @@ export interface CustomerListRow {
   phone: string | null
   balanceMinor: number
   depositHeldMinor: number
+  /** The do-not-rent stamp, on the list as well as the page (W13): the
+   *  owed list is where the desk looks before calling a client back. */
+  blacklisted: boolean
 }
 
 export interface LedgerRow extends LedgerEntryView {
@@ -93,6 +96,11 @@ export interface CustomerView {
   /** Settled line id → the line that settled it (reversal or write-off).
    *  The page renders the pair as one row; both are still in `entries`. */
   settled: Map<string, Settled>
+  /** The do-not-rent decision (W13): the flag 0022's confirm gate reads,
+   *  with the sentence the desk wrote beside it. */
+  blacklisted: boolean
+  blacklistReason: string | null
+  blacklistedAt: number | null
   jobs: CustomerLinkedJob[]
 }
 
@@ -173,8 +181,8 @@ export function settlements(entries: LedgerRow[]): Map<string, Settled> {
  *  the reading order of the owed list. */
 export function customersByBalance(db: SqlDriver): CustomerListRow[] {
   return db
-    .all<{ id: string; name: string; phone: string | null }>(
-      `select id, name, phone from customers order by name`,
+    .all<{ id: string; name: string; phone: string | null; blacklisted: number }>(
+      `select id, name, phone, blacklisted from customers order by name`,
     )
     .map((c) => {
       const p = projectLedger(rowsFor(db, c.id))
@@ -184,6 +192,7 @@ export function customersByBalance(db: SqlDriver): CustomerListRow[] {
         phone: c.phone,
         balanceMinor: p.balanceMinor,
         depositHeldMinor: p.depositHeldMinor,
+        blacklisted: Number(c.blacklisted) === 1,
       }
     })
     .sort((a, b) => b.balanceMinor - a.balanceMinor)
@@ -191,8 +200,16 @@ export function customersByBalance(db: SqlDriver): CustomerListRow[] {
 
 /** One customer's whole page: projection, book, linked jobs. */
 export function customerView(db: SqlDriver, id: string): CustomerView | null {
-  const c = db.get<{ id: string; name: string; phone: string | null }>(
-    `select id, name, phone from customers where id = ?`,
+  const c = db.get<{
+    id: string
+    name: string
+    phone: string | null
+    blacklisted: number
+    blacklist_reason: string | null
+    blacklisted_at: number | null
+  }>(
+    `select id, name, phone, blacklisted, blacklist_reason, blacklisted_at
+       from customers where id = ?`,
     [id],
   )
   if (!c) return null
@@ -218,6 +235,9 @@ export function customerView(db: SqlDriver, id: string): CustomerView | null {
     depositHeldMinor: p.depositHeldMinor,
     entries: [...entries].reverse(),
     settled: settlements(entries),
+    blacklisted: Number(c.blacklisted) === 1,
+    blacklistReason: c.blacklist_reason,
+    blacklistedAt: c.blacklisted_at === null ? null : Number(c.blacklisted_at),
     jobs: jobs.map((j) => ({
       id: j.id,
       label: j.label ?? 'Unnamed job',
@@ -847,6 +867,67 @@ export function waivedFees(db: SqlDriver, customerId: string): WaivedFee[] {
     })
   }
   return out
+}
+
+// --------------------------- W13: the do-not-rent decision (0029)
+
+export type BlacklistResult =
+  | { ok: true; blacklisted: boolean }
+  | { ok: false; reason: 'not_found' | 'no_reason' }
+
+/**
+ * "Do not rent to this client" — the switch the gate never had (year
+ * finding `no-blacklist`).
+ *
+ * 0022 D9's confirm gate has refused a blacklisted customer since W5 and
+ * `customers.blacklisted` has existed since 0017, but nothing could set
+ * it: FEB's absconded client and the day-14 rung's "consider a
+ * blacklist" both ended in a shrug. The door is 0029's
+ * `set_customer_blacklisted`, owner/manager on the server and audited
+ * there.
+ *
+ * A REASON IS REQUIRED to switch it on and not to lift it: refusing a
+ * person future business is the decision that needs a sentence beside it
+ * (override 18), while letting them back in refuses nobody. The server
+ * keeps the reason in the audit log — the column is a boolean — so the
+ * phone keeps its own copy for the stamp to say out loud.
+ *
+ * ASSUMPTION: the flag is local and sent, like credentials_verified; a
+ * second phone learns it when customers sync, which they do not yet.
+ * See docs/assumptions.md#local-blacklist-flag
+ */
+export function setBlacklisted(
+  db: SqlDriver,
+  input: { customerId: string; on: boolean; reason: string | null; whenMs: number },
+  ids: QueueIds = defaultIds(input.whenMs),
+): BlacklistResult {
+  const reason = (input.reason ?? '').trim() || null
+  if (input.on && reason === null) return { ok: false, reason: 'no_reason' }
+  const c = db.get<{ blacklisted: number }>(
+    `select blacklisted from customers where id = ?`, [input.customerId],
+  )
+  if (!c) return { ok: false, reason: 'not_found' }
+
+  db.transaction(() => {
+    db.exec(
+      `update customers
+          set blacklisted = ?, blacklist_reason = ?, blacklisted_at = ?
+        where id = ?`,
+      [
+        input.on ? 1 : 0,
+        input.on ? reason : null,
+        input.on ? input.whenMs : null,
+        input.customerId,
+      ],
+    )
+    if (!ids) return
+    enqueueOp(db, ids, 'set_customer_blacklisted', {
+      p_customer_id: input.customerId,
+      p_on: input.on,
+      p_reason: reason,
+    }, NAMES.customer(input.customerId))
+  })
+  return { ok: true, blacklisted: input.on }
 }
 
 export interface DuplicateEntry {

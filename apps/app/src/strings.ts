@@ -1506,6 +1506,23 @@ const STR_EN = {
       : `${rupees} late fee — waived on ${date}`,
   moneyWaivedHeading: 'Favours given',
   moneyWaivedSub: (n: number): string => `${n} fee${s(n)} waived`,
+  // --- 4. Do not rent to this client (`no-blacklist`) — 0029.
+  // 0022's confirm gate has refused a blacklisted client since W5; this
+  // is the switch it never had. A reason to turn it ON, none to lift it.
+  moneyBlacklistStamp: 'do not rent',
+  moneyBlacklistHeading: 'Renting to this client',
+  moneyBlacklistOn: 'Do not rent to this client',
+  moneyBlacklistOff: 'Let this client rent again',
+  moneyBlacklistLine: (date: string, why: string | null): string =>
+    why ? `Refused since ${date} — ${why}` : `Refused since ${date}`,
+  moneyBlacklistOpen: 'This client can book and confirm as normal.',
+  moneyBlacklistWhat:
+    'Bookings for this client cannot be confirmed. The server refuses them too, by name, so no phone can promise gear around it.',
+  moneyBlacklistHold: 'Hold to refuse this client',
+  moneyBlacklistLiftHold: 'Hold to let them rent again',
+  moneyBlacklistReasonPlaceholder: 'e.g. Rs 2.6M of gear never came back',
+  moneyBlacklistOnConfirm: 'This client is on the do-not-rent list — confirming will be refused.',
+
 
 
   // ======================================================================

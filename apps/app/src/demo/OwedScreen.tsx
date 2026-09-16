@@ -82,7 +82,16 @@ export function OwedScreen({ store }: { store: DemoStore }) {
                 className="line line-tap pressable"
                 onClick={() => go({ name: 'customer', customerId: c.id })}
               >
-                <span className="line-name">{c.name}</span>
+                <span className="line-name">
+                  {c.name}
+                  {/* The do-not-rent stamp rides the owed list too (W13):
+                      this is where the desk looks before calling a client
+                      back, and a decision nobody can see is not a
+                      decision. */}
+                  {c.blacklisted ? (
+                    <span className="stamp">{STR.moneyBlacklistStamp}</span>
+                  ) : null}
+                </span>
                 <span className="line-note">
                   {[
                     c.phone,

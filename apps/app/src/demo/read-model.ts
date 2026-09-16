@@ -103,6 +103,13 @@ create table if not exists customers (
   phone  text,
   note   text,
   blacklisted integer not null default 0,
+  -- WHY the house refuses this client, and when the decision was made
+  -- (W13, no-blacklist). The server keeps the reason in its audit log —
+  -- a boolean column cannot be asked why — so the phone keeps its own
+  -- copy for the stamp to say out loud. The FLAG is what 0022's confirm
+  -- gate reads; these two are the sentence beside it.
+  blacklist_reason text,
+  blacklisted_at integer,
   credentials_verified integer not null default 0
 );
 create index if not exists jobs_customer_idx on jobs (customer_id);

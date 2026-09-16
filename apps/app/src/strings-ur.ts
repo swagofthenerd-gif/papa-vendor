@@ -1374,6 +1374,21 @@ export const STR_UR: StrTable = {
       : `${rupees} late fee — ${date} ko maaf ki`,
   moneyWaivedHeading: 'Di gayi riayatein',
   moneyWaivedSub: (n: number): string => `${n} fee maaf ki`,
+  // --- 4. Is client ko kiraye par na dena (`no-blacklist`) — 0029.
+  moneyBlacklistStamp: 'kiraye par nahi',
+  moneyBlacklistHeading: 'Is client ko dena hai ya nahi',
+  moneyBlacklistOn: 'Is client ko kiraye par na dein',
+  moneyBlacklistOff: 'Is client ko dobara ijazat dein',
+  moneyBlacklistLine: (date: string, why: string | null): string =>
+    why ? `${date} se mana — ${why}` : `${date} se mana`,
+  moneyBlacklistOpen: 'Yeh client aam tarah booking aur confirm kar sakta hai.',
+  moneyBlacklistWhat:
+    'Is client ki booking confirm nahi ho sakti. Server bhi naam le kar mana karta hai, is liye koi phone is ke around gear promise nahi kar sakta.',
+  moneyBlacklistHold: 'Is client ko mana karne ke liye dabaye rakhein',
+  moneyBlacklistLiftHold: 'Dobara ijazat dene ke liye dabaye rakhein',
+  moneyBlacklistReasonPlaceholder: 'jaise: Rs 2.6M ka saman wapas nahi aaya',
+  moneyBlacklistOnConfirm: 'Yeh client do-not-rent list par hai — confirm mana ho jayega.',
+
 
 
   // ======================================================================

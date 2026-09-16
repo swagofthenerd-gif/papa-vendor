@@ -13,12 +13,15 @@ import { test, describe, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { NodeSqliteDriver } from '@papa/core/node-driver'
-import { LOCAL_SCHEMA, monthlyStatementText, oldestUnpaidMs } from '@papa/core'
+import { LOCAL_SCHEMA, argsOf, monthlyStatementText, oldestUnpaidMs } from '@papa/core'
 import { seedDemo } from '../src/demo/seed.ts'
 import {
   assetEarnings,
   correctEntry,
+  customersByBalance,
   customerView,
+  quoteFlags,
+  setBlacklisted,
   duplicateEntries,
   khataLabels,
   recordEntry,
@@ -28,6 +31,7 @@ import {
   writeOffEntry,
 } from '../src/demo/khata.ts'
 import { holdDeposit } from '../src/demo/deposits.ts'
+import { confirmBooking, createBooking } from '../src/demo/bookings.ts'
 import { monthProfit } from '../src/demo/kharcha.ts'
 import { STR_EN } from '../src/strings.ts'
 
@@ -434,5 +438,94 @@ describe('the waived fee', () => {
       orgId: seed.orgId, entryId: charge, reason: 'Absconded', whenMs: NOW + 1,
     }, ids(NOW + 1))
     assert.deepEqual(waivedFees(db, 'cust-ayesha'), [], 'only a forgiven LATE FEE is a favour')
+  })
+})
+
+describe('the do-not-rent decision', () => {
+  test('the flag, the reason and the date land locally, and the op crosses', () => {
+    const r = setBlacklisted(db, {
+      customerId: 'cust-ayesha', on: true,
+      reason: 'Rs 2.6M of gear never came back', whenMs: NOW,
+    }, ids())
+    assert.equal(r.ok, true)
+    assert.equal(r.blacklisted, true)
+
+    const v = customerView(db, 'cust-ayesha')
+    assert.equal(v.blacklisted, true)
+    assert.equal(v.blacklistReason, 'Rs 2.6M of gear never came back')
+    assert.equal(v.blacklistedAt, NOW)
+    // The owed list carries the stamp too — it is where the desk looks.
+    assert.equal(customersByBalance(db).find((c) => c.id === 'cust-ayesha').blacklisted, true)
+
+    const [op] = ops('set_customer_blacklisted')
+    assert.deepEqual(op.payload, {
+      p_customer_id: 'cust-ayesha',
+      p_on: true,
+      p_reason: 'Rs 2.6M of gear never came back',
+    })
+    assert.deepEqual(argsOf('set_customer_blacklisted', op.payload), op.payload,
+      'every key is an RPC argument — the phone mints nothing here')
+  })
+
+  test('0022\'s confirm gate refuses the blacklisted client, and stands down when lifted', () => {
+    const made = createBooking(db, seed.orgId, {
+      customerId: 'cust-bilal',
+      startMs: NOW + 86_400_000,
+      endMs: NOW + 86_400_000 * 3,
+      lines: [{ assetId: 'asset-fx9-1' }],
+      status: 'pencil',
+    }, NOW)
+    assert.equal(made.ok, true)
+
+    assert.equal(setBlacklisted(db, {
+      customerId: 'cust-bilal', on: true, reason: 'Cheque bounced twice', whenMs: NOW,
+    }, ids()).ok, true)
+    const refused = confirmBooking(db, seed.orgId, made.bookingId, {}, NOW)
+    assert.equal(refused.ok, false)
+    assert.equal(refused.reason, 'blacklisted')
+
+    assert.equal(setBlacklisted(db, {
+      customerId: 'cust-bilal', on: false, reason: null, whenMs: NOW + 1,
+    }, ids(NOW + 1)).ok, true)
+    assert.equal(confirmBooking(db, seed.orgId, made.bookingId, {}, NOW).ok, true)
+  })
+
+  test('refusing a client with no reason writes nothing; lifting needs none', () => {
+    assert.equal(setBlacklisted(db, {
+      customerId: 'cust-bilal', on: true, reason: '   ', whenMs: NOW,
+    }, ids()).reason, 'no_reason')
+    assert.equal(customerView(db, 'cust-bilal').blacklisted, false)
+    assert.equal(ops('set_customer_blacklisted').length, 0)
+
+    assert.equal(setBlacklisted(db, {
+      customerId: 'cust-bilal', on: false, reason: null, whenMs: NOW,
+    }, ids()).ok, true, 'letting someone back in refuses nobody')
+  })
+
+  test('lifting it clears the sentence, and an unknown client is refused', () => {
+    setBlacklisted(db, {
+      customerId: 'cust-bilal', on: true, reason: 'For now', whenMs: NOW,
+    }, ids())
+    setBlacklisted(db, {
+      customerId: 'cust-bilal', on: false, reason: null, whenMs: NOW + 1,
+    }, ids(NOW + 1))
+    const v = customerView(db, 'cust-bilal')
+    assert.equal(v.blacklisted, false)
+    assert.equal(v.blacklistReason, null)
+    assert.equal(v.blacklistedAt, null)
+
+    assert.equal(setBlacklisted(db, {
+      customerId: 'cust-nobody', on: true, reason: 'x', whenMs: NOW,
+    }, ids()).reason, 'not_found')
+  })
+
+  test('the quote flags ladder drops to refuse', () => {
+    setBlacklisted(db, {
+      customerId: 'cust-bilal', on: true, reason: 'Absconded', whenMs: NOW,
+    }, ids())
+    const f = quoteFlags(db, 'cust-bilal')
+    assert.equal(f.blacklisted, true)
+    assert.equal(f.fastLane, false)
+    assert.equal(f.depositHint, 'refuse')
   })
 })

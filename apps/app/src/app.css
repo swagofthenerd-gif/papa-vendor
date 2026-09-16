@@ -1747,3 +1747,12 @@ h2.stamp .h-ico { display: none; }
   text-align: center; font-size: var(--fs-md); font-weight: 800;
 }
 /* ============================================================== */
+
+/* The do-not-rent stamp under the khata's figure (W13): the stamp, then
+   the sentence beside it in the margin voice. */
+.khata-refused {
+  display: flex; align-items: center; gap: var(--sp-3);
+  flex-wrap: wrap; margin: 0 0 var(--sp-3);
+}
+/* On a list row the stamp sits after the name, not under it. */
+.line-name > .stamp { margin-left: var(--sp-2); font-size: var(--fs-xs); }

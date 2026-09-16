@@ -134,6 +134,7 @@ import {
   duplicateEntries,
   waiveLateFee,
   waivedFees,
+  setBlacklisted,
   paymentLine,
   paymentQr,
   recordEntry,
@@ -149,6 +150,7 @@ import {
   type DuplicateEntry,
   type LateFeeDraftView,
   type MoneyStrip,
+  type BlacklistResult,
   type SettleResult,
   type WaivedFee,
 } from './khata.ts'
@@ -1545,6 +1547,20 @@ export class DemoStore {
   /** Fees this client has been forgiven — the goodwill, in one read. */
   waivedFees(customerId: string): WaivedFee[] {
     return waivedFees(this.db, customerId)
+  }
+
+  /**
+   * The do-not-rent decision (W13, `no-blacklist`) — the switch 0022's
+   * confirm gate never had. A reason to refuse a client, none to let
+   * them back in; owner/manager on the server, audited there.
+   */
+  setBlacklisted(
+    customerId: string,
+    on: boolean,
+    reason: string | null = null,
+    whenMs: number = Date.now(),
+  ): BlacklistResult {
+    return setBlacklisted(this.db, { customerId, on, reason, whenMs }, defaultIds(whenMs))
   }
 
   // ------------------------------------ W13: the deposit door (0017 D4)
