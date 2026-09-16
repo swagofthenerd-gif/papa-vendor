@@ -824,5 +824,5 @@ was found by a simulation that has never met a network, a printer or a
 person. The next thing to re-live this year on is **a real phone, over a
 real network, at a real house** — the three human gates
 (`docs/production-readiness.md`) are what produce the next list, and the
-vendor afternoon's fifty-four assumptions
+vendor afternoon’s fifty-nine assumptions
 (`docs/assumptions.md`) are what it will be about.
