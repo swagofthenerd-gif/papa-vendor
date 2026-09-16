@@ -52,7 +52,7 @@ function rental(assetId, outMs, inMs) {
 beforeEach(() => {
   db = new NodeSqliteDriver()
   db.exec(LOCAL_SCHEMA)
-  seed = seedDemo(db)
+  seed = seedDemo(db, NOW)
   seq = 0
 })
 

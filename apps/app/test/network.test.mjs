@@ -63,7 +63,7 @@ const ops = (op) => db.all(`select id, payload, depends_on from outbox where op 
 beforeEach(() => {
   db = new NodeSqliteDriver()
   db.exec(LOCAL_SCHEMA)
-  seed = seedDemo(db)
+  seed = seedDemo(db, NOW)
   seq = 0
 })
 
