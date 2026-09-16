@@ -132,6 +132,8 @@ import {
   correctEntry,
   writeOffEntry,
   duplicateEntries,
+  waiveLateFee,
+  waivedFees,
   paymentLine,
   paymentQr,
   recordEntry,
@@ -148,6 +150,7 @@ import {
   type LateFeeDraftView,
   type MoneyStrip,
   type SettleResult,
+  type WaivedFee,
 } from './khata.ts'
 // --- W13 the money doors: the deposit state machine (0017 D4).
 import {
@@ -1523,6 +1526,25 @@ export class DemoStore {
     return duplicateEntries(this.db).filter(
       (d) => filter.customerId === undefined || d.customerId === filter.customerId,
     )
+  }
+
+  /**
+   * The drafted late fee the owner chooses NOT to charge (W13,
+   * `waived-fee-invisible`). Written and written off in one transaction —
+   * nothing owed, and the khata still says the favour was given.
+   */
+  waiveLateFee(
+    jobId: string,
+    amountMinor: number,
+    reason: string,
+    whenMs: number = Date.now(),
+  ): SettleResult {
+    return waiveLateFee(this.db, { orgId: this.seed.orgId, jobId, amountMinor, reason, whenMs })
+  }
+
+  /** Fees this client has been forgiven — the goodwill, in one read. */
+  waivedFees(customerId: string): WaivedFee[] {
+    return waivedFees(this.db, customerId)
   }
 
   // ------------------------------------ W13: the deposit door (0017 D4)

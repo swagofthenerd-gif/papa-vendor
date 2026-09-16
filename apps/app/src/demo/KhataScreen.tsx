@@ -238,11 +238,22 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
                   {settled ? (
                     <ul className="line-why">
                       <li>
-                        {STR.moneySettledLine(
-                          STR.customerKindLabel(settled.kind),
-                          ledgerDate(settled.createdAt),
-                          settled.note,
-                        )}
+                        {/* A late fee settled by a write-off is a WAIVER,
+                            and it gets the waiver's own sentence (W13,
+                            `waived-fee-invisible`): 'Rs 4,000 late fee —
+                            waived on 12 Sep', the thing nobody could
+                            remember next quarter. */}
+                        {e.kind === 'late_fee' && settled.kind === 'write_off'
+                          ? STR.moneyFeeWaived(
+                              formatRupees(e.amountMinor),
+                              ledgerDate(settled.createdAt),
+                              settled.note,
+                            )
+                          : STR.moneySettledLine(
+                              STR.customerKindLabel(settled.kind),
+                              ledgerDate(settled.createdAt),
+                              settled.note,
+                            )}
                       </li>
                     </ul>
                   ) : null}

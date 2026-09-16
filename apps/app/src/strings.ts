@@ -1490,6 +1490,23 @@ const STR_EN = {
     `Two ${kind} lines of ${rupees}, ${seconds} second${s(seconds)} apart. Was that twice?`,
   moneyDuplicateKeep: 'Both are real',
   moneyDuplicateKept: 'Kept — both lines stand',
+  // --- 3. The waived fee (`waived-fee-invisible`).
+  // The fee is written and written off in one transaction: two lines that
+  // net to nothing, both on the statement the client reads, so the
+  // goodwill is visible to the person who received it.
+  moneyWaiveIt: 'Waive it',
+  moneyWaiveTitle: 'Waive the late fee',
+  moneyWaiveWhat:
+    'The fee goes on the book and comes straight off it. Nothing is owed, and next quarter the khata still says the favour was given.',
+  moneyWaiveHold: (rupees: string): string => `Hold to waive ${rupees}`,
+  moneyWaiveReasonPlaceholder: 'e.g. Long client, first time late',
+  moneyFeeWaived: (rupees: string, date: string, why: string | null): string =>
+    why
+      ? `${rupees} late fee — waived on ${date} — ${why}`
+      : `${rupees} late fee — waived on ${date}`,
+  moneyWaivedHeading: 'Favours given',
+  moneyWaivedSub: (n: number): string => `${n} fee${s(n)} waived`,
+
 
   // ======================================================================
 }

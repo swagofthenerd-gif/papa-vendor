@@ -745,6 +745,110 @@ export function recordReversalOf(
   return correctEntry(db, { orgId, entryId, reason: note, whenMs }, defaultIds(whenMs)).ok
 }
 
+/**
+ * "Waive it" — the drafted late fee the owner chooses NOT to charge
+ * (year papercut `waived-fee-invisible`: SEP forgave eleven days on the
+ * documentary and nothing recorded the goodwill, so next quarter nobody
+ * remembered Ayesha had already had her favour).
+ *
+ * THE HONEST SHAPE, chosen between the two the brief allowed: the fee is
+ * WRITTEN and then WRITTEN OFF, one transaction, two lines that net to
+ * nothing. The alternatives are both worse. A write-off alone would
+ * credit the client money they were never charged — the balance would go
+ * negative by the size of the favour. An `adjustment` would move the
+ * balance too and would print as the house correcting its own error,
+ * which a waiver is not: the fee was right, and the house chose not to
+ * take it. The pair is what actually happened, and the khata reads it as
+ * one story ("Rs 4,000 late fee — waived on 12 Sep") because the
+ * write-off names the fee through `corrects_entry_id`.
+ *
+ * The balance is unchanged, the earned-money sums drop the fee (a waived
+ * fee never earned anything — SETTLED_ENTRY_IDS_SQL), and both lines are
+ * on the statement the client reads, which is the point: the goodwill is
+ * visible to the person who received it.
+ */
+export function waiveLateFee(
+  db: SqlDriver,
+  input: {
+    orgId: string
+    jobId: string
+    /** The drafted figure, minor units, positive — the owner's number. */
+    amountMinor: number
+    reason: string | null
+    whenMs: number
+  },
+  ids: QueueIds = defaultIds(input.whenMs),
+): SettleResult {
+  const reason = (input.reason ?? '').trim()
+  if (reason.length === 0) return { ok: false, reason: 'no_reason' }
+  const customer = customerForJob(db, input.jobId)
+  if (!customer) return { ok: false, reason: 'not_found' }
+  const amount = Math.round(input.amountMinor)
+  if (!Number.isFinite(amount) || amount <= 0) return { ok: false, reason: 'not_found' }
+
+  let feeId = ''
+  db.transaction(() => {
+    feeId = recordEntry(db, {
+      orgId: input.orgId,
+      customerId: customer.id,
+      kind: 'late_fee',
+      amountMinor: amount,
+      jobId: input.jobId,
+      note: reason,
+      createdAt: input.whenMs,
+    }, ids)
+    recordEntry(db, {
+      orgId: input.orgId,
+      customerId: customer.id,
+      kind: 'write_off',
+      amountMinor: -amount,
+      jobId: input.jobId,
+      note: reason,
+      correctsEntryId: feeId,
+      createdAt: input.whenMs,
+    }, ids)
+  })
+  return { ok: true, id: feeId }
+}
+
+export interface WaivedFee {
+  /** The fee line — the amount the client did not pay. */
+  entryId: string
+  customerId: string
+  amountMinor: number
+  jobId: string | null
+  jobLabel: string | null
+  reason: string | null
+  /** When the waiver was written. */
+  waivedAt: number
+}
+
+/**
+ * Fees this customer was forgiven — a `late_fee` settled by a
+ * `write_off`. No new table: the pair IS the record, and this is the
+ * read that lets a screen say it in one sentence ("Rs 4,000 late fee —
+ * waived on 12 Sep") next quarter, when the same client asks again.
+ */
+export function waivedFees(db: SqlDriver, customerId: string): WaivedFee[] {
+  const entries = rowsFor(db, customerId)
+  const settled = settlements(entries)
+  const out: WaivedFee[] = []
+  for (const e of entries) {
+    const s = settled.get(e.id)
+    if (!s || e.kind !== 'late_fee' || s.kind !== 'write_off') continue
+    out.push({
+      entryId: e.id,
+      customerId,
+      amountMinor: e.amountMinor,
+      jobId: e.jobId,
+      jobLabel: e.jobLabel ?? null,
+      reason: s.note,
+      waivedAt: s.createdAt,
+    })
+  }
+  return out
+}
+
 export interface DuplicateEntry {
   /** The SECOND line — the one a correction would settle. */
   entryId: string

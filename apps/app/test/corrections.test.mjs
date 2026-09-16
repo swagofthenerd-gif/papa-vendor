@@ -23,6 +23,8 @@ import {
   khataLabels,
   recordEntry,
   settlements,
+  waiveLateFee,
+  waivedFees,
   writeOffEntry,
 } from '../src/demo/khata.ts'
 import { holdDeposit } from '../src/demo/deposits.ts'
@@ -354,5 +356,83 @@ describe('the double-tap question', () => {
       orgId: seed.orgId, entryId: second, reason: 'Entered twice', whenMs: NOW + 9_000,
     }, ids(NOW + 9_000))
     assert.deepEqual(duplicateEntries(db), [])
+  })
+})
+
+describe('the waived fee', () => {
+  test('the fee is written and written off: nothing owed, the favour on the record', () => {
+    const before = customerView(db, 'cust-ayesha').balanceMinor
+    const r = waiveLateFee(db, {
+      orgId: seed.orgId, jobId: 'job-doc', amountMinor: rs(4_000),
+      reason: 'Long client, first time late', whenMs: NOW,
+    }, ids())
+    assert.equal(r.ok, true)
+
+    const v = customerView(db, 'cust-ayesha')
+    assert.equal(v.balanceMinor, before, 'a waiver costs the client nothing')
+    // Two lines, both in the book, netting to zero.
+    const fee = v.entries.find((e) => e.id === r.id)
+    assert.equal(fee.kind, 'late_fee')
+    assert.equal(fee.amountMinor, rs(4_000))
+    const off = v.entries.find((e) => e.correctsEntryId === r.id)
+    assert.equal(off.kind, 'write_off')
+    assert.equal(off.amountMinor, -rs(4_000))
+    // And the khata reads them as one story.
+    assert.equal(v.settled.get(r.id).kind, 'write_off')
+
+    const [w] = waivedFees(db, 'cust-ayesha')
+    assert.equal(w.entryId, r.id)
+    assert.equal(w.amountMinor, rs(4_000))
+    assert.equal(w.jobId, 'job-doc')
+    assert.equal(w.reason, 'Long client, first time late')
+    assert.equal(w.waivedAt, NOW)
+  })
+
+  test('a waived fee earns the month nothing — it was never income', () => {
+    const before = monthProfit(db, NOW).earnedMinor
+    assert.equal(waiveLateFee(db, {
+      orgId: seed.orgId, jobId: 'job-doc', amountMinor: rs(198_000),
+      reason: 'Forgiven', whenMs: NOW,
+    }, ids()).ok, true)
+    assert.equal(monthProfit(db, NOW).earnedMinor, before)
+  })
+
+  test('both ops cross, the write-off chained behind the fee it forgives', () => {
+    const r = waiveLateFee(db, {
+      orgId: seed.orgId, jobId: 'job-doc', amountMinor: rs(4_000),
+      reason: 'Goodwill', whenMs: NOW,
+    }, ids())
+    const queued = ops('record_ledger_entry')
+    const fee = queued.find((o) => o.payload.client_ledger_entry_id === r.id)
+    const off = queued.find((o) => o.payload.p_entry_kind === 'write_off')
+    assert.equal(fee.payload.p_entry_kind, 'late_fee')
+    assert.equal(off.payload.p_corrects_entry_id, r.id)
+    assert.equal(off.dependsOn, fee.id, 'the server must have the fee before it is forgiven')
+  })
+
+  test('no reason, no customer and a zero figure all write nothing', () => {
+    assert.equal(waiveLateFee(db, {
+      orgId: seed.orgId, jobId: 'job-doc', amountMinor: rs(4_000), reason: '  ', whenMs: NOW,
+    }, ids()).reason, 'no_reason')
+    // job-tvc-2 has no customer wired in the seed's shape; an unknown job
+    // is the same refusal, and neither writes a line.
+    assert.equal(waiveLateFee(db, {
+      orgId: seed.orgId, jobId: 'job-nobody', amountMinor: rs(4_000), reason: 'x', whenMs: NOW,
+    }, ids()).reason, 'not_found')
+    assert.equal(waiveLateFee(db, {
+      orgId: seed.orgId, jobId: 'job-doc', amountMinor: 0, reason: 'x', whenMs: NOW,
+    }, ids()).ok, false)
+    assert.deepEqual(waivedFees(db, 'cust-ayesha'), [])
+  })
+
+  test('a plain write-off on a charge is not a waived fee', () => {
+    const charge = recordEntry(db, {
+      orgId: seed.orgId, customerId: 'cust-ayesha', kind: 'charge',
+      amountMinor: rs(9_000), createdAt: NOW,
+    }, ids())
+    writeOffEntry(db, {
+      orgId: seed.orgId, entryId: charge, reason: 'Absconded', whenMs: NOW + 1,
+    }, ids(NOW + 1))
+    assert.deepEqual(waivedFees(db, 'cust-ayesha'), [], 'only a forgiven LATE FEE is a favour')
   })
 })

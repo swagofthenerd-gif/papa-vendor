@@ -14,6 +14,7 @@ import { STR } from '../strings.ts'
 // --- network --- (0025): the thermal printer seam.
 import { printThermal } from '../print/thermal.ts'
 import { Sheet, SheetClose } from '../components/Sheet.tsx'
+import { HoldToFinish } from '../components/HoldToFinish.tsx'
 
 /**
  * The handover summary — live session or long finished.
@@ -235,6 +236,14 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
               setWritten('latefee')
             }
           }}
+          // The other answer the owner gives (W13): don't charge it, and
+          // let the khata remember that the favour was given.
+          onWaive={(amountMinor, reason) => {
+            if (store.waiveLateFee(jobId, amountMinor, reason).ok) {
+              setSheet(null)
+              setWritten('latefee')
+            }
+          }}
           onClose={() => setSheet(null)}
         />
       ) : null}
@@ -255,6 +264,15 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
  * confirmed late fee. The amount arrives PREFILLED from the facts on screen
  * and stays fully editable; nothing writes until the one button at the
  * bottom, and closing the sheet writes nothing at all.
+ *
+ * W13: when `onWaive` is given (the late-fee sheet), the sheet grows the
+ * OTHER answer the owner actually gives — "don't charge it". Waiving is
+ * not the same act as closing the sheet: closing writes nothing and the
+ * goodwill vanishes (year papercut `waived-fee-invisible`), while waiving
+ * records the fee and forgives it in one transaction, so next quarter the
+ * khata still says the favour was given. Behind a hold with a reason,
+ * like every other correction, and a second step so the two buttons are
+ * never adjacent.
  */
 export function KhataChargeSheet({
   title,
@@ -263,6 +281,7 @@ export function KhataChargeSheet({
   initialAmount,
   initialNote,
   onSave,
+  onWaive,
   onClose,
 }: {
   title: string
@@ -271,10 +290,14 @@ export function KhataChargeSheet({
   initialAmount: string
   initialNote: string
   onSave: (amountMinor: number, note: string | null) => void
+  /** Present only where a fee can be forgiven rather than charged. */
+  onWaive?: (amountMinor: number, reason: string) => void
   onClose: () => void
 }) {
   const [amount, setAmount] = useState(initialAmount)
   const [note, setNote] = useState(initialNote)
+  const [waiving, setWaiving] = useState(false)
+  const [reason, setReason] = useState('')
   const rupees = Number(amount)
   const valid = Number.isFinite(rupees) && rupees > 0
 
@@ -317,6 +340,33 @@ export function KhataChargeSheet({
       >
         {STR.sessionWriteInKhata}
       </button>
+
+      {onWaive && valid ? (
+        waiving ? (
+          <>
+            <p className="sheet-hint">{STR.moneyWaiveWhat}</p>
+            <label className="field-label" htmlFor="waive-reason">{STR.moneyReasonLabel}</label>
+            <input
+              id="waive-reason"
+              className="sheet-search"
+              value={reason}
+              placeholder={STR.moneyWaiveReasonPlaceholder}
+              onChange={(e) => setReason(e.target.value)}
+              autoCorrect="off"
+              spellCheck={false}
+            />
+            <HoldToFinish
+              label={STR.moneyWaiveHold(formatRupees(Math.round(rupees * 100)))}
+              disabled={reason.trim().length === 0}
+              onFinish={() => onWaive(Math.round(rupees * 100), reason.trim())}
+            />
+          </>
+        ) : (
+          <button className="btn btn-ghost btn-block" onClick={() => setWaiving(true)}>
+            <Icon name="hand" size={18} /> {STR.moneyWaiveIt}
+          </button>
+        )
+      ) : null}
     </Sheet>
   )
 }

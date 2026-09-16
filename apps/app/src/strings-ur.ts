@@ -1361,6 +1361,20 @@ export const STR_UR: StrTable = {
     `${rupees} ki do ${kind} lines, ${seconds} second ke faasle par. Do dafa hua tha?`,
   moneyDuplicateKeep: 'Dono asli hain',
   moneyDuplicateKept: 'Rakh liya — dono lines qaim hain',
+  // --- 3. Maaf ki hui late fee (`waived-fee-invisible`).
+  moneyWaiveIt: 'Maaf kar dein',
+  moneyWaiveTitle: 'Late fee maaf karein',
+  moneyWaiveWhat:
+    'Fee khate par aa kar foran utar jati hai. Kuch baqi nahi rehta, aur agle quarter bhi khata batata hai ke riayat di gayi thi.',
+  moneyWaiveHold: (rupees: string): string => `${rupees} maaf karne ke liye dabaye rakhein`,
+  moneyWaiveReasonPlaceholder: 'jaise: purana client, pehli dafa late',
+  moneyFeeWaived: (rupees: string, date: string, why: string | null): string =>
+    why
+      ? `${rupees} late fee — ${date} ko maaf ki — ${why}`
+      : `${rupees} late fee — ${date} ko maaf ki`,
+  moneyWaivedHeading: 'Di gayi riayatein',
+  moneyWaivedSub: (n: number): string => `${n} fee maaf ki`,
+
 
   // ======================================================================
 }
