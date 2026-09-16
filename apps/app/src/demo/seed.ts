@@ -170,14 +170,14 @@ const JOB_CUSTOMER: Record<string, string> = {
  * refresh. Dates have the OPPOSITE requirement: a fixed calendar date rots —
  * within a week of writing it, every job would read overdue and the board
  * would only ever demonstrate one of its three states. So the now-reference
- * is `new Date()` at seed time (the same clock `dueStatus` reads at render,
- * and the same one the seed already uses for updated_at), and the offsets
+ * is the instant handed to seedDemo (the same clock `dueStatus` reads at
+ * render, and the same one the seed uses for updated_at), and the offsets
  * are chosen so the board always shows one overdue, one due-today and one
  * upcoming job. Formatted as local YYYY-MM-DD — exactly what the server's
  * `date` column mirrors — so parseDueDate accepts it.
  */
-function isoDaysFromNow(days: number): string {
-  const d = new Date()
+function isoDaysFromNow(days: number, nowMs: number): string {
+  const d = new Date(nowMs)
   d.setDate(d.getDate() + days)
   return localDay(d)
 }
@@ -311,7 +311,7 @@ export function seedDemo(db: SqlDriver, nowMs: number = Date.now()): DemoSeed {
              (id, org_id, product_id, asset_code, display_name, presence, health,
               ownership, current_location_id, current_job_id, updated_at)
            values (?, ?, ?, ?, ?, 'here', 'ok', 'owned', ?, null, ?)`,
-          [assetId, ORG, productId, assetCode, p.name, p.shelf, new Date().toISOString()],
+          [assetId, ORG, productId, assetCode, p.name, p.shelf, new Date(nowMs).toISOString()],
         )
 
         const code = tagCode(rng)
@@ -336,7 +336,7 @@ export function seedDemo(db: SqlDriver, nowMs: number = Date.now()): DemoSeed {
       db.exec(
         `insert into jobs (id, org_id, label, contact, expected_back, status, customer_id)
          values (?, ?, ?, ?, ?, 'open', ?)`,
-        [j.id, ORG, j.label, j.contact, isoDaysFromNow(j.backInDays), JOB_CUSTOMER[j.id] ?? null],
+        [j.id, ORG, j.label, j.contact, isoDaysFromNow(j.backInDays, nowMs), JOB_CUSTOMER[j.id] ?? null],
       )
       db.exec(
         `insert into job_meta (job_id, departs_at) values (?, ?)`,
@@ -402,7 +402,7 @@ export function seedDemo(db: SqlDriver, nowMs: number = Date.now()): DemoSeed {
           presence, health, ownership, current_location_id, updated_at)
        values ('asset-case-1', ?, 'prod-case', 'CASE-01', 'A-Cam Case', 1,
                'here', 'ok', 'owned', 'loc-rack-a', ?)`,
-      [ORG, new Date().toISOString()],
+      [ORG, new Date(nowMs).toISOString()],
     )
     {
       const caseTag = tagCode(rng)
@@ -445,12 +445,12 @@ export function seedDemo(db: SqlDriver, nowMs: number = Date.now()): DemoSeed {
       )
     }
 
-    seedRateCard(db)
+    seedRateCard(db, nowMs)
     seedMoneyBook(db, nowMs)
     seedBookings(db, nowMs)
     // --- network --- (0025): partner houses, the staff roster, the
     // wedding truck's crew. See network.ts seedNetwork.
-    seedNetwork(db, ORG)
+    seedNetwork(db, ORG, nowMs)
   })
 
   return {
@@ -463,7 +463,7 @@ export function seedDemo(db: SqlDriver, nowMs: number = Date.now()): DemoSeed {
       label: j.label,
       contact: j.contact,
       departsAt: j.departsAt,
-      expectedBack: isoDaysFromNow(j.backInDays),
+      expectedBack: isoDaysFromNow(j.backInDays, nowMs),
       expected: expectedFor(j),
     })),
   }
@@ -484,8 +484,8 @@ export function seedDemo(db: SqlDriver, nowMs: number = Date.now()): DemoSeed {
  * the lunar calendar and the desk edits the row. See
  * docs/assumptions.md#demo-eid
  */
-function seedRateCard(db: SqlDriver): void {
-  const iso = new Date().toISOString()
+function seedRateCard(db: SqlDriver, nowMs: number): void {
+  const iso = new Date(nowMs).toISOString()
   db.exec(
     `insert into rate_cards (id, org_id, name, is_default, week_equals_days,
        min_billable_days, weekend_mask, updated_at)
@@ -500,7 +500,7 @@ function seedRateCard(db: SqlDriver): void {
       [`rce-${p.key}`, ORG, `prod-${p.key}`, p.dayRateRs * 100],
     )
   }
-  const now = new Date()
+  const now = new Date(nowMs)
   const seasonYear = now.getMonth() <= 1 ? now.getFullYear() - 1 : now.getFullYear()
   for (let d = new Date(seasonYear, 11, 1); d < new Date(seasonYear + 1, 2, 1); d.setDate(d.getDate() + 1)) {
     db.exec(
