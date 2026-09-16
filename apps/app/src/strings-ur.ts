@@ -57,6 +57,24 @@ const SETTLE_REFUSAL_UR: Record<string, string> = {
   deposit_line: 'Zamanat ka paisa Lagayein aur Wapas se chalta hai, yahan se nahi.',
 }
 
+/** Sehat ke teen jawab, aur har ek ka shelf par matlab. */
+const HEALTH_CALL_UR: Record<string, string> = {
+  broken: 'Kharab',
+  needs_a_look: 'Dekhna parega',
+  ok: 'Theek',
+}
+const HEALTH_WHAT_UR: Record<string, string> = {
+  broken: 'Shelf se bahar. Jab tak koi theek na kahe, kisi ko offer nahi hoga.',
+  needs_a_look: 'Workshop ki line mein, aur intezar ke doran shelf se bahar.',
+  ok: 'Dobara service mein aur offer hone laga.',
+}
+/** assets.health, desk ke lafzon mein. */
+const HEALTH_WORD_UR: Record<string, string> = {
+  ok: 'theek',
+  servicing: 'workshop mein',
+  quarantined: 'kharab',
+}
+
 /** Overdue ladder ke rung — us din ka kaam. */
 const ESCALATION_UR: Record<string, string> = {
   whatsapp_nudge: 'pehla nudge',
@@ -1388,6 +1406,20 @@ export const STR_UR: StrTable = {
   moneyBlacklistLiftHold: 'Dobara ijazat dene ke liye dabaye rakhein',
   moneyBlacklistReasonPlaceholder: 'jaise: Rs 2.6M ka saman wapas nahi aaya',
   moneyBlacklistOnConfirm: 'Yeh client do-not-rent list par hai — confirm mana ho jayega.',
+  // --- 5. Sehat ka darwaza (`no-health-door`) — 0003 ke verb, naya axis nahi.
+  moneyHealthHeading: 'Yeh kaisa hai?',
+  moneyHealthNow: (word: string): string => `Abhi: ${word}`,
+  moneyHealthBroken: 'Yeh kharab hai',
+  moneyHealthNeedsALook: 'Dekhna parega',
+  moneyHealthOk: 'Yeh theek hai',
+  moneyHealthWhat: (call: string): string => HEALTH_WHAT_UR[call] ?? call,
+  moneyHealthNoteLabel: 'Kya hua (optional)',
+  moneyHealthNotePlaceholder: 'jaise: bench par gir gaya, mount dheela hai',
+  moneyHealthSave: (call: string): string => `${HEALTH_CALL_UR[call] ?? call} — likh dein`,
+  moneyHealthWord: (health: string): string => HEALTH_WORD_UR[health] ?? health,
+  moneyHealthIsEvidence:
+    'Yeh log mein scan event ban kar jata hai, baqi sab ki tarah — shelf aur calendar log ko mante hain, kisi switch ko nahi.',
+
 
 
 

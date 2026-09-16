@@ -1756,3 +1756,8 @@ h2.stamp .h-ico { display: none; }
 }
 /* On a list row the stamp sits after the name, not under it. */
 .line-name > .stamp { margin-left: var(--sp-2); font-size: var(--fs-xs); }
+
+/* The health door on a unit's page (W13): the question, three chips, and
+   the consequence spelled out under the one that is picked. */
+.health-door { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.health-door .section-sub { margin: 0; }

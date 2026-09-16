@@ -161,6 +161,8 @@ function AssetRoute({ store, assetId }: { store: DemoStore; assetId: string }) {
         }}
         onRepairCost={() => setRepairing(true)}
         onServiced={() => setServicing(true)}
+        // W13 the health door: one real scan verb, no swap behind it.
+        onMarkHealth={(call, note) => { store.markHealth(assetId, call, note); bump() }}
         onVoiceSave={(rec) => {
           const r = store.captureVoiceNote({
             assetId,

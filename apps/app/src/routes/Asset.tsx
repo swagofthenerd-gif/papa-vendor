@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Icon } from '@papa/icons'
-import { bookingDateLabel, formatRupees, type Disposition as MarkDisposition, type PromisedSoon } from '@papa/core'
+import { bookingDateLabel, formatRupees, type Disposition as MarkDisposition, type HealthCall, type PromisedSoon } from '@papa/core'
 import { go } from '../nav.ts'
 import { dayLabel } from '../booking-view.ts'
 import { SectionHead } from '../components/Shell.tsx'
@@ -163,6 +163,91 @@ function AssetMoneySection({
 }
 
 /**
+ * "How is it?" — the standalone health door (W13, `no-health-door`).
+ *
+ * Availability honesty DEPENDS on health: the shelf offers a unit only
+ * when it is here and health='ok'. Until W13 the only thing that could
+ * move it was the crisis-day swap, which needs a substitute and a live
+ * job — so JAN's dropped FX9 needed SQL, and a lens dropped on the bench
+ * with no job behind it had no door at all.
+ *
+ * THREE ANSWERS, EACH A REAL SCAN VERB (0003, projected by project.ts's
+ * one HEALTH_FOR rule): broken → `quarantine`, needs a look →
+ * `send_to_service`, fine → `release`. No new axis, no new projection,
+ * and the log still explains why the mirror says what it says — the
+ * evidence rule, kept.
+ *
+ * Reveal-then-confirm, like the terminal door above it: the first tap
+ * picks an answer and SAYS WHAT IT MEANS for the shelf, the second
+ * writes. No hold, because this is an observation and not a
+ * destruction — a wrongly-quarantined camera is released in two taps.
+ */
+function HealthDoor({
+  health,
+  onMark,
+}: {
+  health: string
+  onMark: (call: HealthCall, note: string | null) => void
+}) {
+  const [picked, setPicked] = useState<HealthCall | null>(null)
+  const [note, setNote] = useState('')
+
+  const calls: { call: HealthCall; label: string }[] = [
+    { call: 'broken', label: STR.moneyHealthBroken },
+    { call: 'needs_a_look', label: STR.moneyHealthNeedsALook },
+    { call: 'ok', label: STR.moneyHealthOk },
+  ]
+
+  return (
+    <div className="health-door">
+      <p className="section-sub">
+        {STR.moneyHealthHeading} · {STR.moneyHealthNow(STR.moneyHealthWord(health))}
+      </p>
+      <div className="chip-row" role="group" aria-label={STR.moneyHealthHeading}>
+        {calls.map((c) => (
+          <button
+            key={c.call}
+            className={`filter-chip${picked === c.call ? ' active' : ''}`}
+            aria-pressed={picked === c.call}
+            onClick={() => setPicked(picked === c.call ? null : c.call)}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+      {picked ? (
+        <>
+          <p className="section-sub">{STR.moneyHealthWhat(picked)}</p>
+          <label className="field-label" htmlFor="health-note">
+            {STR.moneyHealthNoteLabel}
+          </label>
+          <input
+            id="health-note"
+            className="sheet-search"
+            value={note}
+            placeholder={STR.moneyHealthNotePlaceholder}
+            onChange={(e) => setNote(e.target.value)}
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <p className="section-sub">{STR.moneyHealthIsEvidence}</p>
+          <button
+            className="btn btn-primary btn-block"
+            onClick={() => {
+              onMark(picked, note.trim() || null)
+              setPicked(null)
+              setNote('')
+            }}
+          >
+            {STR.moneyHealthSave(picked)}
+          </button>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
+/**
  * The Sehat section of one unit's page (0021): the service line — the
  * usage meter said in words, with a NEEDS-A-LOOK notice once it passes the
  * product's threshold — the cycle line for flagged products, the Serviced
@@ -174,12 +259,15 @@ function AssetSehatSection({
   service,
   voiceNotes,
   onServiced,
+  onMarkHealth,
   onVoiceSave,
 }: {
   asset: AssetView
   service: ServiceFacts | null
   voiceNotes: VoiceNoteRow[]
   onServiced: () => void
+  /** W13: set this unit's health with no swap behind it. */
+  onMarkHealth?: (call: HealthCall, note: string | null) => void
   onVoiceSave: (rec: AwaazRecording) => AwaazSaveResult
 }) {
   return (
@@ -214,6 +302,15 @@ function AssetSehatSection({
             <strong>{STR.sehatCycleOverStamp}</strong>
           </div>
         </div>
+      ) : null}
+
+      {/* The health door (W13, `no-health-door`): the tech who drops a
+          lens on the bench says so HERE, with no swap and no job needed.
+          Above the Serviced door because "is it broken" is the question
+          asked first, and deliberately separate from it: a service is
+          not a release, and one tap must not be two decisions. */}
+      {onMarkHealth ? (
+        <HealthDoor health={asset.health} onMark={onMarkHealth} />
       ) : null}
 
       {/* The Serviced door — a write, kept with the other writes and away
@@ -453,6 +550,7 @@ export function Asset({
   onProveIt,
   onRepairCost,
   onServiced,
+  onMarkHealth,
   onVoiceSave,
   onMarkTerminal,
   onFound,
@@ -479,6 +577,8 @@ export function Asset({
   onRepairCost: () => void
   /** Open the Serviced sheet — note + optional cost in one flow (0021). */
   onServiced: () => void
+  /** Set this unit's health with no swap behind it (W13). */
+  onMarkHealth?: (call: HealthCall, note: string | null) => void
   /** Keep a hold-to-record awaaz note about this unit. */
   onVoiceSave: (rec: AwaazRecording) => AwaazSaveResult
   /** Declare the item lost/stolen/sold — behind the hold-gated disclosure. */
@@ -586,6 +686,7 @@ export function Asset({
         <AssetSehatSection
           asset={asset}
           service={service}
+          onMarkHealth={onMarkHealth}
           voiceNotes={voiceNotes}
           onServiced={onServiced}
           onVoiceSave={onVoiceSave}

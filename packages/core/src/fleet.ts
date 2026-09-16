@@ -201,6 +201,70 @@ export function recordServiced(
   )
 }
 
+/**
+ * The three things a desk says about a unit's condition, and the scan-event
+ * verb each one is. NOT a new axis and NOT a new projection: 0003's
+ * vocabulary already had all three, and project.ts's HEALTH_FOR is the one
+ * place that says where each leaves `assets.health`.
+ */
+export type HealthCall = 'broken' | 'needs_a_look' | 'ok'
+
+const HEALTH_EVENT: Record<HealthCall, string> = {
+  /** Off the shelf and not rentable until someone says otherwise. */
+  broken: 'quarantine',
+  /** In the workshop's queue — the camera the tech is unsure about. */
+  needs_a_look: 'send_to_service',
+  /** Back in service. */
+  ok: 'release',
+}
+
+export interface MarkHealthInput {
+  assetId: string
+  call: HealthCall
+  note?: string | null
+  now?: () => number
+  newId?: () => string
+}
+
+/**
+ * Set a unit's health from the phone, with no swap behind it (year
+ * finding `no-health-door`).
+ *
+ * Availability honesty DEPENDS on health — the answer is "here and
+ * health='ok'" — and until W13 the only thing that could move it was the
+ * crisis-day swap, which needs a substitute and a live job. A tech who
+ * drops a lens on the bench had no way to say so: JAN's dropped FX9
+ * needed SQL, and a peeled-tag unit had no door at all (JUL).
+ *
+ * THE EVIDENCE RULE HOLDS. This is not a projection write with a note
+ * attached: it is a real `scan_events` verb through the same append-only
+ * queue every scan uses (the way markTerminal is), so the log still
+ * explains why the mirror says what it says, and the server re-derives
+ * the same health from its own events. One op, projected optimistically,
+ * in one transaction.
+ *
+ * Deliberately NOT the service meter's reset: `serviced` is its own verb
+ * and its own decision (0021 D2), and a release that silently reset the
+ * usage nudge would be two acts wearing one tap.
+ */
+export function markHealth(
+  db: SqlDriver,
+  input: MarkHealthInput,
+): FleetOpResult {
+  return enqueueScanOp(
+    db,
+    {
+      assetId: input.assetId,
+      eventType: HEALTH_EVENT[input.call],
+      note: input.note,
+    },
+    {
+      now: input.now ?? Date.now,
+      newId: input.newId ?? (() => crypto.randomUUID()),
+    },
+  )
+}
+
 export type SwapFlag = 'flag_damage' | 'quarantine'
 
 export interface SwapInput {
@@ -321,12 +385,11 @@ export function swapAsset(db: SqlDriver, input: SwapInput): SwapResult {
     projectOp(db, flagOp)
     outbox.enqueue({ id: eOut, op: 'submit_scan_batch', payload: checkOut, dependsOn: eIn })
     projectOp(db, checkOut)
-
-    // projectOp does not move health (it owns presence/disposition/job only),
-    // so the flag's effect on the mirror is written here — the same
-    // optimistic honesty the scan path keeps: the broken item shows
-    // quarantined immediately, not after a sync.
-    db.exec(`update assets set health = 'quarantined' where id = ?`, [input.brokenAssetId])
+    // The flag's effect on the mirror used to be written here by hand,
+    // because projectOp owned presence/disposition/job and nothing else.
+    // Since W13 the health rule lives in project.ts's HEALTH_FOR — one
+    // home, shared with the standalone health door — so projecting the
+    // flag op above is what quarantines the broken item.
   })
 
   return {

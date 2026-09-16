@@ -138,6 +138,40 @@ function presenceFor(eventType: unknown): string | null {
   return typeof eventType === 'string' ? (PRESENCE_FOR[eventType] ?? null) : null
 }
 
+/**
+ * The events that move an asset's HEALTH, mapped to where they leave it —
+ * the server's own `case` (0003, re-stated in 0020's fifth edition),
+ * written ONCE here so the phone and the server cannot disagree about
+ * whether a quarantined camera is rentable.
+ *
+ * Until W13 this rule lived nowhere on the device: the swap wrote
+ * `health = 'quarantined'` by hand beside its three ops (fleet.ts) and
+ * every other health verb was a no-op on the mirror, which is why a
+ * standalone "this is broken" toggle had nothing to project through
+ * (year finding `no-health-door`). `flag_damage` may carry its own
+ * health in the payload, exactly as the server's coalesce allows.
+ */
+const HEALTH_FOR: Record<string, string> = {
+  send_to_service: 'servicing',
+  return_from_service: 'ok',
+  quarantine: 'quarantined',
+  release: 'ok',
+  flag_damage: 'quarantined',
+  // `found` brings a terminal item home healthy — the server sets
+  // presence, health and disposition in one update (0020 D1).
+  found: 'ok',
+}
+
+/** The health an event stamps, or null when it leaves health alone. */
+export function healthFor(op: { event_type?: unknown; health?: unknown }): string | null {
+  if (typeof op.event_type !== 'string') return null
+  const mapped = HEALTH_FOR[op.event_type]
+  if (mapped === undefined) return null
+  // The server's coalesce: an explicit health on the event wins, which is
+  // how flag_damage can mean 'servicing' rather than 'quarantined'.
+  return typeof op.health === 'string' ? op.health : mapped
+}
+
 /** The disposition an event stamps, or null. Mirrors the server reducer
  *  (0020 D1, fifth edition in 0025 D5): the mark_* verbs name why the item
  *  left, `found` clears it, and `retire` on a BORROWED unit (ownership =
@@ -201,8 +235,25 @@ export function projectOp(db: SqlDriver, op: ProjectableOp): string | undefined 
     return assetId
   }
 
+  const health = healthFor(op)
   const presence = presenceFor(op.event_type)
-  if (!presence) return undefined
+
+  // A health verb that moves nothing else (quarantine, release,
+  // send_to_service, return_from_service, flag_damage): the mirror shows
+  // it immediately, the way every other optimistic write does, and the
+  // availability answer ('here' and health='ok') stops offering a broken
+  // camera before any sync. Handled before the presence gate because
+  // health is not a movement — the same shape as `serviced` above.
+  if (!presence) {
+    if (health === null) return undefined
+    db.exec(
+      `update assets
+          set health = ?, last_scanned_at = coalesce(?, last_scanned_at)
+        where id = ?`,
+      [health, typeof op.device_time === 'string' ? op.device_time : null, assetId],
+    )
+    return assetId
+  }
 
   // 0021: the two usage meters ride the same update as presence, so the
   // optimistic mirror can never show a movement without its wear.
@@ -249,12 +300,16 @@ export function projectOp(db: SqlDriver, op: ProjectableOp): string | undefined 
       `update assets
           set presence = ?,
               disposition = ?,
+              ${health === null ? '' : 'health = ?,'}
               ${clearJob ? 'current_job_id = null,' : ''}
               last_scanned_at = coalesce(?, last_scanned_at)
         where id = ?`,
       [
         presence,
         disposition.set,
+        // `found` brings it home healthy (0020 D1); retire and the three
+        // marks leave health as it stands.
+        ...(health === null ? [] : [health]),
         typeof op.device_time === 'string' ? op.device_time : null,
         assetId,
       ],

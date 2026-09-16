@@ -86,6 +86,25 @@ const SETTLE_REFUSAL_EN: Record<string, string> = {
   deposit_line: 'Deposit money moves through Apply and Refund, not here.',
 }
 
+/** The three answers the health door offers, and what each one MEANS for
+ *  the shelf — the availability rule said in words ('here' and ok). */
+const HEALTH_CALL_EN: Record<string, string> = {
+  broken: 'Broken',
+  needs_a_look: 'Needs a look',
+  ok: 'Fine',
+}
+const HEALTH_WHAT_EN: Record<string, string> = {
+  broken: 'Off the shelf. It stops being offered to anyone until someone says it is fine again.',
+  needs_a_look: 'In the workshop queue, and off the shelf while it waits.',
+  ok: 'Back in service and offered again.',
+}
+/** assets.health, in the desk's words. */
+const HEALTH_WORD_EN: Record<string, string> = {
+  ok: 'fine',
+  servicing: 'in the workshop',
+  quarantined: 'broken',
+}
+
 /** The overdue ladder's rungs, by the action each day asks for. */
 const ESCALATION_EN: Record<string, string> = {
   whatsapp_nudge: 'first nudge',
@@ -1522,6 +1541,23 @@ const STR_EN = {
   moneyBlacklistLiftHold: 'Hold to let them rent again',
   moneyBlacklistReasonPlaceholder: 'e.g. Rs 2.6M of gear never came back',
   moneyBlacklistOnConfirm: 'This client is on the do-not-rent list — confirming will be refused.',
+  // --- 5. The health door (`no-health-door`) — 0003's verbs, no new axis.
+  // Availability honesty depends on health ('here' and health='ok'), and
+  // until now only the crisis swap could move it: a tech who drops a lens
+  // on the bench had no way to say so.
+  moneyHealthHeading: 'How is it?',
+  moneyHealthNow: (word: string): string => `Right now: ${word}`,
+  moneyHealthBroken: 'It is broken',
+  moneyHealthNeedsALook: 'Needs a look',
+  moneyHealthOk: 'It is fine',
+  moneyHealthWhat: (call: string): string => HEALTH_WHAT_EN[call] ?? call,
+  moneyHealthNoteLabel: 'What happened (optional)',
+  moneyHealthNotePlaceholder: 'e.g. Dropped on the bench, mount is loose',
+  moneyHealthSave: (call: string): string => `${HEALTH_CALL_EN[call] ?? call} — record it`,
+  moneyHealthWord: (health: string): string => HEALTH_WORD_EN[health] ?? health,
+  moneyHealthIsEvidence:
+    'This goes in the log as a scan event, like everything else — the shelf and the calendar believe the log, not a switch.',
+
 
 
 

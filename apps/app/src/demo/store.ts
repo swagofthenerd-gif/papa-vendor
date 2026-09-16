@@ -6,6 +6,7 @@ import {
   voidScan,
   markTerminal,
   markFound,
+  markHealth,
   swapAsset,
   cycleCountDiff,
   recordServiced,
@@ -13,6 +14,7 @@ import {
   type VoiceNoteRow,
   type VoidScanResult,
   type Disposition,
+  type HealthCall,
   type SwapFlag,
   type SwapResult,
   type CountDiff,
@@ -1754,6 +1756,18 @@ export class DemoStore {
   }
 
   /** Bring a terminal item home — the recovery door. */
+  /**
+   * Set a unit's health from the phone with no swap behind it (W13,
+   * `no-health-door`). One real scan event through the append-only queue,
+   * projected optimistically — so the shelf stops offering a broken
+   * camera at once and the log still explains why.
+   */
+  markHealth(assetId: string, call: HealthCall, note: string | null = null): void {
+    markHealth(this.db, { assetId, call, note })
+    this.refreshCatalogue()
+    notifySync()
+  }
+
   markFound(assetId: string): void {
     markFound(this.db, { assetId })
   }
