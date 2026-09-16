@@ -26,19 +26,25 @@ let seed
 let seq
 /**
  * Noon on the 10th, so no assertion here can straddle a month edge — and
- * far enough from the seed's own history (which is dated relative to the
- * real clock, days rather than months back) that the two windows hold
- * only what this file puts in them.
+ * far enough from the seed's own history that the windows below hold only
+ * what this file puts in them.
+ *
+ * That distance used to be luck: the seed dated its history days back from
+ * the REAL clock, so it stayed clear of 2027 only until the real clock got
+ * there. SEEDED pins it instead. The seed's money reaches 34 days back, so
+ * from mid-April it spans mid-March to mid-April — clear of February (the
+ * quiet month below), of May and of June, deliberately and for good.
  */
 const TODAY = new Date(2027, 5, 10, 12).getTime()
 const LAST = new Date(2027, 4, 10, 12).getTime()
+const SEEDED = new Date(2027, 3, 15, 12).getTime()
 const ids = (nowMs) => ({ now: () => nowMs, newId: () => `op-${++seq}` })
 const rs = (rupees) => rupees * 100
 
 beforeEach(() => {
   db = new NodeSqliteDriver()
   db.exec(LOCAL_SCHEMA)
-  seed = seedDemo(db)
+  seed = seedDemo(db, SEEDED)
   seq = 0
 })
 

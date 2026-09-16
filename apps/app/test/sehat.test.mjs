@@ -21,10 +21,24 @@ import { dayAccount, dayAccountText } from '../src/demo/hisaab.ts'
 let db
 let seed
 
+/** Local `days` from today at `hour`:00 — the same instant the seed uses. */
+const atDays = (days, hour) => {
+  const d = new Date()
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days, hour, 0, 0, 0).getTime()
+}
+/**
+ * NOON TODAY, handed to the seed and to every read below, rather than the
+ * wall clock read afresh at each call. Today stays today — these assertions
+ * are about the day the demo opens — but the TIME of day stops mattering,
+ * and the seed can no longer be built a tick either side of a midnight the
+ * reads land on. docs/principles.md: deterministic, injectable clocks.
+ */
+const NOW = atDays(0, 12)
+
 beforeEach(() => {
   db = new NodeSqliteDriver()
   db.exec(LOCAL_SCHEMA)
-  seed = seedDemo(db)
+  seed = seedDemo(db, NOW)
 })
 
 describe('the seeded fleet health', () => {
@@ -34,7 +48,7 @@ describe('the seeded fleet health', () => {
     assert.equal(facts.dueAfter, 100)
     assert.equal(facts.due, true)
 
-    const health = sehat(db, Date.now())
+    const health = sehat(db, NOW)
     assert.deepEqual(
       health.serviceDue.map((r) => r.id),
       ['asset-fx9-1'],
@@ -51,12 +65,12 @@ describe('the seeded fleet health', () => {
     assert.equal(facts.retireAfterCycles, 30)
     assert.equal(facts.cyclesOver, false)
 
-    assert.deepEqual(sehat(db, Date.now()).cyclesOver, [], 'nothing has crossed yet')
+    assert.deepEqual(sehat(db, NOW).cyclesOver, [], 'nothing has crossed yet')
   })
 
   test('a unit pushed past the ceiling joins the cycle group — and nothing else changes', () => {
     db.exec(`update assets set cycle_count = 31 where id = 'asset-fx9-2'`)
-    const over = sehat(db, Date.now()).cyclesOver
+    const over = sehat(db, NOW).cyclesOver
     assert.deepEqual(over.map((r) => r.id), ['asset-fx9-2'])
     assert.equal(over[0].cycles, 31)
     assert.equal(over[0].ceiling, 30)
@@ -66,7 +80,7 @@ describe('the seeded fleet health', () => {
   })
 
   test('dead stock is exactly the two idle units, value split honestly', () => {
-    const health = sehat(db, Date.now())
+    const health = sehat(db, NOW)
     assert.deepEqual(
       health.deadStock.map((r) => r.id).sort(),
       ['asset-sachdeva-3', 'asset-samyang-1'],
@@ -86,15 +100,15 @@ describe('the seeded fleet health', () => {
     // New: an anchor inside the window protects a recent arrival.
     db.exec(
       `update assets set last_scanned_at = ?, updated_at = ? where id = 'asset-sachdeva-3'`,
-      [new Date().toISOString(), new Date().toISOString()],
+      [new Date(NOW).toISOString(), new Date(NOW).toISOString()],
     )
-    assert.deepEqual(sehat(db, Date.now()).deadStock, [])
+    assert.deepEqual(sehat(db, NOW).deadStock, [])
   })
 })
 
 describe('the serviced flow, end to end', () => {
   test('threshold crossed → surfaced → serviced with cost → reset, booked, linked', () => {
-    assert.equal(sehat(db, Date.now()).serviceDue.length, 1)
+    assert.equal(sehat(db, NOW).serviceDue.length, 1)
 
     // The one flow the sheet performs: the repair on the kharcha book,
     // named to the unit, and the serviced event carrying the link.
@@ -105,14 +119,14 @@ describe('the serviced flow, end to end', () => {
       assetId: 'asset-fx9-1',
       counterparty: 'Sharif Camera Works',
       note: 'Full service',
-      createdAt: Date.now(),
+      createdAt: NOW,
     })
     recordServiced(db, { assetId: 'asset-fx9-1', note: 'Full service', expenseId })
 
     const facts = serviceFacts(db, 'asset-fx9-1')
     assert.equal(facts.daysSinceService, 0, 'the meter reset')
     assert.equal(facts.due, false)
-    assert.deepEqual(sehat(db, Date.now()).serviceDue, [], 'the nudge stands down')
+    assert.deepEqual(sehat(db, NOW).serviceDue, [], 'the nudge stands down')
 
     // The money landed where the payback bar reads it…
     assert.equal(assetCosts(db, 'asset-fx9-1').repairMinor, 12_000_00 + 45_000_00)
@@ -130,7 +144,7 @@ describe('the serviced flow, end to end', () => {
 
 describe('the day’s account carries the dead-stock line', () => {
   test('when dead stock exists, the hisaab says so in one line — count and money', () => {
-    const account = dayAccount(db, Date.now())
+    const account = dayAccount(db, NOW)
     assert.equal(account.deadStock.items, 2)
     assert.equal(account.deadStock.days, 90)
     assert.match(
@@ -143,9 +157,9 @@ describe('the day’s account carries the dead-stock line', () => {
     db.exec(
       `update assets set last_scanned_at = ?, updated_at = ?
         where id in ('asset-samyang-1', 'asset-sachdeva-3')`,
-      [new Date().toISOString(), new Date().toISOString()],
+      [new Date(NOW).toISOString(), new Date(NOW).toISOString()],
     )
-    const account = dayAccount(db, Date.now())
+    const account = dayAccount(db, NOW)
     assert.equal(account.deadStock.items, 0)
     assert.doesNotMatch(dayAccountText(account), /Idle \d+\+ days/)
   })

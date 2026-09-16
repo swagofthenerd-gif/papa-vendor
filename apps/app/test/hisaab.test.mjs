@@ -32,10 +32,24 @@ const expectedFor = (jobId, mode) => {
     .map((r) => r.id)
 }
 
+/** Local `days` from today at `hour`:00 — the same instant the seed uses. */
+const atDays = (days, hour) => {
+  const d = new Date()
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days, hour, 0, 0, 0).getTime()
+}
+/**
+ * NOON TODAY, handed to the seed and to every read below, rather than the
+ * wall clock read afresh at each call. Today stays today — these assertions
+ * are about the day the demo opens — but the TIME of day stops mattering,
+ * and the seed can no longer be built a tick either side of a midnight the
+ * reads land on. docs/principles.md: deterministic, injectable clocks.
+ */
+const NOW = atDays(0, 12)
+
 beforeEach(() => {
   db = new NodeSqliteDriver()
   db.exec(LOCAL_SCHEMA)
-  seed = seedDemo(db)
+  seed = seedDemo(db, NOW)
   registry = new SessionRegistry(db, 'test-device', expectedFor)
 })
 
@@ -61,7 +75,7 @@ describe('classification', () => {
       bytes: 10,
     })
 
-    const account = dayAccount(db, Date.now())
+    const account = dayAccount(db, NOW)
     assert.equal(account.wentOut, 4)
     assert.equal(account.cameBack, 1)
     assert.equal(account.onTrust, 2)
@@ -86,7 +100,7 @@ describe('classification', () => {
     const back = registry.open('job-doc', 'in')
     back.session.addManually(back.expected[0], 'check_in')
 
-    const account = dayAccount(db, Date.now())
+    const account = dayAccount(db, NOW)
     assert.equal(group(account, shan.id).out.length, 1)
     assert.equal(group(account, shan.id).back.length, 0)
     assert.equal(group(account, 'job-doc').back.length, 1)
@@ -96,7 +110,7 @@ describe('classification', () => {
   test('an unknown label is counted, not dropped', () => {
     const shan = seed.jobs[0]
     registry.open(shan.id, 'out').session.scan('v1NOTAREALTAGCODEATALL0')
-    const account = dayAccount(db, Date.now())
+    const account = dayAccount(db, NOW)
     assert.equal(account.unknownTags, 1)
   })
 
@@ -110,7 +124,7 @@ describe('classification', () => {
       db.get(`select count(*) as n from outbox`).n, 2,
       'the queue really holds two ops — the dedupe is the account\'s, not the engine\'s',
     )
-    assert.equal(dayAccount(db, Date.now()).wentOut, 1)
+    assert.equal(dayAccount(db, NOW).wentOut, 1)
   })
 
   test('a scan upgrades trust to observation, in either order of arrival', () => {
@@ -125,7 +139,7 @@ describe('classification', () => {
     registry.endCurrent()
     registry.open(shan.id, 'out').session.confirmContents([shan.expected[1]], 'check_out')
 
-    const g = group(dayAccount(db, Date.now()), shan.id)
+    const g = group(dayAccount(db, NOW), shan.id)
     assert.equal(g.out.length, 2)
     // Neither is still a belief: something real was seen both times.
     assert.deepEqual(g.out.filter((i) => i.assumed), [])
@@ -137,7 +151,7 @@ describe('the day boundary', () => {
     const shan = seed.jobs[0]
     registry.open(shan.id, 'out').session.addManually(shan.expected[0], 'check_out')
 
-    const now = Date.now()
+    const now = NOW
     const { startMs } = dayBounds(now)
     // Push the op back to yesterday evening, the way a phone that scanned
     // yesterday and never synced would hold it.
@@ -151,14 +165,14 @@ describe('the day boundary', () => {
   test('yesterday\'s photos are not today\'s either', () => {
     // The seed itself plants demo condition photos dated 2026-08-14 — they
     // must not leak into today's photo count.
-    const account = dayAccount(db, Date.now())
+    const account = dayAccount(db, NOW)
     assert.equal(account.photos, 0)
   })
 })
 
 describe('what is still out', () => {
   test('carries the due label the Today board shows, from the same read', () => {
-    const account = dayAccount(db, Date.now())
+    const account = dayAccount(db, NOW)
     // The seed has gear physically out (job-doc among others).
     assert.ok(account.stillOut.length > 0)
     for (const j of account.stillOut) {
@@ -175,7 +189,7 @@ describe('the WhatsApp copy', () => {
     prep.session.addManually(shan.expected[0], 'check_out')
     prep.session.confirmContents([shan.expected[1]], 'check_out')
 
-    const text = dayAccountText(dayAccount(db, Date.now()))
+    const text = dayAccountText(dayAccount(db, NOW))
     assert.match(text, /^Din ka hisaab — /)
     assert.match(text, /Out 2 · Back 0 · On trust 1/)
     assert.match(text, new RegExp(`${shan.label.slice(0, 10)}.*2 out \\(1 on trust\\)`))
@@ -186,12 +200,12 @@ describe('the WhatsApp copy', () => {
   })
 
   test('an empty day says so instead of rendering a page of zeros', () => {
-    const text = dayAccountText(dayAccount(db, Date.now()))
+    const text = dayAccountText(dayAccount(db, NOW))
     assert.match(text, /Nothing scanned or photographed today\./)
   })
 
   test('still-out lines carry the honest due label, then the money', () => {
-    const text = dayAccountText(dayAccount(db, Date.now()))
+    const text = dayAccountText(dayAccount(db, NOW))
     // Every still-out line carries a due label — 'due today', 'N days late',
     // 'back <day>', or the honest 'no date' — followed, when anything on the
     // job is priced, by the replacement value of what it is holding.
@@ -213,7 +227,7 @@ describe('the WhatsApp copy', () => {
     // on a job of its own.
     db.exec(`insert into jobs (id, org_id, label, status) values ('job-x', 'demo-org', 'Unpriced Job', 'open')`)
     db.exec(`update assets set presence = 'out', current_job_id = 'job-x' where id = 'asset-sachdeva-1'`)
-    const text = dayAccountText(dayAccount(db, Date.now()))
+    const text = dayAccountText(dayAccount(db, NOW))
     const line = text.split('\n').find((l) => l.includes('Unpriced Job'))
     assert.ok(line, 'the unpriced job is still listed')
     assert.doesNotMatch(line, /Rs/)

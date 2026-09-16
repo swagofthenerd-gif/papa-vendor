@@ -25,10 +25,24 @@ import {
 let db
 let seed
 
+/** Local `days` from today at `hour`:00 — the same instant the seed uses. */
+const atDays = (days, hour) => {
+  const d = new Date()
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days, hour, 0, 0, 0).getTime()
+}
+/**
+ * NOON TODAY, handed to the seed and to every read below, rather than the
+ * wall clock read afresh at each call. Today stays today — these assertions
+ * are about the day the demo opens — but the TIME of day stops mattering,
+ * and the seed can no longer be built a tick either side of a midnight the
+ * reads land on. docs/principles.md: deterministic, injectable clocks.
+ */
+const NOW = atDays(0, 12)
+
 beforeEach(() => {
   db = new NodeSqliteDriver()
   db.exec(LOCAL_SCHEMA)
-  seed = seedDemo(db)
+  seed = seedDemo(db, NOW)
 })
 
 describe('the seeded due dates', () => {
@@ -36,14 +50,14 @@ describe('the seeded due dates', () => {
     // The seed documents this promise: the dates are relative to the day the
     // demo opens precisely so the board always demonstrates all three
     // states. A fixed calendar date would rot into all-overdue in a week.
-    const states = seed.jobs.map((j) => dueStatus(j.expectedBack, Date.now()).state).sort()
+    const states = seed.jobs.map((j) => dueStatus(j.expectedBack, NOW).state).sort()
     assert.deepEqual(states, ['due_today', 'overdue', 'upcoming'])
   })
 
   test('are real ISO dates the parser accepts, not free text', () => {
     for (const job of seed.jobs) {
       assert.match(job.expectedBack, /^\d{4}-\d{2}-\d{2}$/)
-      assert.notEqual(dueStatus(job.expectedBack, Date.now()).state, 'unknown')
+      assert.notEqual(dueStatus(job.expectedBack, NOW).state, 'unknown')
     }
   })
 
@@ -51,7 +65,7 @@ describe('the seeded due dates', () => {
     // So the coming-back board opens with a real red row and a nudge to
     // send, instead of the overdue state being unreachable in the demo.
     const doc = seed.jobs.find((j) => j.id === 'job-doc')
-    assert.equal(dueStatus(doc.expectedBack, Date.now()).state, 'overdue')
+    assert.equal(dueStatus(doc.expectedBack, NOW).state, 'overdue')
     const out = db.get(
       `select count(*) as n from assets where current_job_id = 'job-doc' and presence = 'out'`,
     )
@@ -107,7 +121,7 @@ describe('the board runs in departure order', () => {
 
 describe('the coming-back board', () => {
   test('counts overdue and due-back from dueStatus, not a hardcoded zero', () => {
-    const board = dueBoard(db, Date.now())
+    const board = dueBoard(db, NOW)
     // Only the documentary has gear out, and it is seeded overdue.
     assert.equal(board.overdue, 1)
     assert.equal(board.dueBack, 0)
@@ -121,7 +135,7 @@ describe('the coming-back board', () => {
     db.exec(
       `update assets set presence = 'out', current_job_id = 'job-wedding' where id = 'asset-fx6-1'`,
     )
-    const board = dueBoard(db, Date.now())
+    const board = dueBoard(db, NOW)
     assert.deepEqual(
       board.outJobs.map((j) => j.due.state),
       ['overdue', 'upcoming'],
@@ -130,7 +144,7 @@ describe('the coming-back board', () => {
 
   test('free-text dates land in neither counter — no date is not late', () => {
     db.exec(`update jobs set expected_back = 'after eid' where id = 'job-doc'`)
-    const board = dueBoard(db, Date.now())
+    const board = dueBoard(db, NOW)
     assert.equal(board.overdue, 0)
     assert.equal(board.dueBack, 0)
     assert.equal(board.outJobs[0].due.label, 'no date')

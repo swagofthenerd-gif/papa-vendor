@@ -68,9 +68,18 @@ beforeEach(() => {
 const ops = (op) => db.all(`select id, op, payload, depends_on from outbox where op = ? order by seq`, [op])
   .map((r) => ({ ...r, payload: JSON.parse(r.payload) }))
 
-// The golden window: Mon 1 Apr 2030 10:00 -> Thu 11 Apr 10:00 PKT, ten days.
-const APR1 = at('2030-04-01T10:00+05:00')
-const APR11 = at('2030-04-11T10:00+05:00')
+// The golden window: Mon 25 Mar 2030 10:00 -> Thu 4 Apr 10:00 PKT, ten days.
+//
+// It ENDS BEFORE 10 APRIL on purpose. The seeded Eid is "the coming 10 April"
+// from the seed's own instant, so now that the calendar is built from the same
+// 2030 clock this file prices against, a window running into 11 April crosses
+// it and carries ×1.25 — a different test, and it already exists below ('a
+// window crossing the seeded Eid'). This one is the clean quote. Still a
+// Monday start over ten calendar days holding exactly one Saturday and one
+// Sunday, so the span, the six billable days, the weekend mask and every
+// rupee below are the ones this file has always asserted.
+const MAR25 = at('2030-03-25T10:00+05:00')
+const APR4 = at('2030-04-04T10:00+05:00')
 
 describe('the seeded card', () => {
   test('one default card, the documented knobs, every priced product on it', () => {
@@ -105,7 +114,7 @@ describe('the seeded card', () => {
 describe('quoteFor — a booking priced from the mirror', () => {
   test('GOLDEN: FX9 ×2 + XLR ×4 + an unpriced tripod over ten days = Rs 307,200 +1 unpriced', () => {
     const r = createBooking(db, ORG, {
-      customerId: 'cust-hamza', startMs: APR1, endMs: APR11,
+      customerId: 'cust-hamza', startMs: MAR25, endMs: APR4,
       lines: [{ productId: 'prod-fx9', qty: 2 }, { productId: 'prod-xlr', qty: 4 }, { productId: 'prod-sachdeva', qty: 1 }],
       status: 'pencil',
     }, NOW, ids)
@@ -121,7 +130,7 @@ describe('quoteFor — a booking priced from the mirror', () => {
     assert.equal(q.totals.unpricedCount, 1)
     assert.equal(q.totals.indicative, true)
     assert.deepEqual(q.totals.indicativeReasons, ['unpriced_lines', 'not_confirmed'])
-    assert.equal(q.steps.calendarMultiplier.multiplier, 1, 'April 1–10 crosses no seeded calendar day')
+    assert.equal(q.steps.calendarMultiplier.multiplier, 1, '25 March – 3 April crosses no seeded calendar day')
   })
   test('a confirmed, fully priced booking is not indicative; the seeded B#1 prices', () => {
     const q = quoteFor(db, 'bk-1')
@@ -160,7 +169,7 @@ describe('quoteForLines — the enquiry priced before a booking exists', () => {
     { productId: 'prod-xlr', productName: 'XLR Cable 5m', qty: 4 },
   ]
   test('indicative by construction, the same numbers the booking will carry', () => {
-    const q = quoteForLines(db, LINES, APR1, APR11, null)
+    const q = quoteForLines(db, LINES, MAR25, APR4, null)
     assert.equal(q.status, 'enquiry')
     assert.equal(q.bookingId, null)
     assert.equal(q.totals.subtotalMinor, rs(307_200))
@@ -168,14 +177,14 @@ describe('quoteForLines — the enquiry priced before a booking exists', () => {
     assert.equal(q.totals.indicative, true)
     assert.deepEqual(q.totals.indicativeReasons, ['not_confirmed'])
     const b = createBooking(db, ORG, {
-      customerId: 'cust-bilal', startMs: APR1, endMs: APR11,
+      customerId: 'cust-bilal', startMs: MAR25, endMs: APR4,
       lines: LINES.map((l) => ({ productId: l.productId, qty: l.qty })), status: 'pencil',
     }, NOW, ids)
     assert.equal(quoteFor(db, b.bookingId).totals.subtotalMinor, q.totals.subtotalMinor)
   })
   test('with a customer, the flags ride along; without one, null', () => {
-    assert.equal(quoteForLines(db, LINES, APR1, APR11, null).flags, null)
-    const q = quoteForLines(db, LINES, APR1, APR11, 'cust-hamza')
+    assert.equal(quoteForLines(db, LINES, MAR25, APR4, null).flags, null)
+    const q = quoteForLines(db, LINES, MAR25, APR4, 'cust-hamza')
     assert.equal(q.customerName, 'Hamza Saeed')
     assert.equal(q.flags.verified, true)
   })
@@ -231,7 +240,7 @@ describe('the rate card writes', () => {
     const r = setRate(db, ORG, 'prod-sachdeva', rs(1_500), NOW, ids)
     assert.equal(r.ok, true)
     assert.equal(dayRateFor(db, 'prod-sachdeva'), rs(1_500))
-    const q = quoteForLines(db, [{ productId: 'prod-sachdeva', productName: 'Sachdeva Tripod', qty: 2 }], APR1, APR11, null)
+    const q = quoteForLines(db, [{ productId: 'prod-sachdeva', productName: 'Sachdeva Tripod', qty: 2 }], MAR25, APR4, null)
     assert.equal(q.lines[0].lineTotalMinor, 2 * 6 * rs(1_500))
     const [op] = ops('upsert_rate_entry')
     assert.deepEqual(op.payload, { p_rate_card_id: 'card-standard', p_product_id: 'prod-sachdeva', p_day_rate_minor: rs(1_500) })
@@ -242,7 +251,7 @@ describe('the rate card writes', () => {
     assert.equal(ops('upsert_rate_entry')[0].payload.p_day_rate_minor, null)
     setRate(db, ORG, 'prod-xlr', 0, NOW, ids)
     assert.equal(dayRateFor(db, 'prod-xlr'), 0)
-    const q = quoteForLines(db, [{ productId: 'prod-xlr', productName: 'XLR', qty: 4 }], APR1, APR11, null)
+    const q = quoteForLines(db, [{ productId: 'prod-xlr', productName: 'XLR', qty: 4 }], MAR25, APR4, null)
     assert.equal(q.lines[0].priced, true)
     assert.equal(q.lines[0].lineTotalMinor, 0)
   })
@@ -258,8 +267,8 @@ describe('the rate card writes', () => {
     assert.deepEqual(card.weekendMask, [6, 7])
     assert.equal(card.minBillableDays, 2)
     assert.equal(card.weekEqualsDays, 3, 'an omitted knob keeps its value')
-    const q = quoteForLines(db, [{ productId: 'prod-fx9', productName: 'FX9', qty: 1 }], APR1, APR11, null)
-    assert.deepEqual(q.steps.billableDays.droppedDates, ['2030-04-06', '2030-04-07'])
+    const q = quoteForLines(db, [{ productId: 'prod-fx9', productName: 'FX9', qty: 1 }], MAR25, APR4, null)
+    assert.deepEqual(q.steps.billableDays.droppedDates, ['2030-03-30', '2030-03-31'])
     assert.equal(q.steps.weekRule.billableDays, 4)
     const [op] = ops('upsert_rate_card')
     assert.equal(op.payload.p_id, 'card-standard')
@@ -289,31 +298,31 @@ describe('the rate card writes', () => {
 
 describe('the calendar writes', () => {
   test('setCalendarDay adds a holiday the next quote applies, and queues set_calendar_day', () => {
-    const r = setCalendarDay(db, ORG, '2030-04-05', 'holiday', 'Test holiday', 1.5, NOW, ids)
+    const r = setCalendarDay(db, ORG, '2030-04-01', 'holiday', 'Test holiday', 1.5, NOW, ids)
     assert.equal(r.ok, true)
-    const q = quoteForLines(db, [{ productId: 'prod-fx9', productName: 'FX9', qty: 1 }], APR1, APR11, null)
+    const q = quoteForLines(db, [{ productId: 'prod-fx9', productName: 'FX9', qty: 1 }], MAR25, APR4, null)
     assert.equal(q.steps.calendarMultiplier.multiplier, 1.5)
     assert.equal(q.lines[0].lineTotalMinor, Math.round(6 * rs(25_000) * 1.5))
     // client_day_id rides beside the args (W9): the pipe maps the server's
     // row id onto the phone's `cal-…` one when the reply comes back.
     const { client_day_id, ...args } = ops('set_calendar_day')[0].payload
     assert.match(client_day_id, /^cal-/)
-    assert.deepEqual(args, { p_day: '2030-04-05', p_kind: 'holiday', p_name: 'Test holiday', p_rate_multiplier: 1.5 })
+    assert.deepEqual(args, { p_day: '2030-04-01', p_kind: 'holiday', p_name: 'Test holiday', p_rate_multiplier: 1.5 })
   })
   test('the same (day, kind) is one row, updated; clearCalendarDay removes it and queues', () => {
-    setCalendarDay(db, ORG, '2030-04-05', 'holiday', 'First', 1.5, NOW, ids)
-    setCalendarDay(db, ORG, '2030-04-05', 'holiday', 'Second', 1.1, NOW, ids)
-    const rows = calendarDays(db).filter((d) => d.day === '2030-04-05')
+    setCalendarDay(db, ORG, '2030-04-01', 'holiday', 'First', 1.5, NOW, ids)
+    setCalendarDay(db, ORG, '2030-04-01', 'holiday', 'Second', 1.1, NOW, ids)
+    const rows = calendarDays(db).filter((d) => d.day === '2030-04-01')
     assert.equal(rows.length, 1)
     assert.equal(rows[0].name, 'Second')
-    assert.equal(clearCalendarDay(db, '2030-04-05', 'holiday', NOW, ids), true)
-    assert.equal(clearCalendarDay(db, '2030-04-05', 'holiday', NOW, ids), false)
-    assert.equal(calendarDays(db).some((d) => d.day === '2030-04-05'), false)
-    assert.deepEqual(ops('clear_calendar_day')[0].payload, { p_day: '2030-04-05', p_kind: 'holiday' })
+    assert.equal(clearCalendarDay(db, '2030-04-01', 'holiday', NOW, ids), true)
+    assert.equal(clearCalendarDay(db, '2030-04-01', 'holiday', NOW, ids), false)
+    assert.equal(calendarDays(db).some((d) => d.day === '2030-04-01'), false)
+    assert.deepEqual(ops('clear_calendar_day')[0].payload, { p_day: '2030-04-01', p_kind: 'holiday' })
   })
   test('a bad multiplier, a blank name, a malformed date are refused', () => {
-    assert.deepEqual(setCalendarDay(db, ORG, '2030-04-05', 'holiday', 'X', 0, NOW, ids), { ok: false, reason: 'bad_multiplier' })
-    assert.deepEqual(setCalendarDay(db, ORG, '2030-04-05', 'holiday', '  ', 1, NOW, ids), { ok: false, reason: 'bad_name' })
+    assert.deepEqual(setCalendarDay(db, ORG, '2030-04-01', 'holiday', 'X', 0, NOW, ids), { ok: false, reason: 'bad_multiplier' })
+    assert.deepEqual(setCalendarDay(db, ORG, '2030-04-01', 'holiday', '  ', 1, NOW, ids), { ok: false, reason: 'bad_name' })
     assert.deepEqual(setCalendarDay(db, ORG, '5 April', 'holiday', 'X', 1, NOW, ids), { ok: false, reason: 'bad_day' })
   })
 })
@@ -323,7 +332,7 @@ describe('the override (0024 D8)', () => {
   let lineId
   beforeEach(() => {
     const r = createBooking(db, ORG, {
-      customerId: 'cust-hamza', startMs: APR1, endMs: at('2030-04-15T10:00+05:00'),
+      customerId: 'cust-hamza', startMs: MAR25, endMs: at('2030-04-08T10:00+05:00'),
       lines: [{ productId: 'prod-fx9', qty: 1 }], status: 'pencil',
     }, NOW, ids)
     bookingId = r.bookingId
@@ -363,7 +372,7 @@ describe('the override (0024 D8)', () => {
   })
   test('confirming a booking with an unpriced line is allowed — counted, not blocked', () => {
     const r = createBooking(db, ORG, {
-      customerId: 'cust-hamza', startMs: APR1, endMs: APR11,
+      customerId: 'cust-hamza', startMs: MAR25, endMs: APR4,
       lines: [{ productId: 'prod-sachdeva', qty: 1 }], status: 'pencil',
     }, NOW, ids)
     assert.equal(confirmBooking(db, ORG, r.bookingId, {}, NOW, ids).ok, true)
@@ -379,7 +388,7 @@ describe('the WhatsApp quote — golden, both tables', () => {
   beforeEach(() => {
     setPaymentLine(db, 'JazzCash: 0300 1234567')
     const r = createBooking(db, ORG, {
-      customerId: 'cust-hamza', startMs: APR1, endMs: APR11,
+      customerId: 'cust-hamza', startMs: MAR25, endMs: APR4,
       lines: [{ productId: 'prod-fx9', qty: 2 }, { productId: 'prod-xlr', qty: 4 }, { productId: 'prod-sachdeva', qty: 1 }],
       status: 'pencil',
     }, NOW, ids)
@@ -390,7 +399,7 @@ describe('the WhatsApp quote — golden, both tables', () => {
     assert.equal(text, [
       'Ravi Light & Grip — quote',
       'For: Hamza Saeed',
-      `From ${bookingDateLabel(APR1)} to ${bookingDateLabel(APR11)}`,
+      `From ${bookingDateLabel(MAR25)} to ${bookingDateLabel(APR4)}`,
       '6 billable days (10 on the calendar)',
       '',
       'Sony FX9 × 2 · 6 days · Rs 25,000/day = Rs 300,000',
@@ -410,7 +419,7 @@ describe('the WhatsApp quote — golden, both tables', () => {
     assert.equal(text, [
       'Ravi Light & Grip — quote',
       'Naam: Hamza Saeed',
-      `${bookingDateLabel(APR1)} se ${bookingDateLabel(APR11)} tak`,
+      `${bookingDateLabel(MAR25)} se ${bookingDateLabel(APR4)} tak`,
       '6 bill wale din (calendar pe 10)',
       '',
       'Sony FX9 × 2 · 6 din · Rs 25,000/din = Rs 300,000',
@@ -426,10 +435,10 @@ describe('the WhatsApp quote — golden, both tables', () => {
     ].join('\n'))
   })
   test('an enquiry quote with a holiday inside carries the note; no client, no deposit line', () => {
-    setCalendarDay(db, ORG, '2030-04-05', 'holiday', 'Eid ul-Fitr', 1.25, NOW, ids)
-    const q = quoteForLines(db, [{ productId: 'prod-fx9', productName: 'Sony FX9', qty: 1 }], APR1, APR11, null)
+    setCalendarDay(db, ORG, '2030-04-01', 'holiday', 'Eid ul-Fitr', 1.25, NOW, ids)
+    const q = quoteForLines(db, [{ productId: 'prod-fx9', productName: 'Sony FX9', qty: 1 }], MAR25, APR4, null)
     const text = quoteTextOf(db, STR_EN, seed.houseName, q)
-    assert.match(text, /Eid ul-Fitr on 2030-04-05: ×1\.25 on the whole booking/)
+    assert.match(text, /Eid ul-Fitr on 2030-04-01: ×1\.25 on the whole booking/)
     assert.match(text, /Sony FX9 × 1 · 6 days · Rs 25,000\/day = Rs 187,500/)
     assert.match(text, /Indicative — not confirmed yet\./)
     assert.doesNotMatch(text, /Deposit/)
