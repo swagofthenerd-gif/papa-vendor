@@ -57,7 +57,11 @@ const rs = (rupees) => rupees * 100
 beforeEach(() => {
   db = new NodeSqliteDriver()
   db.exec(LOCAL_SCHEMA)
-  seed = seedDemo(db)
+  // The seed is built from the SAME instant this file prices against. Its
+  // own clock was pinned to 2030 while the seeded bookings and ledger were
+  // built from the real today, so the two disagreed by years — green, but
+  // the same shape of flake the seam in seedDemo exists to remove.
+  seed = seedDemo(db, NOW)
   n = 0
 })
 

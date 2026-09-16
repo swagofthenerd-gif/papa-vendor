@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Nothing leaves this phone by backup or by device transfer (W12).
+
+  Android 12 replaced `allowBackup` with these two sections for cloud
+  backup and for phone-to-phone transfer, and an app that sets only
+  `allowBackup="false"` still transfers on API 31+. Both are excluded here
+  for the same reason the manifest gives: the database is SQLCipher and its
+  key is in the Android Keystore, which never leaves the device — so a
+  restored copy would be a book the new phone cannot open, and the customer
+  list would have travelled for nothing.
+
+  See docs/android.md and docs/assumptions.md#no-device-backup.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="file" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="file" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

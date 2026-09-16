@@ -13,6 +13,7 @@ import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 // --- network --- (0025): the thermal printer seam.
 import { printThermal } from '../print/thermal.ts'
+import { thermalPrintSaid } from '../print/print-said.ts'
 import { Sheet, SheetClose } from '../components/Sheet.tsx'
 
 /**
@@ -109,14 +110,11 @@ export function SessionScreen({ store, jobId }: { store: DemoStore; jobId: strin
           // the QR parchi); where they go is the seam's decision.
           const bytes = store.thermalParchiBytes(jobId)
           if (!bytes) return
+          // W12 moved the reason→sentence mapping into print-said.ts: the
+          // Bluetooth transport speaks four more refusals than `no_printer`
+          // and two screens now translate them.
           void printThermal(bytes, `parchi-${jobId}.bin`).then((r) => {
-            setPrinted(
-              r.ok
-                ? (r.reason === 'dev_download' ? STR.networkThermalSaved : STR.networkThermalSent)
-                : r.reason === 'no_printer'
-                  ? STR.networkThermalNoPrinter
-                  : STR.networkThermalFailed(r.reason ?? ''),
-            )
+            setPrinted(thermalPrintSaid(r))
           })
         }}
         onBackToScanning={() => go({ name: 'scan', jobId, mode: 'out' })}

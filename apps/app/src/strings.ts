@@ -1356,7 +1356,6 @@ const STR_EN = {
   pipeDeviceLine: (label: string, id: string): string => `${label} · ${id}`,
   pipeServerLine: (url: string): string => `Talks to ${url}`,
   pipeSessionUntil: (when: string): string => `Session good until ${when}`,
-  pipeTokenInMemory: 'Browser build: the session lives in memory and is gone on reload. The Android build keeps it.',
   pipePeopleHeading: 'People on this phone',
   pipePeopleSub: 'Tap a name to hand the phone over',
   pipeHoldingNow: 'holding it now',
@@ -1387,6 +1386,38 @@ const STR_EN = {
   pipeLiveQueueStatus: (n: number): string =>
     n === 0 ? 'Queue empty · synced with the server' : `${n} write${s(n)} queued · sending when the server answers`,
   pipeOpName: (op: string): string => OP_EN[op] ?? op,
+  // --- the device wave (W12): the encrypted book, the printer ----------
+  // One delimited block so the concurrent money-doors branch merges
+  // without a conflict. `network*` for the printer because the thermal
+  // parchi's words already live under that prefix; `pipe*` for the phone
+  // and its book because that is where the This-phone screen reads.
+  networkPrinterHeading: 'Printer',
+  networkPrinterSub: 'The till printer this phone prints parchis on.',
+  networkPrinterNoneChosen: 'No printer chosen yet.',
+  networkPrinterChoose: 'Choose a printer',
+  networkPrinterChosen: (name: string): string => `Printing to ${name}`,
+  networkPrinterForget: 'Forget this printer',
+  networkPrinterTest: 'Print a test line',
+  networkPrinterTested: 'Test line sent to the printer.',
+  networkPrinterPaired: 'Paired Bluetooth devices',
+  networkPrinterNonePaired: 'Nothing is paired yet. Pair the printer in the phone\'s own Bluetooth settings, then come back.',
+  networkPrinterLooking: 'Looking for paired devices',
+  networkPrinterBrowserHint: 'No printer connected. A Bluetooth printer needs the Android app; here the parchi stays on screen and the bytes are still built.',
+  networkPrinterTestBody: 'Printer test. If you can read this line, a parchi will print.',
+  networkPrinterTestWidth: '32 columns, 58mm paper',
+  // The printer's refusals, each as the reason word the transport returns.
+  networkThermalNoPrinterChosen: 'No printer chosen — pick one under Settings, Printer.',
+  networkThermalBluetoothOff: 'Bluetooth is off. Turn it on and try again.',
+  networkThermalPermissionDenied: 'Bluetooth permission was refused, so the printer cannot be reached.',
+  networkThermalNoBluetooth: 'This phone has no Bluetooth radio.',
+  // The book at rest, on the This-phone screen.
+  pipeAtRestHeading: 'This phone\'s book',
+  pipeAtRestEncrypted: 'The book is encrypted on the phone itself, with a key the phone keeps in its secure hardware and never hands out. The session is kept in that book, so it survives a restart.',
+  pipeAtRestBrowser: 'Browser: the book lives in memory and is gone on reload, and so is the session. The Android app keeps both.',
+  pipeAtRestProof: (hex: string): string =>
+    `The file on the phone starts ${hex} — an unencrypted book would start 53514c6974652066, the words "SQLite format".`,
+  pipeAtRestNoFile: 'Nothing has been written to the file yet.',
+  // --- end the device wave ---------------------------------------------
 }
 
 /**

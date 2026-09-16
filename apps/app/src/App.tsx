@@ -33,6 +33,10 @@ import { PartnerSendSheet } from './demo/PartnerSendSheet.tsx'
 import { EnrolScreen } from './demo/EnrolScreen.tsx'
 import { PinGate } from './demo/PinGate.tsx'
 import { ThisPhoneScreen } from './demo/ThisPhoneScreen.tsx'
+// --- the device wave (W12): where the database comes from, and the printer
+import { openAppDatabase } from './db/boot.ts'
+import { installThermalPrinter } from './print/bt-printer.ts'
+// --- end the device wave
 
 /**
  * The app shell.
@@ -72,11 +76,24 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false
-    DemoStore.open()
+    // --- the device wave (W12) ------------------------------------------
+    // ONE branch, and it lives in db/boot.ts: on Android the database is
+    // SQLCipher on the filesystem, opened through openDeviceDatabase()
+    // with a key from the Keystore; in a browser it is sql.js in memory.
+    // There is deliberately no third answer — see boot.ts, and
+    // packages/core/src/db/device-key.ts for why the ordering is the risk.
+    // The printer's transport is installed on the same database, because
+    // the chosen printer is a setting that lives in it.
+    openAppDatabase()
+      .then((db) => {
+        installThermalPrinter(db)
+        return DemoStore.open(db)
+      })
       .then((s) => { if (!cancelled) { setStore(s); setLocked(s.needsPinGate()) } })
       .catch((e: unknown) => {
         if (!cancelled) setFailed(e instanceof Error ? e.message : String(e))
       })
+    // --- end the device wave -------------------------------------------
     return () => { cancelled = true }
   }, [])
 

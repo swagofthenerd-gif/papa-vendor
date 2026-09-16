@@ -7,6 +7,10 @@ import { useSyncTick } from '../sync-tick.ts'
 import { pinSwitchSaid } from './PinGate.tsx'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
+// --- the device wave (W12): what the book at rest actually is
+import { deviceHeaderHex, deviceStorage } from '../db/boot.ts'
+import { PLAINTEXT_MAGIC_HEX } from '../db/capacitor-driver.ts'
+// --- end the device wave
 
 /**
  * Settings → This phone (W9): who it is, who it talks to, what is waiting.
@@ -83,8 +87,16 @@ export function ThisPhoneScreen({ store }: { store: DemoStore }) {
             {session.expiresAt ? (
               <p className="section-sub">{STR.pipeSessionUntil(dateLabel(session.expiresAt))}</p>
             ) : null}
-            <p className="tags-hint">{STR.pipeTokenInMemory}</p>
           </section>
+
+          {/* --- the device wave (W12) -----------------------------------
+              What the book IS, on whichever host is running. This replaces
+              the browser-only "the session lives in memory" line, because
+              on the phone it no longer does: the token is a row in the
+              encrypted database, so it survives a restart — and that is
+              worth saying beside the proof rather than instead of it. --- */}
+          <AtRest />
+          {/* --- end the device wave ------------------------------------ */}
 
           <section className="section">
             <SectionHead icon="user" title={STR.pipePeopleHeading} sub={STR.pipePeopleSub} />
@@ -180,6 +192,46 @@ export function ThisPhoneScreen({ store }: { store: DemoStore }) {
         </>
       )}
     </Shell>
+  )
+}
+
+/**
+ * --- the device wave (W12) ---
+ *
+ * The book at rest, and the phone's own proof of it.
+ *
+ * Two honest sentences and, on the device, the first bytes of the file. A
+ * plaintext SQLite file starts with the ASCII "SQLite format 3\0"; a
+ * SQLCipher file starts with its random per-database salt, so these bytes
+ * differ on every install and match that magic on none. Rendering them puts
+ * the proof in the owner's hand without a cable, which is the difference
+ * between "we encrypted it" and "look".
+ *
+ * If the header ever DID read as plaintext, the line says so as a warning
+ * rather than quietly showing reassuring hex — the guard is only worth
+ * having if it can fail out loud.
+ */
+function AtRest() {
+  const storage = deviceStorage()
+  const header = deviceHeaderHex()
+  const plaintext = header !== null && header.startsWith(PLAINTEXT_MAGIC_HEX.slice(0, 16))
+  return (
+    <section className="section">
+      <SectionHead icon="shield" title={STR.pipeAtRestHeading} />
+      <p className="section-sub">
+        {storage.protection === 'encrypted' ? STR.pipeAtRestEncrypted : STR.pipeAtRestBrowser}
+      </p>
+      {header === null ? null : header === '' ? (
+        <p className="tags-hint">{STR.pipeAtRestNoFile}</p>
+      ) : plaintext ? (
+        <div className="notice notice-warn" role="alert">
+          <Icon name="warning" size={18} />
+          <div><strong>{STR.pipeAtRestProof(header)}</strong></div>
+        </div>
+      ) : (
+        <p className="section-sub code">{STR.pipeAtRestProof(header)}</p>
+      )}
+    </section>
   )
 }
 
