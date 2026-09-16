@@ -667,6 +667,208 @@ const STR_EN = {
     `Confirm — write ${rupees} back`,
   customerReversedNote: 'Charged, then it came back — reversed',
 
+  // ===================================================== W13 — money doors
+  // The eight screens the simulated year asked for and could not find:
+  // deposits, corrections and write-offs, the waived fee, the do-not-rent
+  // decision, the health toggle, the month picker, what a client is worth,
+  // how hard a unit works. One block, one wave — every key below is new in
+  // W13 and every one of them has its twin in strings-ur.ts.
+
+  // --- 1. Deposits (`no-deposit-door`) — hold / apply / refund, 0017 D4.
+  moneyDepositsHeading: 'Deposits',
+  moneyDepositsNone: 'Nothing held for this client.',
+  moneyDepositsHeldSub: (rupees: string): string => `${rupees} in the drawer`,
+  moneyTakeDeposit: 'Take a deposit',
+  moneyDepositAmount: 'Amount (Rs)',
+  moneyDepositHowHeld: 'How it is held',
+  moneyDepositCash: 'Cash',
+  moneyDepositCheque: 'Cheque',
+  moneyDepositNoteOptional: 'Note — cheque number, who handed it over',
+  moneyDepositAgainstJob: 'Against which job',
+  moneyDepositNoJob: 'No job',
+  moneyDepositSave: 'Record the deposit',
+  moneyDepositStamp: (state: string): string => DEPOSIT_STATE_EN[state] ?? state,
+  moneyDepositRowNote: (rupees: string, job: string | null): string =>
+    job ? `${rupees} · ${job}` : rupees,
+  moneyDepositRemaining: (rupees: string): string => `${rupees} still held`,
+  moneyDepositApplied: (rupees: string): string => `${rupees} put against bills`,
+  moneyDepositRefunded: (rupees: string): string => `${rupees} given back`,
+  moneyDepositApply: 'Apply to a bill',
+  moneyDepositApplyTitle: 'Apply the deposit',
+  moneyDepositApplyPick: 'Apply it to',
+  moneyDepositApplyBalance: (rupees: string): string => `Everything owed — ${rupees}`,
+  moneyDepositApplyCharge: (kind: string, rupees: string): string => `${kind} — ${rupees}`,
+  moneyDepositApplySave: 'Apply it',
+  moneyDepositApplyTooMuch: (rupees: string): string =>
+    `Only ${rupees} is still held.`,
+  moneyDepositRefund: 'Refund',
+  moneyDepositRefundTitle: 'Refund the deposit',
+  moneyDepositRefundHold: (rupees: string): string => `Hold to give ${rupees} back`,
+  // The gate, said BEFORE the tap. The server refuses a refund while the
+  // job is not QC-clear (override 15) and names every blocker; the phone
+  // says the same thing here, and says out loud that it can only see its
+  // own half.
+  moneyDepositRefundBlocked: 'Not yet — this job is not clear',
+  moneyDepositBlocker: (reason: string, n: number): string =>
+    REFUND_BLOCKER_EN[reason]?.(n) ?? reason,
+  moneyDepositServerChecksAgain:
+    'The server checks the job again when this sends. A refund it refuses comes back as one card, not as lost money.',
+  moneyDepositRefundNothingLeft: 'Nothing left to refund — it has all been applied.',
+  // --- 2. Corrections and write-offs (`no-adjustment-door`) — 0018 D6.
+  // Every line is a door: tapping one opens the two things a desk does to
+  // money already written. Both need a reason (override 18: the owner's
+  // judgement is never fought and always recorded) and both sit behind a
+  // hold, because the ledger is append-only and a correction is forever.
+  moneyLineDoorHint: 'Tap a line to correct it or write it off',
+  moneyLineTitle: 'This line',
+  moneyCorrectThis: 'Correct this',
+  moneyWriteItOff: 'Write it off',
+  moneyCorrectTitle: 'Correct this line',
+  moneyWriteOffTitle: 'Write this off',
+  moneyCorrectWhat: 'A mistake — the line comes off the book and the client sees both rows.',
+  moneyWriteOffWhat: 'Not a mistake — money the house has decided not to chase.',
+  moneyReasonLabel: 'Why (kept with the line)',
+  moneyReasonPlaceholder: 'e.g. Entered twice at the dock',
+  moneyCorrectHold: (rupees: string): string => `Hold to write ${rupees} back`,
+  moneyWriteOffHold: (rupees: string): string => `Hold to forgive ${rupees}`,
+  moneySettledLine: (word: string, date: string, why: string | null): string =>
+    why ? `${word} on ${date} — ${why}` : `${word} on ${date}`,
+  moneySettleRefused: (reason: string): string => SETTLE_REFUSAL_EN[reason] ?? reason,
+  // The double-tap guard as a question, never a refusal: two identical
+  // charges do genuinely happen, and only a person knows which this is.
+  moneyDuplicateNotice: (kind: string, rupees: string, seconds: number): string =>
+    `Two ${kind} lines of ${rupees}, ${seconds} second${s(seconds)} apart. Was that twice?`,
+  moneyDuplicateKeep: 'Both are real',
+  moneyDuplicateKept: 'Kept — both lines stand',
+  moneyWriteOffBalance: 'Write off what is owed',
+  moneyWriteOffBalanceTitle: 'Write off the balance',
+  moneyWriteOffBalanceWhat:
+    'The whole outstanding amount, given up — the absconded-client answer. It names no single charge, because a payment on a running account is not attached to one.',
+  moneyWriteOffBalanceHold: (rupees: string): string => `Hold to give up ${rupees}`,
+  moneyWriteOffBalanceReasonPlaceholder: 'e.g. Absconded — FIR filed',
+
+  // --- 3. The waived fee (`waived-fee-invisible`).
+  // The fee is written and written off in one transaction: two lines that
+  // net to nothing, both on the statement the client reads, so the
+  // goodwill is visible to the person who received it.
+  moneyWaiveIt: 'Waive it',
+  moneyWaiveTitle: 'Waive the late fee',
+  moneyWaiveWhat:
+    'The fee goes on the book and comes straight off it. Nothing is owed, and next quarter the khata still says the favour was given.',
+  moneyWaiveHold: (rupees: string): string => `Hold to waive ${rupees}`,
+  moneyWaiveReasonPlaceholder: 'e.g. Long client, first time late',
+  moneyFeeWaived: (rupees: string, date: string, why: string | null): string =>
+    why
+      ? `${rupees} late fee — waived on ${date} — ${why}`
+      : `${rupees} late fee — waived on ${date}`,
+  moneyWaivedHeading: 'Favours given',
+  moneyWaivedSub: (n: number): string => `${n} fee${s(n)} waived`,
+  // --- 4. Do not rent to this client (`no-blacklist`) — 0029.
+  // 0022's confirm gate has refused a blacklisted client since W5; this
+  // is the switch it never had. A reason to turn it ON, none to lift it.
+  moneyBlacklistStamp: 'do not rent',
+  moneyBlacklistHeading: 'Renting to this client',
+  moneyBlacklistOn: 'Do not rent to this client',
+  moneyBlacklistOff: 'Let this client rent again',
+  moneyBlacklistLine: (date: string, why: string | null): string =>
+    why ? `Refused since ${date} — ${why}` : `Refused since ${date}`,
+  moneyBlacklistOpen: 'This client can book and confirm as normal.',
+  moneyBlacklistWhat:
+    'Bookings for this client cannot be confirmed. The server refuses them too, by name, so no phone can promise gear around it.',
+  moneyBlacklistHold: 'Hold to refuse this client',
+  moneyBlacklistLiftHold: 'Hold to let them rent again',
+  moneyBlacklistReasonPlaceholder: 'e.g. Rs 2.6M of gear never came back',
+  moneyBlacklistOnConfirm: 'This client is on the do-not-rent list — confirming will be refused.',
+  // --- 5. The health door (`no-health-door`) — 0003's verbs, no new axis.
+  // Availability honesty depends on health ('here' and health='ok'), and
+  // until now only the crisis swap could move it: a tech who drops a lens
+  // on the bench had no way to say so.
+  moneyHealthHeading: 'How is it?',
+  moneyHealthNow: (word: string): string => `Right now: ${word}`,
+  moneyHealthBroken: 'It is broken',
+  moneyHealthNeedsALook: 'Needs a look',
+  moneyHealthOk: 'It is fine',
+  moneyHealthWhat: (call: string): string => HEALTH_WHAT_EN[call] ?? call,
+  moneyHealthNoteLabel: 'What happened (optional)',
+  moneyHealthNotePlaceholder: 'e.g. Dropped on the bench, mount is loose',
+  moneyHealthSave: (call: string): string => `${HEALTH_CALL_EN[call] ?? call} — record it`,
+  moneyHealthWord: (health: string): string => HEALTH_WORD_EN[health] ?? health,
+  moneyHealthIsEvidence:
+    'This goes in the log as a scan event, like everything else — the shelf and the calendar believe the log, not a switch.',
+  // --- 6. The month behind the day (`no-month-history-screen`).
+  // moneyStrip and monthProfit could always answer any month; every
+  // caller hardcoded today. A picker plus a title, not new maths.
+  moneyMonthPrev: 'The month before',
+  moneyMonthNext: 'The month after',
+  moneyMonthThis: 'this month, so far',
+  moneyMonthHeading: 'The month',
+  moneyMonthMoved: (out: number, back: number): string =>
+    `${out} went out · ${back} came back`,
+  moneyMonthNothingMoved: 'Nothing went out or came back this month.',
+  moneyMonthStatements: 'Statements',
+  moneyMonthStatementsSub: 'Tap a name to copy their statement for this month',
+  moneyMonthNobody: 'No khata moved this month.',
+  moneyMonthBilled: (rupees: string, paid: string): string =>
+    `Billed ${rupees} · paid ${paid}`,
+  moneyMonthCopied: 'Copied — paste it in WhatsApp',
+  // The kharcha head on a MONTH says month, not 'today' — the day's own
+  // words on a month's report is the drift that makes a reader distrust
+  // every other number on the page.
+  moneyMonthKharchaNone: 'Nothing spent this month.',
+  moneyMonthKharchaSpent: (rupees: string): string => `${rupees} spent this month`,
+  // --- 7. What this client has been worth (`no-lifetime-value-view`).
+  // Every figure is a sum over the book the khata page already loads.
+  moneyWorthHeading: 'What this client has been worth',
+  moneyWorthCharged: 'Billed, all time',
+  moneyWorthPaid: 'Paid',
+  moneyWorthWrittenOff: 'Written off',
+  moneyWorthJobs: 'Jobs',
+  moneyWorthAverage: 'Average job',
+  moneyWorthSpan: (first: string, last: string): string => `${first} → ${last}`,
+  moneyWorthFirstOnly: (first: string): string => `Since ${first}`,
+  moneyWorthNothing: 'Nothing on the book yet — no history to show.',
+  // The honest limit, on the screen rather than in a comment.
+  moneyWorthLimit:
+    'From this phone\u2019s book. A khata that started before the app, or one that has not synced, is longer than this.',
+  moneyWorthNoAverage: 'no priced job yet',
+  // --- 8. How hard it works (`no-utilization-read`).
+  // Four numbers from things that already exist, and the two honest
+  // limits said out loud: the phone's log is not the unit's life, and
+  // there is no acquisition date on this side of the pipe.
+  moneyWorkHeading: 'How hard it works',
+  moneyWorkDaysOut: (days: number, window: number): string =>
+    `Out ${days} of the last ${window} days`,
+  moneyWorkBusy: (pct: number): string => `Busy ${pct}% of the window`,
+  moneyWorkNeverOut: 'This phone has not seen it go out.',
+  moneyWorkOutNow: 'Out right now.',
+  moneyWorkIdle: (days: number): string => `Idle ${days} day${s(days)} since it last left`,
+  moneyWorkSinceService: (days: number, due: number | null): string =>
+    due === null
+      ? `${days} rental day${s(days)} since its last service`
+      : `${days} of ${due} rental days since its last service`,
+  moneyWorkEarned: 'Earned',
+  moneyWorkPerDay: 'A day, since first seen',
+  moneyWorkPerDayUnknown: 'no start date',
+  moneyWorkLimit:
+    'Days out come from this phone\u2019s own queue, and there is no purchase date on this side — so these are a floor, not a lifetime.',
+  // The Sehat group: the fleet ranked, which is the AUG question.
+  moneyWorkersHeading: 'Hardest workers',
+  moneyWorkersSub: (window: number): string => `Days out in the last ${window}`,
+  moneyWorkersRow: (days: number, rupees: string): string => `${days} day${s(days)} out · ${rupees}`,
+  // A unit that earned but never left THIS PHONE's log says so, rather
+  // than reading '0 days out' four times and inviting the wrong reading.
+  moneyWorkersRowNotOut: (window: number, rupees: string): string =>
+    `Not out in the last ${window} — earned ${rupees}`,
+  moneyWorkersNobody: 'Nothing has been out long enough to rank yet.',
+
+
+
+
+
+
+
+  // ======================================================================
+
   // --------------------------------------------------------------- kharcha
   // The expense side of the book (0019): the entry sheet, the asset page's
   // cost line, the job margin line, and the hisaab's Kharcha + month block.
@@ -1435,208 +1637,6 @@ const STR_EN = {
   pipeLiveQueueStatus: (n: number): string =>
     n === 0 ? 'Queue empty · synced with the server' : `${n} write${s(n)} queued · sending when the server answers`,
   pipeOpName: (op: string): string => OP_EN[op] ?? op,
-
-  // ===================================================== W13 — money doors
-  // The eight screens the simulated year asked for and could not find:
-  // deposits, corrections and write-offs, the waived fee, the do-not-rent
-  // decision, the health toggle, the month picker, what a client is worth,
-  // how hard a unit works. One block, one wave — every key below is new in
-  // W13 and every one of them has its twin in strings-ur.ts.
-
-  // --- 1. Deposits (`no-deposit-door`) — hold / apply / refund, 0017 D4.
-  moneyDepositsHeading: 'Deposits',
-  moneyDepositsNone: 'Nothing held for this client.',
-  moneyDepositsHeldSub: (rupees: string): string => `${rupees} in the drawer`,
-  moneyTakeDeposit: 'Take a deposit',
-  moneyDepositAmount: 'Amount (Rs)',
-  moneyDepositHowHeld: 'How it is held',
-  moneyDepositCash: 'Cash',
-  moneyDepositCheque: 'Cheque',
-  moneyDepositNoteOptional: 'Note — cheque number, who handed it over',
-  moneyDepositAgainstJob: 'Against which job',
-  moneyDepositNoJob: 'No job',
-  moneyDepositSave: 'Record the deposit',
-  moneyDepositStamp: (state: string): string => DEPOSIT_STATE_EN[state] ?? state,
-  moneyDepositRowNote: (rupees: string, job: string | null): string =>
-    job ? `${rupees} · ${job}` : rupees,
-  moneyDepositRemaining: (rupees: string): string => `${rupees} still held`,
-  moneyDepositApplied: (rupees: string): string => `${rupees} put against bills`,
-  moneyDepositRefunded: (rupees: string): string => `${rupees} given back`,
-  moneyDepositApply: 'Apply to a bill',
-  moneyDepositApplyTitle: 'Apply the deposit',
-  moneyDepositApplyPick: 'Apply it to',
-  moneyDepositApplyBalance: (rupees: string): string => `Everything owed — ${rupees}`,
-  moneyDepositApplyCharge: (kind: string, rupees: string): string => `${kind} — ${rupees}`,
-  moneyDepositApplySave: 'Apply it',
-  moneyDepositApplyTooMuch: (rupees: string): string =>
-    `Only ${rupees} is still held.`,
-  moneyDepositRefund: 'Refund',
-  moneyDepositRefundTitle: 'Refund the deposit',
-  moneyDepositRefundHold: (rupees: string): string => `Hold to give ${rupees} back`,
-  // The gate, said BEFORE the tap. The server refuses a refund while the
-  // job is not QC-clear (override 15) and names every blocker; the phone
-  // says the same thing here, and says out loud that it can only see its
-  // own half.
-  moneyDepositRefundBlocked: 'Not yet — this job is not clear',
-  moneyDepositBlocker: (reason: string, n: number): string =>
-    REFUND_BLOCKER_EN[reason]?.(n) ?? reason,
-  moneyDepositServerChecksAgain:
-    'The server checks the job again when this sends. A refund it refuses comes back as one card, not as lost money.',
-  moneyDepositRefundNothingLeft: 'Nothing left to refund — it has all been applied.',
-  // --- 2. Corrections and write-offs (`no-adjustment-door`) — 0018 D6.
-  // Every line is a door: tapping one opens the two things a desk does to
-  // money already written. Both need a reason (override 18: the owner's
-  // judgement is never fought and always recorded) and both sit behind a
-  // hold, because the ledger is append-only and a correction is forever.
-  moneyLineDoorHint: 'Tap a line to correct it or write it off',
-  moneyLineTitle: 'This line',
-  moneyCorrectThis: 'Correct this',
-  moneyWriteItOff: 'Write it off',
-  moneyCorrectTitle: 'Correct this line',
-  moneyWriteOffTitle: 'Write this off',
-  moneyCorrectWhat: 'A mistake — the line comes off the book and the client sees both rows.',
-  moneyWriteOffWhat: 'Not a mistake — money the house has decided not to chase.',
-  moneyReasonLabel: 'Why (kept with the line)',
-  moneyReasonPlaceholder: 'e.g. Entered twice at the dock',
-  moneyCorrectHold: (rupees: string): string => `Hold to write ${rupees} back`,
-  moneyWriteOffHold: (rupees: string): string => `Hold to forgive ${rupees}`,
-  moneySettledLine: (word: string, date: string, why: string | null): string =>
-    why ? `${word} on ${date} — ${why}` : `${word} on ${date}`,
-  moneySettleRefused: (reason: string): string => SETTLE_REFUSAL_EN[reason] ?? reason,
-  // The double-tap guard as a question, never a refusal: two identical
-  // charges do genuinely happen, and only a person knows which this is.
-  moneyDuplicateNotice: (kind: string, rupees: string, seconds: number): string =>
-    `Two ${kind} lines of ${rupees}, ${seconds} second${s(seconds)} apart. Was that twice?`,
-  moneyDuplicateKeep: 'Both are real',
-  moneyDuplicateKept: 'Kept — both lines stand',
-  moneyWriteOffBalance: 'Write off what is owed',
-  moneyWriteOffBalanceTitle: 'Write off the balance',
-  moneyWriteOffBalanceWhat:
-    'The whole outstanding amount, given up — the absconded-client answer. It names no single charge, because a payment on a running account is not attached to one.',
-  moneyWriteOffBalanceHold: (rupees: string): string => `Hold to give up ${rupees}`,
-  moneyWriteOffBalanceReasonPlaceholder: 'e.g. Absconded — FIR filed',
-
-  // --- 3. The waived fee (`waived-fee-invisible`).
-  // The fee is written and written off in one transaction: two lines that
-  // net to nothing, both on the statement the client reads, so the
-  // goodwill is visible to the person who received it.
-  moneyWaiveIt: 'Waive it',
-  moneyWaiveTitle: 'Waive the late fee',
-  moneyWaiveWhat:
-    'The fee goes on the book and comes straight off it. Nothing is owed, and next quarter the khata still says the favour was given.',
-  moneyWaiveHold: (rupees: string): string => `Hold to waive ${rupees}`,
-  moneyWaiveReasonPlaceholder: 'e.g. Long client, first time late',
-  moneyFeeWaived: (rupees: string, date: string, why: string | null): string =>
-    why
-      ? `${rupees} late fee — waived on ${date} — ${why}`
-      : `${rupees} late fee — waived on ${date}`,
-  moneyWaivedHeading: 'Favours given',
-  moneyWaivedSub: (n: number): string => `${n} fee${s(n)} waived`,
-  // --- 4. Do not rent to this client (`no-blacklist`) — 0029.
-  // 0022's confirm gate has refused a blacklisted client since W5; this
-  // is the switch it never had. A reason to turn it ON, none to lift it.
-  moneyBlacklistStamp: 'do not rent',
-  moneyBlacklistHeading: 'Renting to this client',
-  moneyBlacklistOn: 'Do not rent to this client',
-  moneyBlacklistOff: 'Let this client rent again',
-  moneyBlacklistLine: (date: string, why: string | null): string =>
-    why ? `Refused since ${date} — ${why}` : `Refused since ${date}`,
-  moneyBlacklistOpen: 'This client can book and confirm as normal.',
-  moneyBlacklistWhat:
-    'Bookings for this client cannot be confirmed. The server refuses them too, by name, so no phone can promise gear around it.',
-  moneyBlacklistHold: 'Hold to refuse this client',
-  moneyBlacklistLiftHold: 'Hold to let them rent again',
-  moneyBlacklistReasonPlaceholder: 'e.g. Rs 2.6M of gear never came back',
-  moneyBlacklistOnConfirm: 'This client is on the do-not-rent list — confirming will be refused.',
-  // --- 5. The health door (`no-health-door`) — 0003's verbs, no new axis.
-  // Availability honesty depends on health ('here' and health='ok'), and
-  // until now only the crisis swap could move it: a tech who drops a lens
-  // on the bench had no way to say so.
-  moneyHealthHeading: 'How is it?',
-  moneyHealthNow: (word: string): string => `Right now: ${word}`,
-  moneyHealthBroken: 'It is broken',
-  moneyHealthNeedsALook: 'Needs a look',
-  moneyHealthOk: 'It is fine',
-  moneyHealthWhat: (call: string): string => HEALTH_WHAT_EN[call] ?? call,
-  moneyHealthNoteLabel: 'What happened (optional)',
-  moneyHealthNotePlaceholder: 'e.g. Dropped on the bench, mount is loose',
-  moneyHealthSave: (call: string): string => `${HEALTH_CALL_EN[call] ?? call} — record it`,
-  moneyHealthWord: (health: string): string => HEALTH_WORD_EN[health] ?? health,
-  moneyHealthIsEvidence:
-    'This goes in the log as a scan event, like everything else — the shelf and the calendar believe the log, not a switch.',
-  // --- 6. The month behind the day (`no-month-history-screen`).
-  // moneyStrip and monthProfit could always answer any month; every
-  // caller hardcoded today. A picker plus a title, not new maths.
-  moneyMonthPrev: 'The month before',
-  moneyMonthNext: 'The month after',
-  moneyMonthThis: 'this month, so far',
-  moneyMonthHeading: 'The month',
-  moneyMonthMoved: (out: number, back: number): string =>
-    `${out} went out · ${back} came back`,
-  moneyMonthNothingMoved: 'Nothing went out or came back this month.',
-  moneyMonthStatements: 'Statements',
-  moneyMonthStatementsSub: 'Tap a name to copy their statement for this month',
-  moneyMonthNobody: 'No khata moved this month.',
-  moneyMonthBilled: (rupees: string, paid: string): string =>
-    `Billed ${rupees} · paid ${paid}`,
-  moneyMonthCopied: 'Copied — paste it in WhatsApp',
-  // The kharcha head on a MONTH says month, not 'today' — the day's own
-  // words on a month's report is the drift that makes a reader distrust
-  // every other number on the page.
-  moneyMonthKharchaNone: 'Nothing spent this month.',
-  moneyMonthKharchaSpent: (rupees: string): string => `${rupees} spent this month`,
-  // --- 7. What this client has been worth (`no-lifetime-value-view`).
-  // Every figure is a sum over the book the khata page already loads.
-  moneyWorthHeading: 'What this client has been worth',
-  moneyWorthCharged: 'Billed, all time',
-  moneyWorthPaid: 'Paid',
-  moneyWorthWrittenOff: 'Written off',
-  moneyWorthJobs: 'Jobs',
-  moneyWorthAverage: 'Average job',
-  moneyWorthSpan: (first: string, last: string): string => `${first} → ${last}`,
-  moneyWorthFirstOnly: (first: string): string => `Since ${first}`,
-  moneyWorthNothing: 'Nothing on the book yet — no history to show.',
-  // The honest limit, on the screen rather than in a comment.
-  moneyWorthLimit:
-    'From this phone\u2019s book. A khata that started before the app, or one that has not synced, is longer than this.',
-  moneyWorthNoAverage: 'no priced job yet',
-  // --- 8. How hard it works (`no-utilization-read`).
-  // Four numbers from things that already exist, and the two honest
-  // limits said out loud: the phone's log is not the unit's life, and
-  // there is no acquisition date on this side of the pipe.
-  moneyWorkHeading: 'How hard it works',
-  moneyWorkDaysOut: (days: number, window: number): string =>
-    `Out ${days} of the last ${window} days`,
-  moneyWorkBusy: (pct: number): string => `Busy ${pct}% of the window`,
-  moneyWorkNeverOut: 'This phone has not seen it go out.',
-  moneyWorkOutNow: 'Out right now.',
-  moneyWorkIdle: (days: number): string => `Idle ${days} day${s(days)} since it last left`,
-  moneyWorkSinceService: (days: number, due: number | null): string =>
-    due === null
-      ? `${days} rental day${s(days)} since its last service`
-      : `${days} of ${due} rental days since its last service`,
-  moneyWorkEarned: 'Earned',
-  moneyWorkPerDay: 'A day, since first seen',
-  moneyWorkPerDayUnknown: 'no start date',
-  moneyWorkLimit:
-    'Days out come from this phone\u2019s own queue, and there is no purchase date on this side — so these are a floor, not a lifetime.',
-  // The Sehat group: the fleet ranked, which is the AUG question.
-  moneyWorkersHeading: 'Hardest workers',
-  moneyWorkersSub: (window: number): string => `Days out in the last ${window}`,
-  moneyWorkersRow: (days: number, rupees: string): string => `${days} day${s(days)} out · ${rupees}`,
-  // A unit that earned but never left THIS PHONE's log says so, rather
-  // than reading '0 days out' four times and inviting the wrong reading.
-  moneyWorkersRowNotOut: (window: number, rupees: string): string =>
-    `Not out in the last ${window} — earned ${rupees}`,
-  moneyWorkersNobody: 'Nothing has been out long enough to rank yet.',
-
-
-
-
-
-
-
-  // ======================================================================
 }
 
 
