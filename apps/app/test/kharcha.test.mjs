@@ -33,10 +33,24 @@ import { STR_UR } from '../src/strings-ur.ts'
 let db
 let seed
 
+/** Local `days` from today at `hour`:00 — the same instant the seed uses. */
+const atDays = (days, hour) => {
+  const d = new Date()
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days, hour, 0, 0, 0).getTime()
+}
+/**
+ * NOON TODAY, handed to the seed and to every read below, rather than the
+ * wall clock read afresh at each call. Today stays today — these assertions
+ * are about the day the demo opens — but the TIME of day stops mattering,
+ * and the seed can no longer be built a tick either side of a midnight the
+ * reads land on. docs/principles.md: deterministic, injectable clocks.
+ */
+const NOW = atDays(0, 12)
+
 beforeEach(() => {
   db = new NodeSqliteDriver()
   db.exec(LOCAL_SCHEMA)
-  seed = seedDemo(db)
+  seed = seedDemo(db, NOW)
 })
 
 const rs = (rupees) => rupees * 100
@@ -87,7 +101,7 @@ describe('recordExpense', () => {
       kind: 'transport',
       amountMinor: rs(3_000),
       note: 'Fuel — two runs',
-      createdAt: Date.now(),
+      createdAt: NOW,
     })
     assert.ok(id)
     assert.equal(expenseRows(db).length, before + 1)
@@ -99,11 +113,11 @@ describe('recordExpense', () => {
     // reversal wearing a costume. Both refused, neither inserted.
     const before = expenseRows(db).length
     assert.equal(
-      recordExpense(db, { orgId: seed.orgId, kind: 'misc', amountMinor: 0, createdAt: Date.now() }),
+      recordExpense(db, { orgId: seed.orgId, kind: 'misc', amountMinor: 0, createdAt: NOW }),
       null,
     )
     assert.equal(
-      recordExpense(db, { orgId: seed.orgId, kind: 'misc', amountMinor: -rs(500), createdAt: Date.now() }),
+      recordExpense(db, { orgId: seed.orgId, kind: 'misc', amountMinor: -rs(500), createdAt: NOW }),
       null,
     )
     assert.equal(expenseRows(db).length, before)
@@ -115,7 +129,7 @@ describe('recordExpense', () => {
       kind: 'misc',
       amountMinor: rs(100),
       counterparty: '   ',
-      createdAt: Date.now(),
+      createdAt: NOW,
     })
     const row = expenseRows(db).find((e) => e.id === id)
     assert.equal(row.counterparty, null)
@@ -129,10 +143,10 @@ describe('reverseExpense — the void pair', () => {
       kind: 'purchase',
       amountMinor: rs(9_000),
       counterparty: 'Hall Road',
-      createdAt: Date.now(),
+      createdAt: NOW,
     })
     const before = totalExpenses(expenseRows(db))
-    assert.equal(reverseExpense(db, seed.orgId, id, 'entered twice', Date.now()), true)
+    assert.equal(reverseExpense(db, seed.orgId, id, 'entered twice', NOW), true)
 
     const rows = expenseRows(db)
     const rev = rows.find((e) => e.reversalOf === id)
@@ -149,30 +163,30 @@ describe('reverseExpense — the void pair', () => {
 
   test('a second reversal is refused — a double-tap cannot over-credit', () => {
     const id = recordExpense(db, {
-      orgId: seed.orgId, kind: 'misc', amountMinor: rs(500), createdAt: Date.now(),
+      orgId: seed.orgId, kind: 'misc', amountMinor: rs(500), createdAt: NOW,
     })
-    assert.equal(reverseExpense(db, seed.orgId, id, null, Date.now()), true)
-    assert.equal(reverseExpense(db, seed.orgId, id, null, Date.now()), false)
+    assert.equal(reverseExpense(db, seed.orgId, id, null, NOW), true)
+    assert.equal(reverseExpense(db, seed.orgId, id, null, NOW), false)
     assert.equal(expenseRows(db).filter((e) => e.reversalOf === id).length, 1)
   })
 
   test('a reversal cannot be reversed — record the expense again instead', () => {
     const id = recordExpense(db, {
-      orgId: seed.orgId, kind: 'misc', amountMinor: rs(500), createdAt: Date.now(),
+      orgId: seed.orgId, kind: 'misc', amountMinor: rs(500), createdAt: NOW,
     })
-    reverseExpense(db, seed.orgId, id, null, Date.now())
+    reverseExpense(db, seed.orgId, id, null, NOW)
     const rev = expenseRows(db).find((e) => e.reversalOf === id)
-    assert.equal(reverseExpense(db, seed.orgId, rev.id, null, Date.now()), false)
+    assert.equal(reverseExpense(db, seed.orgId, rev.id, null, NOW), false)
   })
 
   test('an unknown id reverses nothing', () => {
-    assert.equal(reverseExpense(db, seed.orgId, 'exp-nobody', null, Date.now()), false)
+    assert.equal(reverseExpense(db, seed.orgId, 'exp-nobody', null, NOW), false)
   })
 })
 
 describe('the day slice (the hisaab Kharcha section)', () => {
   test('today holds what was spent today, not the seeded history', () => {
-    const now = Date.now()
+    const now = NOW
     // The seed's expenses are days old — today opens honest and empty.
     const empty = kharchaBetween(db, dayBounds(now).startMs, dayBounds(now).endMs)
     assert.equal(empty.rows.length, 0)
@@ -189,7 +203,7 @@ describe('the day slice (the hisaab Kharcha section)', () => {
   })
 
   test('a reversal written today voids a row written yesterday', () => {
-    const now = Date.now()
+    const now = NOW
     const yesterday = now - 24 * 60 * 60 * 1000
     const id = recordExpense(db, {
       orgId: seed.orgId, kind: 'misc', amountMinor: rs(2_000), createdAt: yesterday,
@@ -204,7 +218,7 @@ describe('the day slice (the hisaab Kharcha section)', () => {
   })
 
   test('the day account carries the kharcha and its share text says it', () => {
-    const now = Date.now()
+    const now = NOW
     recordExpense(db, {
       orgId: seed.orgId, kind: 'sub_hire', amountMinor: rs(18_000),
       counterparty: 'Noor Light & Grip', createdAt: now,
@@ -217,7 +231,7 @@ describe('the day slice (the hisaab Kharcha section)', () => {
   })
 
   test('a quiet day says nothing about kharcha in the share text', () => {
-    const text = dayAccountText(dayAccount(db, Date.now()))
+    const text = dayAccountText(dayAccount(db, NOW))
     assert.ok(!text.includes('Kharcha:'))
   })
 })
@@ -296,7 +310,7 @@ describe('the payback bar meets the repair bill', () => {
     const before = assetEarnings(db, 'asset-fx9-1')
     recordExpense(db, {
       orgId: seed.orgId, kind: 'repair', amountMinor: rs(455_000),
-      assetId: 'asset-fx9-1', createdAt: Date.now(),
+      assetId: 'asset-fx9-1', createdAt: NOW,
     })
     const after = assetEarnings(db, 'asset-fx9-1')
     assert.equal(after.costMinor, rs(4_000_000))
@@ -308,7 +322,7 @@ describe('the payback bar meets the repair bill', () => {
     // would make every bar read paid-off, the confident lie inverted.
     recordExpense(db, {
       orgId: seed.orgId, kind: 'repair', amountMinor: rs(2_000),
-      assetId: 'asset-sachdeva-1', createdAt: Date.now(),
+      assetId: 'asset-sachdeva-1', createdAt: NOW,
     })
     const e = assetEarnings(db, 'asset-sachdeva-1')
     assert.equal(e.repairMinor, rs(2_000))
@@ -319,10 +333,10 @@ describe('the payback bar meets the repair bill', () => {
   test('a voided repair leaves the denominator', () => {
     const id = recordExpense(db, {
       orgId: seed.orgId, kind: 'repair', amountMinor: rs(100_000),
-      assetId: 'asset-fx9-1', createdAt: Date.now(),
+      assetId: 'asset-fx9-1', createdAt: NOW,
     })
     assert.equal(assetEarnings(db, 'asset-fx9-1').costMinor, rs(3_645_000))
-    reverseExpense(db, seed.orgId, id, 'was warranty work', Date.now())
+    reverseExpense(db, seed.orgId, id, 'was warranty work', NOW)
     assert.equal(assetEarnings(db, 'asset-fx9-1').costMinor, rs(3_545_000))
   })
 })

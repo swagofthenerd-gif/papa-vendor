@@ -34,10 +34,24 @@ import { STR_UR } from '../src/strings-ur.ts'
 let db
 let seed
 
+/** Local `days` from today at `hour`:00 — the same instant the seed uses. */
+const atDays = (days, hour) => {
+  const d = new Date()
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days, hour, 0, 0, 0).getTime()
+}
+/**
+ * NOON TODAY, handed to the seed and to every read below, rather than the
+ * wall clock read afresh at each call. Today stays today — these assertions
+ * are about the day the demo opens — but the TIME of day stops mattering,
+ * and the seed can no longer be built a tick either side of a midnight the
+ * reads land on. docs/principles.md: deterministic, injectable clocks.
+ */
+const NOW = atDays(0, 12)
+
 beforeEach(() => {
   db = new NodeSqliteDriver()
   db.exec(LOCAL_SCHEMA)
-  seed = seedDemo(db)
+  seed = seedDemo(db, NOW)
 })
 
 const rs = (rupees) => rupees * 100
@@ -102,7 +116,7 @@ describe('recordEntry', () => {
       kind: 'payment',
       amountMinor: -rs(25_000),
       note: 'JazzCash',
-      createdAt: Date.now(),
+      createdAt: NOW,
     })
     const c = customerView(db, 'cust-bilal')
     assert.equal(c.entries.length, before + 1)
@@ -119,7 +133,7 @@ describe('recordEntry', () => {
       amountMinor: rs(8_000),
       jobId: 'job-doc',
       note: 'Cracked matte box',
-      createdAt: Date.now(),
+      createdAt: NOW,
     })
     const c = customerView(db, 'cust-ayesha')
     assert.equal(c.balanceMinor, rs(63_000))
@@ -152,7 +166,7 @@ describe('recordEntry', () => {
 
 describe('moneyStrip', () => {
   test('owed = the debts only; credits are not income', () => {
-    const strip = moneyStrip(db, Date.now())
+    const strip = moneyStrip(db, NOW)
     assert.equal(strip.owedMinor, rs(75_000 + 55_000))
     assert.equal(strip.owingCount, 2)
   })
@@ -163,7 +177,7 @@ describe('moneyStrip', () => {
     // when those days-ago fall in the current calendar month. Rather than
     // re-deriving the calendar here, assert the invariant that matters:
     // payments and deposits never count as earnings.
-    const strip = moneyStrip(db, Date.now())
+    const strip = moneyStrip(db, NOW)
     const total = db.get(
       `select sum(amount_minor) as t from customer_ledger_entries
         where kind in ('charge', 'late_fee', 'damage_charge')`,
@@ -176,9 +190,9 @@ describe('moneyStrip', () => {
       customerId: 'cust-ayesha',
       kind: 'late_fee',
       amountMinor: rs(10_000),
-      createdAt: Date.now(),
+      createdAt: NOW,
     })
-    const after = moneyStrip(db, Date.now())
+    const after = moneyStrip(db, NOW)
     assert.equal(after.earnedMonthMinor, strip.earnedMonthMinor + rs(10_000))
     // A payment written now does NOT.
     recordEntry(db, {
@@ -186,20 +200,20 @@ describe('moneyStrip', () => {
       customerId: 'cust-ayesha',
       kind: 'payment',
       amountMinor: -rs(5_000),
-      createdAt: Date.now(),
+      createdAt: NOW,
     })
-    assert.equal(moneyStrip(db, Date.now()).earnedMonthMinor, after.earnedMonthMinor)
+    assert.equal(moneyStrip(db, NOW).earnedMonthMinor, after.earnedMonthMinor)
   })
 
   test('due in today follows the board date, not a separate clock', () => {
     // The seed already has job-shan (Bilal's) due back today — his whole
     // balance is the money a finished return would put on the counter.
-    assert.equal(moneyStrip(db, Date.now()).dueTodayMinor, rs(75_000))
+    assert.equal(moneyStrip(db, NOW).dueTodayMinor, rs(75_000))
     // Make job-doc (Ayesha's, still open with gear out) due back today too.
-    const d = new Date()
+    const d = new Date(NOW)
     const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     db.exec(`update jobs set expected_back = ? where id = 'job-doc'`, [iso])
-    assert.equal(moneyStrip(db, Date.now()).dueTodayMinor, rs(75_000 + 55_000))
+    assert.equal(moneyStrip(db, NOW).dueTodayMinor, rs(75_000 + 55_000))
   })
 })
 
@@ -212,28 +226,28 @@ describe('the turned-away demand log', () => {
   ]
 
   test('only real shortages with a known product are recorded', () => {
-    const n = recordTurnedAway(db, lines, Date.now())
+    const n = recordTurnedAway(db, lines, NOW)
     assert.equal(n, 2)
-    const fx9 = turnedAwayThisMonth(db, 'prod-fx9', Date.now())
+    const fx9 = turnedAwayThisMonth(db, 'prod-fx9', NOW)
     assert.equal(fx9.times, 1)
     assert.equal(fx9.units, 2) // wanted 3, could offer 1
-    const fx6 = turnedAwayThisMonth(db, 'prod-fx6', Date.now())
+    const fx6 = turnedAwayThisMonth(db, 'prod-fx6', NOW)
     assert.equal(fx6.times, 0)
   })
 
   test('each answered list is its own incident', () => {
-    recordTurnedAway(db, lines, Date.now())
-    recordTurnedAway(db, lines, Date.now())
-    const fx9 = turnedAwayThisMonth(db, 'prod-fx9', Date.now())
+    recordTurnedAway(db, lines, NOW)
+    recordTurnedAway(db, lines, NOW)
+    const fx9 = turnedAwayThisMonth(db, 'prod-fx9', NOW)
     assert.equal(fx9.times, 2)
     assert.equal(fx9.units, 4)
   })
 
   test('last month is not this month', () => {
-    const lastMonth = new Date()
+    const lastMonth = new Date(NOW)
     lastMonth.setDate(0) // last day of the previous month
     recordTurnedAway(db, lines, lastMonth.getTime())
-    const fx9 = turnedAwayThisMonth(db, 'prod-fx9', Date.now())
+    const fx9 = turnedAwayThisMonth(db, 'prod-fx9', NOW)
     assert.equal(fx9.times, 0)
   })
 
@@ -245,10 +259,10 @@ describe('the turned-away demand log', () => {
       { productId: 'prod-fx9', wanted: 2, onHand: 2, confirmedOverlap: 2, state: 'none', shortReason: 'committed' },
       { productId: 'prod-fx6', wanted: 4, onHand: 3, confirmedOverlap: 0, state: 'short', shortReason: 'short' },
     ]
-    assert.equal(recordTurnedAway(db, committed, Date.now()), 2)
-    assert.deepEqual(turnedAwayThisMonth(db, 'prod-fx9', Date.now()), { times: 1, units: 2 })
-    assert.deepEqual(turnedAwayByReason(db, 'prod-fx9', Date.now()), { short: 0, committed: 2 })
-    assert.deepEqual(turnedAwayByReason(db, 'prod-fx6', Date.now()), { short: 1, committed: 0 })
+    assert.equal(recordTurnedAway(db, committed, NOW), 2)
+    assert.deepEqual(turnedAwayThisMonth(db, 'prod-fx9', NOW), { times: 1, units: 2 })
+    assert.deepEqual(turnedAwayByReason(db, 'prod-fx9', NOW), { short: 0, committed: 2 })
+    assert.deepEqual(turnedAwayByReason(db, 'prod-fx6', NOW), { short: 1, committed: 0 })
   })
 })
 
@@ -285,7 +299,7 @@ describe('assetEarnings', () => {
       amountMinor: rs(150_000),
       assetId: 'asset-fx9-1',
       note: 'Top handle repair',
-      createdAt: Date.now(),
+      createdAt: NOW,
     })
     // On the khata, yes; on the payback bar, never — a camera that gets
     // broken often must not look like the fleet's best performer.
@@ -300,7 +314,7 @@ describe('assetEarnings', () => {
       kind: 'charge',
       amountMinor: rs(20_000),
       assetId: 'asset-fx9-1',
-      createdAt: Date.now(),
+      createdAt: NOW,
     })
     assert.equal(assetEarnings(db, 'asset-fx9-1').earnedMinor, before + rs(20_000))
     recordEntry(db, {
@@ -310,7 +324,7 @@ describe('assetEarnings', () => {
       amountMinor: -rs(20_000),
       assetId: 'asset-fx9-1',
       reversalOf: chargeId,
-      createdAt: Date.now(),
+      createdAt: NOW,
     })
     assert.equal(assetEarnings(db, 'asset-fx9-1').earnedMinor, before)
   })
@@ -323,7 +337,7 @@ describe('assetEarnings', () => {
       kind: 'payment',
       amountMinor: -rs(30_000),
       assetId: 'asset-fx9-1',
-      createdAt: Date.now(),
+      createdAt: NOW,
     })
     assert.equal(assetEarnings(db, 'asset-fx9-1').earnedMinor, before)
   })

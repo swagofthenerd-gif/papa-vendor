@@ -33,10 +33,24 @@ import {
 let db
 let seed
 
+/** Local `days` from today at `hour`:00 — the same instant the seed uses. */
+const atDays = (days, hour) => {
+  const d = new Date()
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days, hour, 0, 0, 0).getTime()
+}
+/**
+ * NOON TODAY, handed to the seed and to every read below, rather than the
+ * wall clock read afresh at each call. Today stays today — these assertions
+ * are about the day the demo opens — but the TIME of day stops mattering,
+ * and the seed can no longer be built a tick either side of a midnight the
+ * reads land on. docs/principles.md: deterministic, injectable clocks.
+ */
+const NOW = atDays(0, 12)
+
 beforeEach(() => {
   db = new NodeSqliteDriver()
   db.exec(LOCAL_SCHEMA)
-  seed = seedDemo(db)
+  seed = seedDemo(db, NOW)
 })
 
 const create = (over = {}) =>
@@ -107,7 +121,7 @@ describe('the due date on a job card', () => {
     setExpectedBack(db, 'job-desk-1', null)
     const job = openJob(db, 'job-desk-1')
     assert.equal(job.expectedBack, null)
-    assert.equal(dueStatus(job.expectedBack, Date.now()).label, 'no date')
+    assert.equal(dueStatus(job.expectedBack, NOW).label, 'no date')
   })
 })
 
@@ -129,7 +143,7 @@ describe('commitments feed the availability answer', () => {
 
   test('the answer names the job and when its gear is back', () => {
     const matched = matchKitList(parseKitList('1 Sony FX9'), demoCatalogue())
-    const summary = checkAvailability(db, matched, openJobCommitments(db), Date.now())
+    const summary = checkAvailability(db, matched, openJobCommitments(db), NOW)
     const [line] = summary.lines
     assert.equal(line.state, 'available')
     const note = availabilityNote(line)
@@ -140,7 +154,7 @@ describe('commitments feed the availability answer', () => {
   test('a desk-created job claims stock like a seeded one', () => {
     create({ wants: [{ productId: 'prod-komodo', qty: 1 }] })
     const matched = matchKitList(parseKitList('1 RED Komodo 6K'), demoCatalogue())
-    const summary = checkAvailability(db, matched, openJobCommitments(db), Date.now())
+    const summary = checkAvailability(db, matched, openJobCommitments(db), NOW)
     const note = availabilityNote(summary.lines[0])
     assert.ok(note.includes('Music video — Gulberg'), note)
   })
