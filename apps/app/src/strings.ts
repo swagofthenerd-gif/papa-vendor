@@ -1557,6 +1557,23 @@ const STR_EN = {
   moneyHealthWord: (health: string): string => HEALTH_WORD_EN[health] ?? health,
   moneyHealthIsEvidence:
     'This goes in the log as a scan event, like everything else — the shelf and the calendar believe the log, not a switch.',
+  // --- 6. The month behind the day (`no-month-history-screen`).
+  // moneyStrip and monthProfit could always answer any month; every
+  // caller hardcoded today. A picker plus a title, not new maths.
+  moneyMonthPrev: 'The month before',
+  moneyMonthNext: 'The month after',
+  moneyMonthThis: 'this month, so far',
+  moneyMonthHeading: 'The month',
+  moneyMonthMoved: (out: number, back: number): string =>
+    `${out} went out · ${back} came back`,
+  moneyMonthNothingMoved: 'Nothing went out or came back this month.',
+  moneyMonthStatements: 'Statements',
+  moneyMonthStatementsSub: 'Tap a name to copy their statement for this month',
+  moneyMonthNobody: 'No khata moved this month.',
+  moneyMonthBilled: (rupees: string, paid: string): string =>
+    `Billed ${rupees} · paid ${paid}`,
+  moneyMonthCopied: 'Copied — paste it in WhatsApp',
+
 
 
 

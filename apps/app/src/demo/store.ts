@@ -110,7 +110,7 @@ import {
   type OpenJobRow,
   type SubstituteRow,
 } from './read-model.ts'
-import { dayAccount, type DayAccount } from './hisaab.ts'
+import { dayAccount, monthAccount, type DayAccount, type MonthAccount } from './hisaab.ts'
 import {
   jobMargin,
   monthProfit,
@@ -1162,6 +1162,16 @@ export class DemoStore {
   }
 
   /** Din ka hisaab — the whole day, computed locally. See hisaab.ts. */
+  /**
+   * A whole month's account (W13, `no-month-history-screen`) — the read
+   * the API could always answer and no caller could ask. `monthMs` is
+   * any instant inside the wanted month; `todayMs` is the real clock,
+   * and the only thing that decides whether the month has a 'today'.
+   */
+  monthAccount(monthMs: number, todayMs: number = Date.now()): MonthAccount {
+    return monthAccount(this.db, monthMs, todayMs)
+  }
+
   dayAccount(nowMs: number = Date.now()): DayAccount {
     return dayAccount(this.db, nowMs)
   }

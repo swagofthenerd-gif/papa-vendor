@@ -2,9 +2,9 @@ import { useMemo, useRef, useState } from 'react'
 import { formatRupees, moneyLabel } from '@papa/core'
 import { Icon } from '@papa/icons'
 import { Shell, SectionHead } from '../components/Shell.tsx'
-import { go, type View } from '../nav.ts'
+import { go, parseHash, type View } from '../nav.ts'
 import { DueBadge } from '../routes/Today.tsx'
-import { dayAccountText, type DayItem } from './hisaab.ts'
+import { dayAccountText, monthKey, monthStep, msOfMonth, type DayItem } from './hisaab.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 
@@ -23,14 +23,63 @@ import { STR } from '../strings.ts'
  * The copy button produces the compact WhatsApp version and stops there: the
  * owner forwards it to his staff group himself, because the authority of the
  * message lives in WHO sent it, not in the app that drafted it.
+ *
+ * AND SINCE W13, THE MONTH BEHIND THE DAY (`no-month-history-screen`).
+ * `moneyStrip(nowMs)` and `monthProfit(nowMs)` could always answer any
+ * month; every caller hardcoded `Date.now()`, so the owner could not see
+ * last month from this one. The picker is two taps and a title — the
+ * maths was already honest — and it is deep-linkable as
+ * `#/hisaab?m=YYYY-MM`, so a WhatsApp'd link opens on the right month.
+ * Picking a past month replaces the day's sections with that month's
+ * account: what went out and came back, the kharcha, the profit, and the
+ * statement links collections week actually needs. A past month has no
+ * 'today' under it, and the screen does not pretend otherwise.
  */
 export function HisaabScreen({ store }: { store: DemoStore }) {
-  const view: View = { name: 'hisaab' }
+  // The real clock, read once: everything time-derived below is computed
+  // from it at render, never welded (CONTRIBUTING's injectable-clock rule).
+  const todayMs = useMemo(() => Date.now(), [])
+  // The chosen month, initialised from the hash so a deep link lands on
+  // it, and written back to the hash on every step so the address bar
+  // stays shareable. State rather than a prop because the route's own
+  // component is not this screen's to change.
+  const [monthMs, setMonthMs] = useState(() => {
+    const m = parseHash(window.location.hash)
+    const from = m.name === 'hisaab' && m.month ? msOfMonth(m.month) : null
+    return from ?? todayMs
+  })
+  const isThisMonth = monthKey(monthMs) === monthKey(todayMs)
+  const view: View = isThisMonth
+    ? { name: 'hisaab' }
+    : { name: 'hisaab', month: monthKey(monthMs) }
+
+  const step = (by: number) => {
+    const next = monthStep(monthMs, by)
+    setMonthMs(next)
+    go(monthKey(next) === monthKey(todayMs)
+      ? { name: 'hisaab' }
+      : { name: 'hisaab', month: monthKey(next) })
+  }
+
   // Computed once per mount; the screen is a report, not a live feed.
-  const account = useMemo(() => store.dayAccount(), [store])
-  // The month's bottom line (0019): earned − kharcha, the vendor's-dream
-  // figure. Same mount-time snapshot as the day.
-  const month = useMemo(() => store.monthProfit(), [store])
+  const account = useMemo(() => store.dayAccount(todayMs), [store, todayMs])
+  // The chosen month's whole account (W13) — its own snapshot, re-read
+  // when the picker moves.
+  const monthly = useMemo(
+    () => store.monthAccount(monthMs, todayMs),
+    [store, monthMs, todayMs],
+  )
+  const month = monthly.profit
+  const [copiedName, setCopiedName] = useState<string | null>(null)
+  const nameTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const copyStatement = (customerId: string) => {
+    const text = store.statementText(customerId, monthMs)
+    if (!text) return
+    void navigator.clipboard?.writeText(text).catch(() => {})
+    setCopiedName(customerId)
+    if (nameTimer.current) clearTimeout(nameTimer.current)
+    nameTimer.current = setTimeout(() => setCopiedName(null), 1500)
+  }
 
   const [copied, setCopied] = useState(false)
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -58,6 +107,33 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
         </button>
       }
     >
+      {/* The picker (W13): back, the month's own name, forward — and
+          forward is dead on the current month, because there is no
+          account of a month that has not happened. */}
+      <div className="month-picker">
+        <button
+          className="icon-btn"
+          onClick={() => step(-1)}
+          aria-label={STR.moneyMonthPrev}
+        >
+          <Icon name="chevron-left" size={22} />
+        </button>
+        <span className="month-picker-label code">
+          {monthly.monthLabel}
+          {isThisMonth ? <span className="line-note"> {STR.moneyMonthThis}</span> : null}
+        </span>
+        <button
+          className="icon-btn"
+          onClick={() => step(1)}
+          disabled={isThisMonth}
+          aria-label={STR.moneyMonthNext}
+        >
+          <Icon name="chevron-right" size={22} />
+        </button>
+      </div>
+
+      {isThisMonth ? (
+      <>
       <div className="stat-strip">
         <div className="stat">
           <span className="stat-n code">{account.wentOut}</span>
@@ -198,6 +274,96 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
           />
         </section>
       ) : null}
+
+      </>
+      ) : (
+        /* A past month: its own account, in the same grammar. What moved,
+           what was spent, then the statements. The day's sections are
+           gone rather than empty — a month is not a day with no scans. */
+        <>
+          <div className="stat-strip">
+            <div className="stat">
+              <span className="stat-n code">{monthly.wentOut}</span>
+              <span className="stat-label">{STR.hisaabStatWentOut}</span>
+            </div>
+            <div className="stat">
+              <span className="stat-n code">{monthly.cameBack}</span>
+              <span className="stat-label">{STR.hisaabStatCameBack}</span>
+            </div>
+          </div>
+
+          {monthly.wentOut === 0 && monthly.cameBack === 0 ? (
+            <div className="empty">
+              <Icon name="calendar" size={36} />
+              <p>{STR.moneyMonthNothingMoved}</p>
+            </div>
+          ) : null}
+
+          <section className="section">
+            <SectionHead
+              icon="receipt"
+              title={STR.kharchaHeading}
+              sub={
+                monthly.kharcha.rows.length === 0
+                  ? STR.kharchaDayNone
+                  : STR.kharchaDaySpent(formatRupees(monthly.kharcha.totalMinor))
+              }
+            />
+            {monthly.kharcha.rows.length === 0 ? null : (
+              <ul className="line-list">
+                {monthly.kharcha.rows.map((e) => (
+                  <li key={e.id} className="line">
+                    <span className="line-name">{STR.kharchaKindLabel(e.kind)}</span>
+                    <span className="line-note">
+                      {[e.counterparty, e.assetCode, e.jobLabel, e.note]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                    <span className="line-code code">{formatRupees(e.amountMinor)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="section">
+            <SectionHead
+              icon="scroll"
+              title={STR.moneyMonthStatements}
+              sub={
+                monthly.customers.length === 0
+                  ? STR.moneyMonthNobody
+                  : STR.moneyMonthStatementsSub
+              }
+            />
+            {monthly.customers.length === 0 ? null : (
+              <ul className="line-list khata-book">
+                {monthly.customers.map((c) => (
+                  <li key={c.id}>
+                    <button
+                      className="line line-stack line-tap pressable"
+                      onClick={() => copyStatement(c.id)}
+                    >
+                      <span className="line-name">{c.name}</span>
+                      <span className="line-note">
+                        {copiedName === c.id
+                          ? STR.moneyMonthCopied
+                          : STR.moneyMonthBilled(
+                              formatRupees(c.billedMinor),
+                              formatRupees(c.paidMinor),
+                            )}
+                      </span>
+                      <span className={`line-code code${c.balanceMinor > 0 ? ' is-owed' : ''}`}>
+                        {formatRupees(c.balanceMinor)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
+      )}
 
       {/* The month's statement (0019): earned and spent as plain rows,
           then the profit line under the accountant's double rule — the

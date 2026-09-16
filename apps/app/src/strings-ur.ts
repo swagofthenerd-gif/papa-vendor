@@ -1419,6 +1419,21 @@ export const STR_UR: StrTable = {
   moneyHealthWord: (health: string): string => HEALTH_WORD_UR[health] ?? health,
   moneyHealthIsEvidence:
     'Yeh log mein scan event ban kar jata hai, baqi sab ki tarah — shelf aur calendar log ko mante hain, kisi switch ko nahi.',
+  // --- 6. Din ke peeche ka mahina (`no-month-history-screen`).
+  moneyMonthPrev: 'Pichla mahina',
+  moneyMonthNext: 'Agla mahina',
+  moneyMonthThis: 'yeh mahina, ab tak',
+  moneyMonthHeading: 'Mahina',
+  moneyMonthMoved: (out: number, back: number): string =>
+    `${out} bahar gaye · ${back} wapas aaye`,
+  moneyMonthNothingMoved: 'Is mahine kuch bahar nahi gaya aur wapas nahi aaya.',
+  moneyMonthStatements: 'Statement',
+  moneyMonthStatementsSub: 'Is mahine ka statement copy karne ke liye naam dabayein',
+  moneyMonthNobody: 'Is mahine koi khata nahi chala.',
+  moneyMonthBilled: (rupees: string, paid: string): string =>
+    `Bill ${rupees} · wusooli ${paid}`,
+  moneyMonthCopied: 'Copy ho gaya — WhatsApp mein paste karein',
+
 
 
 
