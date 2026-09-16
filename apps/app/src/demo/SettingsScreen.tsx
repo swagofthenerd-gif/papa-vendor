@@ -4,6 +4,9 @@ import { go } from '../nav.ts'
 import { BackedUpRow, LanguageRow, PaymentRow, Tags } from './Tags.tsx'
 // --- network --- (0025)
 import { PartnersSection } from './PartnersSection.tsx'
+// --- the device wave (W12): the till printer
+import { PrinterRow } from './PrinterRow.tsx'
+// --- end the device wave
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 
@@ -39,6 +42,13 @@ export function SettingsScreen({ store }: { store: DemoStore }) {
       </section>
 
       <PaymentRow store={store} />
+
+      {/* --- the device wave (W12): which till printer the parchi goes to.
+          Above the partner houses because it is hardware this phone owns,
+          and beside the payment line because both are "how the desk gets
+          paid and proves it". --- */}
+      <PrinterRow store={store} />
+      {/* --- end the device wave --- */}
 
       {/* --- network --- (0025): the partner houses and the public line. */}
       <PartnersSection store={store} />

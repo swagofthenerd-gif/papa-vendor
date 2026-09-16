@@ -200,8 +200,11 @@ rows, so nothing on it changes.
 ## Auth on the phone
 
 - `enrol` → `complete_enrolment`; the once-returned token lives in
-  `sync_meta.session_token` (SQLCipher at rest is the device-driver wave;
-  the browser build keeps it in memory and Settings says so). A null token
+  `sync_meta.session_token` — **on the device that is now a row inside the
+  SQLCipher database, so the session survives a restart** (W12; the key is
+  in the Android Keystore, `docs/android.md`). The browser build still
+  keeps it in memory and loses it on reload, and Settings → This phone says
+  which of the two it is looking at. A null token
   is "bad code" — one face for wrong code and unknown phone. `22023` "more
   than one organisation" is told apart so the screen can ask which house.
 - `pinSwitch` → `switch_session_user` (server-verified; the 5/min lockout

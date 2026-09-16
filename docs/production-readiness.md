@@ -535,3 +535,62 @@ Details: `docs/the-pipe.md`. Contract: `docs/hosting-decision.md`, "The
 PostgREST contract".
 
 <!-- ===================== end: The pipe (W9) ===================== -->
+
+<!-- ===================== The device wave (W12) — appended as one section; keep delimited ===================== -->
+
+## The device wave (W12) — the phone has a book of its own
+
+**Built here; NOT run on an Android.** The APK builds clean and its
+contents are verified, but the emulator on this machine crashes with
+`SIGSEGV` in every configuration tried (five of them, listed in
+`docs/android.md` §5). So everything below is proven by the Node suite and
+by reading, and the one thing only a phone can answer — what the bytes on
+its filesystem actually are — is a script waiting for the owner's phone:
+`./db/device-proof.sh`.
+
+What changed in the rows above:
+
+| Gap | Now |
+|---|---|
+| **No device DB encryption** | SQLCipher (`net.zetetic:sqlcipher-android` 4.17.0) behind `openDeviceDatabase`, key 32 random bytes in EncryptedSharedPreferences with its master key in the **Android Keystore**, `setUserAuthenticationRequired(false)`. An empty key — which SQLCipher would open in plaintext while reporting success — is refused twice, in TypeScript and in Java. There is no unencrypted path to a file on a phone, and a native platform with no bridge **refuses to start** rather than falling back to the in-memory browser database. |
+| Session token in memory | On the device it is a row in `sync_meta` inside the encrypted database, so it survives a restart. Settings → This phone says which host it is on rather than carrying the browser's wording everywhere. |
+| No Bluetooth transport for the parchi | `PapaPrintPlugin`: classic SPP, ten-second watchdog, 512-byte chunks. Settings → **Printer** picks from the paired devices, remembers one MAC in `app_settings`, and prints a test line built by the one ESC/POS builder. |
+| No local backup story | `allowBackup="false"` plus `data_extraction_rules.xml` excluding cloud backup and device transfer — an encrypted book whose key stays in the Keystore would restore onto a new phone as a file nothing can open, and the customer list would have travelled for nothing. ASSUMPTION `#no-device-backup`. |
+
+**The one hard problem, and the answer.** `SqlDriver` is synchronous
+because the scan handler may not await (CONTRIBUTING principle 1), and
+Capacitor plugin calls are asynchronous. The database is therefore a
+first-party `@JavascriptInterface` object on the WebView — those *are*
+called synchronously from JavaScript — and the Java does marshalling only,
+with every decision in `apps/app/src/db/capacitor-driver.ts` where Node can
+test it (47 tests against a fake bridge that reproduces the Java's
+restrictions, including that its `exec` runs one statement). The printer is
+the opposite call: an ordinary async plugin, because printing is nowhere
+near the scan path.
+
+**Honest limits, stated:**
+
+- **No Android has run this.** Not the bridge, not the Keystore, not the
+  socket, not the ladder on a real file. Five emulator configurations
+  segfaulted on this host; the evidence is in `docs/android.md`.
+- The key crosses into JavaScript, because `DeviceKeyProvider.getKey()`
+  returns the passphrase and the driver above it is synchronous. What that
+  costs and does not cost is written out in `docs/android.md` §2.
+- Nested `transaction()` joins the outer transaction rather than opening a
+  savepoint — parity with the two drivers every test runs against, chosen
+  deliberately over the nicer behaviour.
+- **No release build.** Debug only: no signing config, no ProGuard rules
+  for the SQLCipher and Tink classes, and `db/device-proof.sh` uses
+  `run-as`, which needs a debuggable package.
+- SQLCipher is pinned to 4.17.0 because 4.18.0+ needs compileSdk 37 and AGP
+  8.13 tops out at 36. The toolchain bump is its own commit.
+- The PBKDF2 cost at open is unmeasured on a cheap phone
+  (ASSUMPTION `#sqlcipher-kdf-cost`), as are the printer's chunking and
+  timeout (`#printer-chunking`, `#print-timeout`).
+- The outbox limit is unchanged and cannot be engineered away: unsent scans
+  exist only on the phone. The wipe now refuses while anything is unsent
+  unless `force` is passed, which is a guard, not a solution.
+
+Details: `docs/android.md`. Contract: `packages/core/src/db/device-key.ts`.
+
+<!-- ===================== end: The device wave (W12) ===================== -->

@@ -401,8 +401,13 @@ export class DemoStore {
    * (goLive), and the Android build's persisted database boots straight
    * into the live branch.
    */
-  static async open(): Promise<DemoStore> {
-    const db = await SqlJsDriver.open()
+  static async open(prepared?: SqlDriver): Promise<DemoStore> {
+    // W12: the app hands in the database it opened (db/boot.ts owns the one
+    // browser-or-device branch). Called with nothing — tests, and anything
+    // that just wants a throwaway house — it opens sql.js as it always did.
+    // The migration ladder runs either way and stays this method's job, so
+    // there is one call site for it (docs/principles.md #4).
+    const db = prepared ?? (await SqlJsDriver.open())
     migrateLocal(db)
     const session = sessionOf(db)
     if (session) {

@@ -1455,7 +1455,6 @@ export const STR_UR: StrTable = {
   pipeDeviceLine: (label: string, id: string): string => `${label} · ${id}`,
   pipeServerLine: (url: string): string => `${url} se baat karta hai`,
   pipeSessionUntil: (when: string): string => `Session ${when} tak theek hai`,
-  pipeTokenInMemory: 'Browser build: session memory mein rehta hai aur reload par chala jata hai. Android build rakhta hai.',
   pipePeopleHeading: 'Is phone par log',
   pipePeopleSub: 'Phone kisi ko dene ke liye naam dabayein',
   pipeHoldingNow: 'abhi is ke paas',
@@ -1486,4 +1485,30 @@ export const STR_UR: StrTable = {
   pipeLiveQueueStatus: (n: number): string =>
     n === 0 ? 'Queue khali · server ke saath sync hai' : `${n} likhai queue mein · server jawab de to jati hai`,
   pipeOpName: (op: string): string => OP_UR[op] ?? op,
+  // --- the device wave (W12): the encrypted book, the printer ----------
+  networkPrinterHeading: 'Printer',
+  networkPrinterSub: 'Till ka printer jis par yeh phone parchi chhaapta hai.',
+  networkPrinterNoneChosen: 'Abhi koi printer nahi chuna.',
+  networkPrinterChoose: 'Printer chunein',
+  networkPrinterChosen: (name: string): string => `${name} par chhap raha hai`,
+  networkPrinterForget: 'Yeh printer bhula dein',
+  networkPrinterTest: 'Test line chhaapein',
+  networkPrinterTested: 'Test line printer ko bhej di.',
+  networkPrinterPaired: 'Pair kiye Bluetooth device',
+  networkPrinterNonePaired: 'Abhi kuch pair nahi hua. Pehle phone ki apni Bluetooth settings mein printer pair karein, phir wapas aayein.',
+  networkPrinterLooking: 'Pair kiye device dhoond rahe hain',
+  networkPrinterBrowserHint: 'Printer juda nahi. Bluetooth printer ke liye Android app chahiye; yahan parchi screen par rehti hai aur bytes phir bhi ban jate hain.',
+  networkPrinterTestBody: 'Printer test. Yeh line parh sakein to parchi chhap jayegi.',
+  networkPrinterTestWidth: '32 column, 58mm kaghaz',
+  networkThermalNoPrinterChosen: 'Koi printer nahi chuna — Settings, Printer mein se chunein.',
+  networkThermalBluetoothOff: 'Bluetooth band hai. Chaalu kar ke dobara koshish karein.',
+  networkThermalPermissionDenied: 'Bluetooth ki ijazat nahi mili, is liye printer tak nahi pohnch sakte.',
+  networkThermalNoBluetooth: 'Is phone mein Bluetooth radio nahi hai.',
+  pipeAtRestHeading: 'Is phone ka bahi khata',
+  pipeAtRestEncrypted: 'Khata phone par hi encrypt hai, aur chaabi phone apne secure hardware mein rakhta hai — kisi ko deta nahi. Session usi khate mein rehta hai, is liye restart ke baad bhi bacha rehta hai.',
+  pipeAtRestBrowser: 'Browser: khata memory mein rehta hai aur reload par chala jata hai, session bhi. Android app dono rakhta hai.',
+  pipeAtRestProof: (hex: string): string =>
+    `Phone par file ${hex} se shuru hoti hai — bina encryption wala khata 53514c6974652066 se shuru hota, yani lafz "SQLite format".`,
+  pipeAtRestNoFile: 'File mein abhi kuch likha nahi gaya.',
+  // --- end the device wave ---------------------------------------------
 }
