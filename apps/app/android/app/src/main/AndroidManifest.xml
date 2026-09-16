@@ -50,4 +50,28 @@
     <!-- The feedback vocabulary in packages/core/src/feedback.ts — both the
          Haptics plugin and the navigator.vibrate fallback need this. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- The thermal parchi over Bluetooth classic SPP (W12,
+         PapaPrintPlugin). Android 12 split these into runtime permissions;
+         below that the install-time pair covers the same ground, hence the
+         maxSdkVersion on the legacy two. Both are requested AT USE, never at
+         launch — see PapaPrintPlugin for why.
+
+         neverForLocation on BLUETOOTH_SCAN is a promise the app keeps: it
+         talks to a paired till printer and derives nothing about where
+         anybody is, so the location permission this would otherwise drag in
+         is declined by declaration. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <!-- A phone with no Bluetooth radio still runs everything else; the
+         printer row says "no printer" and the parchi stays on screen. -->
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 </manifest>

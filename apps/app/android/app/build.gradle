@@ -32,6 +32,26 @@ repositories {
 
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
+    // --- the device wave (W12) ------------------------------------------
+    // SQLCipher: the device database is encrypted at rest or it does not
+    // open. packages/core/src/db/device-key.ts makes that a type, and
+    // PapaSqlBridge.java is what satisfies it. `sqlcipher-android` is the
+    // maintained artifact (the older `android-database-sqlcipher` is the
+    // one being replaced); it ships arm64-v8a, armeabi-v7a, x86 and x86_64,
+    // so the same APK runs on a Redmi and on an emulator.
+    implementation "net.zetetic:sqlcipher-android:$sqlcipherVersion"
+    // sqlcipher-android declares this one as `runtime` scope, but its
+    // SQLiteDatabase IMPLEMENTS androidx.sqlite's SupportSQLiteDatabase, so
+    // calling anything the interface declares (close(), for one) needs the
+    // interface at compile time. Pinned to the version sqlcipher itself
+    // resolves so the two cannot drift apart.
+    implementation "androidx.sqlite:sqlite:$androidxSqliteVersion"
+    // EncryptedSharedPreferences, whose master key lives in the Android
+    // Keystore. That is where the 32-byte SQLCipher passphrase is held: a
+    // key in ordinary preferences, or derived from the device id, is
+    // decoration, because an attacker with the phone has the app's storage.
+    implementation "androidx.security:security-crypto:$androidxSecurityCryptoVersion"
+    // --- end the device wave -------------------------------------------
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"

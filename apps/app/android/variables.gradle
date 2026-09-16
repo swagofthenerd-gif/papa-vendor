@@ -13,4 +13,13 @@ ext {
     androidxJunitVersion = '1.3.0'
     androidxEspressoCoreVersion = '3.7.0'
     cordovaAndroidVersion = '14.0.1'
+    // --- the device wave (W12): the encrypted database at rest ---------
+    // 4.17.0, not the 4.19.0 head: 4.18.0 onwards declares minCompileSdk=37,
+    // and AGP 8.13 (this project's) tops out at compileSdk 36. Bumping the
+    // Android Gradle plugin and the platform is a toolchain change for its
+    // own commit, not something to smuggle into the wave that encrypts the
+    // database. 4.17.0 carries the same API and the same four ABIs.
+    sqlcipherVersion = '4.17.0'
+    androidxSecurityCryptoVersion = '1.1.0'
+    androidxSqliteVersion = '2.6.2'
 }
