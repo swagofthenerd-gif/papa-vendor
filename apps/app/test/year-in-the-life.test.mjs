@@ -2782,9 +2782,14 @@ describe('a year in the life of the rental house', () => {
     assert.equal(farhanWorth.writtenOffMinor, rs(38_000))
     assert.equal(bilalWorth.writtenOffMinor, 0)
     // A waived fee is in neither column's favour: Ayesha was billed for it
-    // and forgiven it, so it is given-up money and never billing.
+    // and forgiven it, so it is never billing — and it is a COURTESY, not
+    // money chased and lost, so it has its own column beside the write-off.
     const ayeshaWorth = lifetimeValue(db, 'cust-ayesha')
-    assert.ok(ayeshaWorth.writtenOffMinor >= rs(198_000), 'September\u2019s favour is on the record')
+    assert.ok(
+      ayeshaWorth.waivedMinor + ayeshaWorth.writtenOffMinor >= rs(198_000),
+      'September\u2019s favour is on the record',
+    )
+    assert.ok(ayeshaWorth.waivedMinor > 0, 'and it is on the courtesy side of it')
     // The one figure that must match the ledger exactly: billed, all time,
     // is the live charge-side sum on that khata.
     assert.equal(

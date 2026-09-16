@@ -822,6 +822,7 @@ const STR_EN = {
   moneyWorthCharged: 'Billed, all time',
   moneyWorthPaid: 'Paid',
   moneyWorthWrittenOff: 'Written off',
+  moneyWorthWaived: 'Fees waived',
   moneyWorthJobs: 'Jobs',
   moneyWorthAverage: 'Average job',
   moneyWorthSpan: (first: string, last: string): string => `${first} → ${last}`,

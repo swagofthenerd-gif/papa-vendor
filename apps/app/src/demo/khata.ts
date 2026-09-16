@@ -877,8 +877,19 @@ export interface LifetimeValue {
   chargedMinor: number
   /** Money received, all time. */
   paidMinor: number
-  /** Debt the house gave up — write-offs, the honest other column. */
+  /** Debt the house gave up on money it was actually owed — the honest
+   *  other column, and a real loss. */
   writtenOffMinor: number
+  /** Fees the house chose never to insist on: a write-off that cancels the
+   *  LATE FEE it names (`corrects_entry_id` → a `late_fee` entry), whether
+   *  that is the waiver door or a fee forgiven later. Kept APART from writtenOffMinor because the two are different
+   *  facts about a client — a courtesy costs the house nothing it ever had,
+   *  a write-off is money chased and lost — and because the charge side
+   *  excludes a waived fee (SETTLED_ENTRY_IDS_SQL), so counting waivers as
+   *  written off printed "billed Rs 55,000, written off Rs 234,000": more
+   *  forgiven than was ever charged, which is not a sentence about this
+   *  client that anyone can read. */
+  waivedMinor: number
   /** Money held as security right now (the pot, not the balance). */
   depositHeldMinor: number
   /** Distinct jobs the money touched. NOT the jobs table's count: a job
@@ -914,6 +925,7 @@ export function lifetimeValue(db: SqlDriver, customerId: string): LifetimeValue 
     charged: number | null
     paid: number | null
     written_off: number | null
+    waived: number | null
     jobs: number
     first_at: number | null
     last_at: number | null
@@ -924,8 +936,20 @@ export function lifetimeValue(db: SqlDriver, customerId: string): LifetimeValue 
            and e.id not in (${SETTLED_ENTRY_IDS_SQL})) as charged,
        (select sum(-e.amount_minor) from customer_ledger_entries e
          where e.customer_id = ? and e.kind = 'payment') as paid,
+       -- The two give-ups, told apart by WHAT was forgiven, not by whether
+       -- the write-off names a line: a line write-off names its charge too.
+       -- A late fee let go is a courtesy; a charge or a damage bill given
+       -- up is money the house worked for and lost, and so is a balance
+       -- write-off (which names nothing).
        (select sum(-e.amount_minor) from customer_ledger_entries e
-         where e.customer_id = ? and e.kind = 'write_off') as written_off,
+         where e.customer_id = ? and e.kind = 'write_off'
+           and (e.corrects_entry_id is null or exists (
+             select 1 from customer_ledger_entries t
+              where t.id = e.corrects_entry_id and t.kind <> 'late_fee'))) as written_off,
+       (select sum(-e.amount_minor) from customer_ledger_entries e
+         where e.customer_id = ? and e.kind = 'write_off'
+           and exists (select 1 from customer_ledger_entries t
+             where t.id = e.corrects_entry_id and t.kind = 'late_fee')) as waived,
        (select count(distinct e.job_id) from customer_ledger_entries e
          where e.customer_id = ? and e.job_id is not null
            and e.kind in ('charge', 'late_fee', 'damage_charge')
@@ -934,7 +958,7 @@ export function lifetimeValue(db: SqlDriver, customerId: string): LifetimeValue 
          where e.customer_id = ?) as first_at,
        (select max(e.created_at) from customer_ledger_entries e
          where e.customer_id = ?) as last_at`,
-    [customerId, customerId, customerId, customerId, customerId, customerId],
+    [customerId, customerId, customerId, customerId, customerId, customerId, customerId],
   )
   const charged = Number(row?.charged ?? 0)
   const jobs = Number(row?.jobs ?? 0)
@@ -943,6 +967,7 @@ export function lifetimeValue(db: SqlDriver, customerId: string): LifetimeValue 
     chargedMinor: charged,
     paidMinor: Number(row?.paid ?? 0),
     writtenOffMinor: Number(row?.written_off ?? 0),
+    waivedMinor: Number(row?.waived ?? 0),
     depositHeldMinor: p.depositHeldMinor,
     jobs,
     firstAt: row?.first_at === null || row?.first_at === undefined ? null : Number(row.first_at),

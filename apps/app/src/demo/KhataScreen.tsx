@@ -495,6 +495,15 @@ function WorthSection({ worth }: { worth: LifetimeValue }) {
             <span className="line-code code">{formatRupees(worth.writtenOffMinor)}</span>
           </li>
         ) : null}
+        {/* A waived fee is its own fact, never folded into the write-off:
+            the charge side already leaves it out, so one column carrying
+            both read as "we forgave more than we ever billed". */}
+        {worth.waivedMinor > 0 ? (
+          <li className="line">
+            <span className="line-name">{STR.moneyWorthWaived}</span>
+            <span className="line-code code">{formatRupees(worth.waivedMinor)}</span>
+          </li>
+        ) : null}
         <li className="line">
           <span className="line-name">{STR.moneyWorthJobs}</span>
           <span className="line-code code">{worth.jobs}</span>

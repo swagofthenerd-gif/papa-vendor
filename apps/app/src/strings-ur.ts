@@ -753,6 +753,7 @@ export const STR_UR: StrTable = {
   moneyWorthCharged: 'Kul bill',
   moneyWorthPaid: 'Wusooli',
   moneyWorthWrittenOff: 'Write off',
+  moneyWorthWaived: 'Maaf kiye fees',
   moneyWorthJobs: 'Jobs',
   moneyWorthAverage: 'Ausat job',
   moneyWorthSpan: (first: string, last: string): string => `${first} → ${last}`,

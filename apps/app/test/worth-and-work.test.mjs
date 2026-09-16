@@ -63,6 +63,7 @@ describe('what a client has been worth', () => {
     assert.equal(w.chargedMinor, rs(105_000))
     assert.equal(w.paidMinor, rs(30_000))
     assert.equal(w.writtenOffMinor, 0)
+    assert.equal(w.waivedMinor, 0)
     assert.equal(w.jobs, 2)
     assert.equal(w.averageJobMinor, rs(52_500))
     assert.ok(w.firstAt !== null && w.lastAt !== null && w.lastAt >= w.firstAt)
@@ -91,6 +92,7 @@ describe('what a client has been worth', () => {
     }, ids(NOW + 1))
     const w = lifetimeValue(db, 'cust-ayesha')
     assert.equal(w.writtenOffMinor, rs(12_000))
+    assert.equal(w.waivedMinor, 0, 'nothing waived yet')
     assert.equal(w.chargedMinor, rs(55_000), 'the written-off charge is not billing')
 
     waiveLateFee(db, {
@@ -99,7 +101,12 @@ describe('what a client has been worth', () => {
     }, ids(NOW + 2))
     const after = lifetimeValue(db, 'cust-ayesha')
     assert.equal(after.chargedMinor, rs(55_000), 'a favour is not a bill')
-    assert.equal(after.writtenOffMinor, rs(12_000 + 4_000), 'but it IS money given up')
+    // The two give-ups are DIFFERENT facts and sit in different columns.
+    // Absconded money was chased and lost; a waived fee is a courtesy the
+    // house never had. Folded together they printed "billed Rs 55,000,
+    // written off Rs 16,000" — forgiving more than was billed, unreadable.
+    assert.equal(after.writtenOffMinor, rs(12_000), 'money chased and lost')
+    assert.equal(after.waivedMinor, rs(4_000), 'a fee never insisted on')
   })
 
   test('held security money is the pot, never worth', () => {
