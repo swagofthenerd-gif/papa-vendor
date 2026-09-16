@@ -1379,6 +1379,13 @@ export const STR_UR: StrTable = {
     `${rupees} ki do ${kind} lines, ${seconds} second ke faasle par. Do dafa hua tha?`,
   moneyDuplicateKeep: 'Dono asli hain',
   moneyDuplicateKept: 'Rakh liya — dono lines qaim hain',
+  moneyWriteOffBalance: 'Jo baqi hai write off karein',
+  moneyWriteOffBalanceTitle: 'Baqaya write off karein',
+  moneyWriteOffBalanceWhat:
+    'Poora baqaya chhor dena — woh client jo bhaag gaya. Yeh kisi ek charge ka naam nahi leta, kyunke chalti hui khate par wusooli kisi ek line se nahi juri hoti.',
+  moneyWriteOffBalanceHold: (rupees: string): string => `${rupees} chhorne ke liye dabaye rakhein`,
+  moneyWriteOffBalanceReasonPlaceholder: 'jaise: bhaag gaya — FIR ho gayi',
+
   // --- 3. Maaf ki hui late fee (`waived-fee-invisible`).
   moneyWaiveIt: 'Maaf kar dein',
   moneyWaiveTitle: 'Late fee maaf karein',

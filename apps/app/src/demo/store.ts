@@ -140,6 +140,7 @@ import {
   recordReversalOf,
   correctEntry,
   writeOffEntry,
+  writeOffBalance,
   duplicateEntries,
   waiveLateFee,
   waivedFees,
@@ -1541,6 +1542,13 @@ export class DemoStore {
    *  onto the line it forgives. Never printed as the house's own error. */
   writeOffEntry(entryId: string, reason: string, whenMs: number = Date.now()): SettleResult {
     return writeOffEntry(this.db, { orgId: this.seed.orgId, entryId, reason, whenMs })
+  }
+
+  /** "Write off what's owed" — the whole balance, given up, naming no
+   *  line. The absconded-client case: a payment is not allocated to a
+   *  charge, so "the unpaid lines" do not exist on a running account. */
+  writeOffBalance(customerId: string, reason: string, whenMs: number = Date.now()): SettleResult {
+    return writeOffBalance(this.db, { orgId: this.seed.orgId, customerId, reason, whenMs })
   }
 
   /** Identical charge-side lines a few seconds apart — the double-tap

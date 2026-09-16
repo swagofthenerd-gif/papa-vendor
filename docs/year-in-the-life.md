@@ -66,8 +66,8 @@ as a pair — they cancel in time as well as in money — so "owed since"
 keeps pointing at the original charge, and the statement prints
 *reversed*, never *adjustment*, for a bounce the house did not cause.
 (MAY block pins the surviving clock; `0018_jobs_meet_customers_test.sql`
-pins the server rules.) The `no-adjustment-door` finding stands: outside
-the charged-then-returned notice, no screen writes a reversal yet.
+pins the server rules.) W13 gave it its door: MAY's bounce is now
+written from the khata page, with the reason kept beside the line.
 
 ### 5. The payback bar counts damage recovery as earnings — FIXED
 
@@ -151,9 +151,9 @@ tests pin the default instead of the accident.
   "write off"), so a synced server write-off renders as a word instead of
   leaking snake_case — and February's absconded client is no longer an
   anonymous `adjustment` indistinguishable from a discount. No screen
-  writes it yet (`no-adjustment-door` stands). POLICY comment at the kind
-  union in `packages/core/src/ledger.ts`; the was-`write-off-illegible`
-  finding is retired.
+  writes it (W13: the line door and the balance door both do). POLICY
+  comment at the kind union in `packages/core/src/ledger.ts`; the
+  was-`write-off-illegible` finding is retired.
 
 ## (b) Missing features, ranked by how often the year hit the gap
 
@@ -275,9 +275,10 @@ left the fleet this year, none expressible. Shipped end to end as Wave 2
   **public tag resolver goes deliberately LOUD for a stolen tag** (a STOLEN
   notice with the org's contact line, `public_tag_show_owner` or not — the
   Phase E2 groundwork), while lost/sold/retired stay indistinguishable from
-  an unknown tag (the anti-enumeration rule). Only the customer-side
-  **blacklist flag** remains (narrowed to `no-blacklist`); the Rs 2.6M gear
-  loss is now recorded as a disposition, not an eternal `out`.
+  an unknown tag (the anti-enumeration rule). The customer-side
+  **blacklist flag** was the last of it (`no-blacklist`) and W13 shipped
+  it as migration 0029's `set_customer_blacklisted` — see §11 below; the
+  Rs 2.6M gear loss is recorded as a disposition, not an eternal `out`.
 - The **stocktake** (JUL): shipped as **ginti** — a cycle count is a diff
   (`cycleCountDiff`), and both sides now exist. The tech walks a shelf,
   the seen set is written as `inventory_count` events (non-destructive:
@@ -289,31 +290,79 @@ left the fleet this year, none expressible. Shipped end to end as Wave 2
 *Plan check:* Phase E2 (stolen-gear mode) and Phase D4 (cycle counting)
 were the right shapes; the disposition axis rode with them as predicted.
 
-### 5. The correction vocabulary is one unlabeled word — DEC, FEB, MAY
-`no-adjustment-door`
+### 5. The correction vocabulary is one unlabeled word — SHIPPED as the correction door (W13)
 
-The correction VOCABULARY now exists — `reversal(of=…)` and `write_off`
-are real kinds, the statement prints "reversed", never a self-blaming
-"adjustment", and the charged-then-returned notice writes a reversal
-from its confirm tap. But the general-purpose door is still missing:
-outside that one notice, **no screen posts a reversal, a write-off or an
-adjustment**, and the void guard for double-taps (same customer + amount
-+ kind within a few seconds is a confirmable duplicate, not a silent
-second line) is still unbuilt.
+Was `no-adjustment-door` — hit DEC, FEB and MAY. The vocabulary existed
+(`reversal(of=…)` and `write_off` are real kinds, the statement prints
+"reversed" and never a self-blaming "adjustment") and no screen could
+write any of it outside the charged-then-returned notice. Shipped end to
+end as **three doors, because they are three different admissions**:
 
-*Plan check:* not in any phase. Slot into Phase B polish — it is pure
-past-fact recording, offline-safe by the CONTRIBUTING rule.
+- **Correct this** — the line was a MISTAKE. A `reversal` naming it and
+  negating it exactly; the amount is copied from the target so no caller
+  can mis-type it, and both rows stay on the page because the client saw
+  both happen.
+- **Write it off** (on a line) — the line was RIGHT and the house has
+  decided not to chase it. Named onto the charge through the server's
+  own forward-pointing `corrects_entry_id`, because
+  `record_ledger_entry` allows `p_reversal_of` on kind 'reversal' alone.
+- **Write off what is owed** (on the account) — the absconded-client
+  answer. It names no line, because a payment on a running account is
+  not attached to one charge: after Rs 40,000 paid against Rs 78,000
+  billed there is no such thing as "the unpaid lines", and what the desk
+  decides is "we are not chasing the Rs 38,000". FEB needed exactly this.
 
-### 6. Deposits have no door — SEP, DEC
-`no-deposit-door`
+All three require a REASON (override 18, and the server's own
+`ledger_override_has_reason`), all three sit behind a hold, none can be
+used twice on one line, and none touches deposit money (that moves
+through hold/apply/refund alone). **The khata renders the pair as one
+story**: the settled line struck through with the settlement's own words
+beneath it, the settling row not repeated below.
 
-The projection handles hold/apply/refund flawlessly (DEC pinned the whole
-Rs 100,000 → damage → refund arc to the paisa). But only the seed has ever
-written these kinds; no store method, no screen. Phase B item 7 is listed
-as shipped-in-schema; it is not usable by a vendor.
+The **void guard for double-taps** shipped as a QUESTION rather than a
+refusal: two identical charge-side lines on one khata inside 20 seconds
+(`DUPLICATE_WINDOW_MS`, ASSUMPTION `#duplicate-window`) surface on the
+page with the ordinary one-tap correction behind them. The write is never
+blocked — two cracked filters on one job is a real answer, and only a
+person knows which this is. DEC's double-tapped Rs 30,000 now runs that
+scenario: the question fires, the correction is written with its reason,
+and the camera's earnings drop back.
 
-### 7. Service, utilization and dead stock — MAR, JUN (largely SHIPPED as 0021)
-`no-utilization-read` (narrowed), `no-lifetime-value-view`, `no-month-history-screen`
+### 6. Deposits have no door — SHIPPED as the deposit door (W13)
+
+Was `no-deposit-door` — hit SEP and DEC. The projection handled
+hold/apply/refund flawlessly and only the seed had ever written the
+kinds. Shipped end to end on 0017 D4's own RPCs
+(`hold_deposit` / `apply_deposit` / `refund_deposit`):
+
+- `apps/app/src/demo/deposits.ts` is the state machine on the phone: each
+  door writes its ledger line and queues the RPC it replays as, the
+  phone's `dep-…` riding beside the hold's arguments as
+  `client_deposit_id` and the apply and refund chained behind it. The
+  ledger lines queue **no op of their own** — the server writes them
+  inside the deposit RPCs, and a second op would be a second row
+  (ASSUMPTION `#deposit-line-ids` covers what that costs).
+- The khata page grows a Deposits section above the book, because
+  security money is not debt in either direction: the amount, the state
+  as a quiet badge, the job it secures, and the two things a desk does
+  with it.
+- **The refund gate is the point.** Override 15 calls a refund "the most
+  direct money-loss path in the plan", and the server refuses one while
+  the linked job is not QC-clear. `refundBlockers` mirrors
+  `job_money_shortfalls` over the facts the phone holds — gear still out,
+  nothing scanned back, damage still not `health='ok'` — so the refund is
+  DISABLED with the reason in words BEFORE the tap, and the sheet says
+  out loud that the server checks again (ASSUMPTION
+  `#refund-gate-local-half` names the four reasons the phone cannot see).
+  When it is clear, the refund still sits behind a hold.
+
+SEP now runs the whole arc — a cheque taken at the wedding counter, the
+refund refused while eleven items are on a lawn in Johar Town, the
+cheque returned when the truck is home and nothing is flagged — and
+DEC's Rs 100,000 → damage → apply → refund story runs through the real
+doors instead of the seed's.
+
+### 7. Service, utilization and dead stock — SHIPPED as 0021 and the W13 reads
 
 Was also `no-service-tracking` — the JUN wall ("the inputs are already all
 on the device; nothing reads them for service"). Wave 3 (migration
@@ -352,21 +401,41 @@ on the device; nothing reads them for service"). Wave 3 (migration
   (honest 'device full' refusal), played back inline, silently absent
   where MediaRecorder is.
 
-What remains, still ranked by the year:
+What remained after W3 — all three SHIPPED in W13:
 
-- `no-utilization-read`, NARROWED: no fleet ranking of earners — "which
-  camera earned best" (AUG Q4) still means opening asset pages one at a
-  time. The idle-days half of the finding is retired.
-- `moneyStrip(nowMs)` answers *any* month — verified for October and
-  December from March — but every caller hardcodes `Date.now()`, so the
-  owner cannot see last month from this one. A month picker is nearly
-  free; the API is already honest (`no-month-history-screen`).
-- Lifetime value per customer is sitting in the entries every khata page
-  already loads; the owed list just doesn't show it
-  (`no-lifetime-value-view`).
+- **`no-utilization-read`** (the last of it): the fleet now ranks itself.
+  `demo/utilisation.ts` turns the scan log into out→in periods and counts
+  days out as CALENDAR DATES the way the rental-day rule and the service
+  meter both count them; one unit's page says how hard it works (days out
+  in the last 90, the 0021 meter, what it earned and per day, idle days)
+  and a **Hardest workers** group on the Sehat surface ranks the live
+  fleet — AUG Q4 answered in one glance instead of a page at a time.
+  **Both honest limits are on the screen, not in a comment**: days out
+  come from this phone's own queue, which the pipe drains, and the assets
+  mirror carries no acquisition date, so "per day" is per day since this
+  phone first saw the unit. "Never seen it go out" reports null, never a
+  confident ninety.
+- **`no-month-history-screen`**: Din ka hisaab has a month picker, deep
+  linked as `#/hisaab?m=YYYY-MM`. A picker plus a title, not new maths —
+  the window is `monthBounds`, the money is `monthProfit`, the spending is
+  `kharchaBetween`, the movement counts are the day account's own
+  `classifyDayScans` over a month-wide window. A past month replaces the
+  day's sections with its own account (what moved, the kharcha, the
+  profit, and the per-client statement links collections week needs);
+  this month keeps the day under it, because a month is not a day with no
+  scans. MAR now opens October and December from March, and AUG walks all
+  twelve and asserts they sum to the year.
+- **`no-lifetime-value-view`**: the khata page says what the client has
+  been worth — billed, paid, written off, the jobs the money touched, the
+  span, the average job. Every figure a sum over the entries the page
+  already loads, using the one settled rule, so a reversed charge and a
+  waived fee are not worth: the house never had that money. No average
+  against a zero denominator, and the section says out loud that it knows
+  only this phone's book.
 
 *Plan check:* D1/D6 shipped as the predicted shapes; the month picker and
-lifetime-value column stay cheap Phase B polish, not Phase D work.
+the lifetime-value read were indeed cheap Phase B polish, and the fleet
+ranking needed only the log the phone already had.
 
 ### 8. The crisis-day swap — SHIPPED as the swap flow (0020)
 
@@ -382,16 +451,33 @@ not on the job, and terminal / off-shelf / unfit substitutes. NOV and JAN
 now both run the real swap; the rental stays one job's story and the
 evidence chain holds.
 
-### 9. Health cannot be set standalone from the phone — JAN (narrowed)
-`no-health-door`
+### 9. Health cannot be set standalone from the phone — SHIPPED as the health door (W13)
 
-Availability honesty **depends** on `health` (`'here' and health='ok'`).
-The **swap** now sets it for the swap case — the dropped FX9 is flagged
-`quarantined` in the same atomic flow that sends its substitute out, so
-JAN no longer needs SQL — but a STANDALONE "this is broken, quarantine it"
-toggle with no swap behind it still has no screen. That narrowed gap is
-what `no-health-door` now names. (Related: retiring a peeled tag also has
-no door — JUL.)
+Was `no-health-door`. Availability honesty **depends** on `health`
+(`'here' and health='ok'`), and the only thing that could move it was the
+crisis-day swap — which needs a substitute and a live job. A tech who
+drops a lens on the bench had no way to say so.
+
+Shipped as **three answers, each a REAL scan verb** already in 0003's
+vocabulary: broken → `quarantine`, needs a look → `send_to_service`,
+fine → `release`. One append-only op through the same queue every scan
+uses, projected optimistically, so the log still explains why the mirror
+says what it says — the evidence rule, kept. The door is on the unit's
+own Sehat section, with what the chosen answer MEANS for the shelf
+spelled out before the write.
+
+Lifting it surfaced a **second copy of the health rule**: `swapAsset`
+wrote `health = 'quarantined'` by hand beside its three ops because
+`projectOp` owned presence, disposition and job and nothing else. The
+rule now lives once, in `project.ts`'s `HEALTH_FOR` — the server's own
+`case` from 0003/0020 — and the swap projects through it like everything
+else (principle 4). `found` brings a terminal unit home healthy in the
+same update the server uses.
+
+Deliberately NOT the service meter's reset: `serviced` is its own verb
+and its own decision (0021 D2), and JAN asserts that a release leaves the
+meter where it was. (Still open, and not a money door: retiring a peeled
+tag has no screen — JUL.)
 
 ### 10. Import apply is welded to the store — RETIRED (W8)
 
@@ -403,15 +489,69 @@ is deleted. Lifting it surfaced fixed bug (a)8.
 
 ---
 
+### 11. The blacklist is a gate with no switch — SHIPPED as 0029 (W13)
+
+Was `no-blacklist`, the customer-side half of the old
+`no-blacklist-or-theft-export` — hit FEB and, as a question the app could
+not answer, every time the overdue ladder's day-14 rung said "consider a
+blacklist".
+
+`customers.blacklisted` has existed since 0017 and `confirm_booking` has
+refused a blacklisted customer BY NAME since 0022 D9. **Nothing could
+ever set it.** The year's FEB scene lost Rs 2.6M to an absconded client,
+wrote off his debt, marked his gear stolen, filed the theft report — and
+then had no way to record the one decision that follows from all of it.
+
+Shipped as migration **0029**'s `set_customer_blacklisted(p_customer_id,
+p_on, p_reason)` — the only RPC this whole wave needed:
+
+- **owner/manager only**, like the refund (override 17): refusing a
+  client future business is not desk work, and a warehouse phone must not
+  be able to say it.
+- **a reason is required to switch it ON** and not to lift it (override
+  18): the column is a boolean and a boolean cannot be asked why, so the
+  audit row is the record — `customer_blacklisted` /
+  `customer_unblacklisted`, audited both ways, silent when nothing
+  changed so a second tap is not a second decision.
+- tenancy by hand (the 0004 rule), its own 6/min budget, 18 pgTAP
+  assertions including the point of the whole thing: `confirm_booking`
+  refuses the client and stands down again when the flag is lifted.
+
+On the phone the flag, the reason and the date are written and the op
+queued; the red stamp rides the khata header, the owed list and the
+booking confirm sheet — a decision nobody can see is not a decision. The
+decision is deliberately NOT a sync: this migration does not make
+`customers` syncable, because that is a PII decision with a role
+predicate to design and not a rider on a one-function migration
+(ASSUMPTION `#local-blacklist-flag`).
+
+FEB now runs it on Farhan, and JUN records a **no**: one bounced cheque
+from a four-job regular is not an absconding, the desk declines to
+blacklist Imran, and he pays the Rs 40,000 again in cash. The door
+exists; the judgement is still the owner's.
+
 ## (c) Small UX papercuts
 
 - **The progress ring undercounts swaps.** `packedProgress` counts
   promised-and-out only; the wedding that legitimately took batteries 5–8
   instead of the promised 1–4 shows 7/11 forever after a reload (pinned,
   SEP).
-- **A waived late fee leaves no trace** (`waived-fee-invisible`). The
-  owner forgave 11 days on the documentary; nothing records the goodwill,
-  so next quarter nobody remembers Ayesha already got her favour.
+- **A waived late fee leaves no trace — SHIPPED (W13).** Was
+  `waived-fee-invisible`: the owner forgave 11 days on the documentary and
+  nothing recorded the goodwill, so next quarter nobody remembered Ayesha
+  had already had her favour. **The choice made, and why:** the fee is
+  WRITTEN and then WRITTEN OFF, one transaction, two lines netting to
+  nothing, the write-off naming the fee through `corrects_entry_id`. The
+  two alternatives are both worse — a write-off alone credits the client
+  money they were never charged, and an `adjustment` moves the balance
+  *and* prints as the house correcting its own error, which a waiver is
+  not: the fee was right and the house chose not to take it. The khata
+  reads the pair as one sentence — "Rs 4,000 late fee — waived on 12 Sep"
+  — the balance does not move, the month earns nothing from it, and both
+  lines are on the statement the client reads, which is the point: the
+  goodwill is visible to the person who received it. The door is the
+  late-fee sheet's other answer, behind a reason and a hold, a step away
+  from the charge button so the two are never adjacent.
 - **Statements are one tap per customer.** February's collections were
   five separate compose-and-send rounds; at a real house's scale this is
   an hour of thumbing. A "send all statements" batch (still via the
@@ -468,6 +608,8 @@ book, no lowered quote.
    day-14 rung tells him to consider (`no-blacklist`), and the goodwill
    he extends when he waives a fee (`waived-fee-invisible`). Each is
    pure past-fact recording — a B-polish week, not a wave.
+   *(All four SHIPPED in W13, with the four reads beside them. The
+   B-polish week was the whole of the wave.)*
 3. **The two walls the shipped doors have**, found only by using them in
    order: a sub-rent intent that the pipe cannot replay
    (`sub-rent-intent-unreplayable`) and a borrowed unit's cost that
@@ -544,15 +686,17 @@ comments; this is the ledger of what moved.
 
 - **Retired (1):** `import-apply-welded` — the routine moved, the replica
   died, and moving it fixed bug (a)8.
-- **Kept (8), each a Phase B polish door the waves did not build:**
+- **Kept (8) at the end of W8, ALL EIGHT RETIRED IN W13** — see
+  [The money doors](#the-money-doors-w13) at the end of this page:
   `no-adjustment-door`, `no-deposit-door`, `no-blacklist`,
   `no-health-door`, `waived-fee-invisible`, `no-month-history-screen`,
-  `no-lifetime-value-view`, `no-utilization-read`. None names a shipped
-  feature: the store still has no `holdDeposit`, no standalone reversal
-  or write-off door (only the charged-then-returned notice writes one),
-  no health toggle without a swap, no blacklist toggle, no waiver line,
-  no month picker on the Hisaab (`monthProfit()` is called with no
-  clock), no lifetime column on the owed list, no earners leaderboard.
+  `no-lifetime-value-view`, `no-utilization-read`. At the end of W8 none
+  named a shipped feature: the store had no `holdDeposit`, no standalone
+  reversal or write-off door, no health toggle without a swap, no
+  blacklist toggle, no waiver line, no month picker on the Hisaab, no
+  lifetime figures on the khata, no earners leaderboard. It has all of
+  them now, and **the findings ledger in
+  `apps/app/test/year-in-the-life.test.mjs` is empty**.
 - **New (2), found only by using the shipped doors in a vendor's order:**
 
 ### Wall retired in W11: `sub-rent-intent-unreplayable` — MAR
@@ -616,3 +760,69 @@ The suite found no invariant violation. It found the papercut in (c)
 assertions batch their lookups — a reminder that the phone's read models
 were written for one org's year, not for a test that runs one in five
 seconds.
+
+---
+
+## The money doors (W13)
+
+The eight kept findings, all retired — the Phase B polish the waves kept
+deferring, built as the eight screens the simulated year reached for and
+could not find. **The findings ledger in
+`apps/app/test/year-in-the-life.test.mjs` is now empty**, and every
+scenario below runs in the month that first hit the wall.
+
+Seven of the eight sat on RPCs that already existed. One did not, and
+that one is migration **0029** (`set_customer_blacklisted`) — a gate with
+no switch since 0017.
+
+| Door | Where it lives | Retires | The month that runs it |
+|---|---|---|---|
+| Deposits — take, apply to a bill, refund | khata page, above the book | `no-deposit-door` | SEP (taken, gate refuses, refunded clear) · DEC (the Rs 100,000 arc) |
+| Correct this · Write it off · Write off what is owed | every book line, and the account | `no-adjustment-door` | DEC (the double tap) · FEB (the absconded balance) · MAY (the bounced cheque) |
+| Waive a late fee | the late-fee sheet's other answer | `waived-fee-invisible` | SEP (11 days forgiven on the documentary) |
+| Do not rent to this client | khata page, bottom | `no-blacklist` | FEB (Farhan) · JUN (the answer is no) |
+| How is it? — broken / needs a look / fine | the unit's Sehat section | `no-health-door` | JAN (the lens off the bench) |
+| The month picker, `#/hisaab?m=YYYY-MM` | Din ka hisaab | `no-month-history-screen` | MAR (October from March) · AUG (all twelve) |
+| What this client has been worth | khata page, under the book | `no-lifetime-value-view` | AUG (Q2) |
+| How hard it works, and the fleet ranked | the unit's page · a Sehat group | `no-utilization-read` | MAR · AUG (Q4) |
+
+### The four design calls worth knowing
+
+1. **A waived fee is a fee written and written off**, not an adjustment
+   and not a bare write-off. See (c) — the alternatives credit the client
+   money they were never charged, or print the favour as the house's own
+   error.
+2. **A write-off comes in two sizes** because a running account has no
+   "unpaid lines": one names a charge (through the server's
+   `corrects_entry_id`), one names the balance (and no line at all).
+   FEB needed the second; the brief only asked for the first.
+3. **The refund gate is read before the tap.** The phone mirrors three of
+   `job_money_shortfalls`' seven reasons and says out loud that the
+   server checks again (ASSUMPTION `#refund-gate-local-half`). A refusal
+   the desk can read is worth more than a parked card an hour later.
+4. **The two utilisation limits are on the screen.** The phone's log is a
+   floor, not a lifetime, and there is no purchase date on this side of
+   the pipe. A number whose limit lives only in a code comment is a
+   confident lie.
+
+### One rule found living in two places, and fixed
+
+Lifting the health door surfaced it: `swapAsset` wrote
+`health = 'quarantined'` by hand beside its three ops, because
+`projectOp` owned presence, disposition and job and nothing else. The
+health rule now lives once — `project.ts`'s `HEALTH_FOR`, the server's
+own `case` from 0003/0020 — and the swap projects through it like every
+other write (principle 4). `SETTLED_ENTRY_IDS_SQL` in
+`packages/core/src/ledger.ts` is the same move on the money side: "this
+line was settled" is stated once and read by per-asset earnings, the
+month's profit, a job's margin, the Today strip and the client's worth.
+
+### What the year still cannot say
+
+An empty findings list is not the end of the findings. Everything above
+was found by a simulation that has never met a network, a printer or a
+person. The next thing to re-live this year on is **a real phone, over a
+real network, at a real house** — the three human gates
+(`docs/production-readiness.md`) are what produce the next list, and the
+vendor afternoon's fifty-four assumptions
+(`docs/assumptions.md`) are what it will be about.

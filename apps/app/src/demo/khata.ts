@@ -1012,6 +1012,40 @@ export function setBlacklisted(
   return { ok: true, blacklisted: input.on }
 }
 
+/**
+ * "Write off what's owed" — the WHOLE outstanding balance, given up.
+ *
+ * The line-scoped door above forgives one charge; this one forgives an
+ * ACCOUNT, and it exists because the ledger is a running account: a
+ * payment is not allocated to a charge, so after Rs 40,000 paid against
+ * Rs 78,000 billed there is no such thing as "the unpaid lines". What
+ * the desk actually decides on an absconded client is "we are not
+ * chasing the Rs 38,000", and that is one write-off naming no line.
+ *
+ * Refused when nothing is owed — writing off a zero (or a credit) would
+ * hand the client money. A reason is required, like every settlement.
+ */
+export function writeOffBalance(
+  db: SqlDriver,
+  input: { orgId: string; customerId: string; reason: string | null; whenMs: number },
+  ids: QueueIds = defaultIds(input.whenMs),
+): SettleResult {
+  const reason = (input.reason ?? '').trim()
+  if (reason.length === 0) return { ok: false, reason: 'no_reason' }
+  const view = customerView(db, input.customerId)
+  if (!view) return { ok: false, reason: 'not_found' }
+  if (view.balanceMinor <= 0) return { ok: false, reason: 'already_settled' }
+  const id = recordEntry(db, {
+    orgId: input.orgId,
+    customerId: input.customerId,
+    kind: 'write_off',
+    amountMinor: -view.balanceMinor,
+    note: reason,
+    createdAt: input.whenMs,
+  }, ids)
+  return { ok: true, id }
+}
+
 export interface DuplicateEntry {
   /** The SECOND line — the one a correction would settle. */
   entryId: string

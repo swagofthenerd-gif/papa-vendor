@@ -1509,6 +1509,13 @@ const STR_EN = {
     `Two ${kind} lines of ${rupees}, ${seconds} second${s(seconds)} apart. Was that twice?`,
   moneyDuplicateKeep: 'Both are real',
   moneyDuplicateKept: 'Kept — both lines stand',
+  moneyWriteOffBalance: 'Write off what is owed',
+  moneyWriteOffBalanceTitle: 'Write off the balance',
+  moneyWriteOffBalanceWhat:
+    'The whole outstanding amount, given up — the absconded-client answer. It names no single charge, because a payment on a running account is not attached to one.',
+  moneyWriteOffBalanceHold: (rupees: string): string => `Hold to give up ${rupees}`,
+  moneyWriteOffBalanceReasonPlaceholder: 'e.g. Absconded — FIR filed',
+
   // --- 3. The waived fee (`waived-fee-invisible`).
   // The fee is written and written off in one transaction: two lines that
   // net to nothing, both on the statement the client reads, so the

@@ -15,6 +15,7 @@ import { DueBadge } from '../routes/Today.tsx'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 import { Sheet, SheetClose } from '../components/Sheet.tsx'
+import { HoldToFinish } from '../components/HoldToFinish.tsx'
 // --- W13 the money doors
 import { DepositSection } from './DepositSection.tsx'
 import { LineSheet } from './CorrectionSheet.tsx'
@@ -327,6 +328,21 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
       {/* The decision itself (W13): at the bottom, because it is the
           rarest act on the page and the one that must never be a
           mis-tap — behind a hold, with a reason, like every refusal. */}
+      {/* Write off what is owed (W13): the account-level answer the
+          line-scoped door cannot give, because a payment on a running
+          account is not attached to one charge. Down here with the
+          do-not-rent decision — both are things a desk does once, about a
+          client rather than about a line. */}
+      {customer.balanceMinor > 0 ? (
+        <BalanceWriteOff
+          rupees={formatRupees(customer.balanceMinor)}
+          onWriteOff={(reason) => {
+            store.writeOffBalance(customerId, reason)
+            setTick((t) => t + 1)
+          }}
+        />
+      ) : null}
+
       <BlacklistSection
         store={store}
         customerId={customerId}
@@ -376,6 +392,56 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
         />
       ) : null}
     </Shell>
+  )
+}
+
+/**
+ * "Write off what is owed" (W13) — the whole balance, given up.
+ *
+ * Reveal-then-hold, like every other settlement: the button opens a
+ * reason field and a hold, because forgiving a client's debt is a
+ * decision the house makes once and lives with. The figure is in the
+ * hold's own label, so the thumb that finishes it has read the number.
+ */
+function BalanceWriteOff({
+  rupees,
+  onWriteOff,
+}: {
+  rupees: string
+  onWriteOff: (reason: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [reason, setReason] = useState('')
+
+  if (!open) {
+    return (
+      <div className="session-actions">
+        <button className="btn btn-ghost btn-block" onClick={() => setOpen(true)}>
+          <Icon name="hand" size={18} /> {STR.moneyWriteOffBalance}
+        </button>
+      </div>
+    )
+  }
+  return (
+    <section className="section">
+      <SectionHead icon="hand" title={STR.moneyWriteOffBalanceTitle} />
+      <p className="section-sub">{STR.moneyWriteOffBalanceWhat}</p>
+      <label className="field-label" htmlFor="writeoff-balance-why">{STR.moneyReasonLabel}</label>
+      <input
+        id="writeoff-balance-why"
+        className="sheet-search"
+        value={reason}
+        placeholder={STR.moneyWriteOffBalanceReasonPlaceholder}
+        onChange={(e) => setReason(e.target.value)}
+        autoCorrect="off"
+        spellCheck={false}
+      />
+      <HoldToFinish
+        label={STR.moneyWriteOffBalanceHold(rupees)}
+        disabled={reason.trim().length === 0}
+        onFinish={() => { onWriteOff(reason.trim()); setOpen(false) }}
+      />
+    </section>
   )
 }
 
