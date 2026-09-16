@@ -70,6 +70,10 @@ export function canPrintOverBluetooth(): boolean {
  * Paired, not scanned: a till printer is paired once in Android's own
  * Bluetooth settings, by someone who can see the PIN sticker on it. A
  * discovery scan inside this app would be a second, worse pairing flow.
+ *
+ * ASSUMPTION: a house has one till printer, paired by someone willing to go
+ * into Android's settings, and one remembered MAC is enough.
+ * See docs/assumptions.md#printer-pairing
  */
 export async function pairedPrinters(): Promise<PairedPrinter[]> {
   const answer = await PapaPrint.list()

@@ -75,7 +75,14 @@ public class PapaPrintPlugin extends Plugin {
     /** The Serial Port Profile UUID. Every ESC/POS clone answers on it. */
     private static final UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
 
-    /** The whole print, connect included, gets ten seconds. */
+    /**
+     * The whole print, connect included, gets ten seconds.
+     *
+     * ASSUMPTION: ten seconds is how long a person at a till waits before
+     * writing the parchi out by hand. connect()'s own timeout is about
+     * twelve and cannot be set, so a number had to be chosen.
+     * See docs/assumptions.md#print-timeout
+     */
     private static final long TIMEOUT_MS = 10_000L;
 
     /**
@@ -85,8 +92,12 @@ public class PapaPrintPlugin extends Plugin {
      * control worth the name. A parchi with a QR code is several kilobytes,
      * and handing it over in one write is how these printers produce half a
      * receipt and then stop. Small writes with a breath between them is the
-     * shape that works on the hardware, and ASSUMPTION #thermal-58mm already
-     * says the hardware is unverified.
+     * shape that works on this class of hardware.
+     *
+     * ASSUMPTION: the chunk size and the pause are general to cheap SPP
+     * clones, not measured on the pilot house's printer — no printer has fed
+     * paper yet (#thermal-58mm is still open).
+     * See docs/assumptions.md#printer-chunking
      */
     private static final int CHUNK_BYTES = 512;
     private static final long CHUNK_PAUSE_MS = 20L;

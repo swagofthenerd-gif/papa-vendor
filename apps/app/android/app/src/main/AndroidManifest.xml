@@ -1,8 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- allowBackup is FALSE from W12, changed from Capacitor's default.
+
+         The database is SQLCipher, and its key lives in the Android
+         Keystore, which by design never leaves the device. Android
+         auto-backup would therefore copy the ciphertext to Google and
+         restore it onto a new phone with no key to open it — an app that
+         starts and cannot read its own book, which is a worse failure than
+         starting empty. It would also put the customer list and every
+         purchase price on a third party's servers, which nobody has agreed
+         to.
+         ASSUMPTION: losing the local book with the phone is acceptable
+         because everything except the outbox is a projection of the server.
+         See docs/assumptions.md#no-device-backup -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"

@@ -401,6 +401,11 @@ export function unsentEvidence(db: SqlDriver): number {
  * WebView's heap. What that costs and what it does not is written down in
  * docs/android.md; the alternative — an opaque handle — would mean the
  * contract's empty-key guard guarded nothing, which is a worse trade.
+ *
+ * ASSUMPTION: the key crosses as a PASSPHRASE, so SQLCipher derives the file
+ * key with PBKDF2 at its default iteration count — a few hundred
+ * milliseconds once, at open, unmeasured on a cheap phone.
+ * See docs/assumptions.md#sqlcipher-kdf-cost
  */
 export class CapacitorKeyProvider implements DeviceKeyProvider {
   /**
