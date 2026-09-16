@@ -64,8 +64,13 @@ const atDays = (days, hour) => {
 beforeEach(() => {
   db = new NodeSqliteDriver()
   db.exec(LOCAL_SCHEMA)
-  seed = seedDemo(db)
-  NOW = Date.now()
+  // Anchored to NOON, not to the wall clock, and the seed is built on the
+  // same instant. A pencil that dies "in five hours" stops dying TODAY once
+  // the real clock passes 19:00, and this file's Promised-strip assertions
+  // quietly became time-of-day dependent — the one thing docs/principles.md
+  // forbids of a test. seedDemo takes the clock for exactly this reason.
+  NOW = atDays(0, 12)
+  seed = seedDemo(db, NOW)
   n = 0
 })
 

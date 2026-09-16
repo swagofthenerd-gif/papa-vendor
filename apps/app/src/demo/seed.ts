@@ -246,7 +246,7 @@ export interface DemoSeed {
  * what they will run against on a phone. Nothing here is a mock of the engine
  * — only of the server that would normally have filled these tables by sync.
  */
-export function seedDemo(db: SqlDriver): DemoSeed {
+export function seedDemo(db: SqlDriver, nowMs: number = Date.now()): DemoSeed {
   const rng = makeRng(0x5A17A11)
   const tags: DemoTag[] = []
 
@@ -380,7 +380,7 @@ export function seedDemo(db: SqlDriver): DemoSeed {
       `update assets set rental_days_since_service = 41, cycle_count = 28 where id = 'asset-fx9-2'`,
     )
     {
-      const idleSince = new Date(msDaysAgo(120)).toISOString()
+      const idleSince = new Date(msDaysAgo(120, nowMs)).toISOString()
       db.exec(
         `update assets set last_scanned_at = ?, updated_at = ? where id in ('asset-samyang-1', 'asset-sachdeva-3')`,
         [idleSince, idleSince],
@@ -446,8 +446,8 @@ export function seedDemo(db: SqlDriver): DemoSeed {
     }
 
     seedRateCard(db)
-    seedMoneyBook(db)
-    seedBookings(db)
+    seedMoneyBook(db, nowMs)
+    seedBookings(db, nowMs)
     // --- network --- (0025): partner houses, the staff roster, the
     // wedding truck's crew. See network.ts seedNetwork.
     seedNetwork(db, ORG)
@@ -521,8 +521,8 @@ function seedRateCard(db: SqlDriver): void {
 /** Epoch ms `days` before now — the ledger's created_at voice. Relative for
  *  the same reason the due dates are: a fixed date rots into ancient history
  *  and the khata would stop demonstrating a current month. */
-function msDaysAgo(days: number): number {
-  return Date.now() - days * 24 * 60 * 60 * 1000
+function msDaysAgo(days: number, nowMs: number): number {
+  return nowMs - days * 24 * 60 * 60 * 1000
 }
 
 /**
@@ -538,7 +538,7 @@ function msDaysAgo(days: number): number {
  * ASSUMPTION: the figures are plausible Lahore PKR, unvalidated — same
  * status as the seeded rates. See docs/assumptions.md#demo-rates
  */
-function seedMoneyBook(db: SqlDriver): void {
+function seedMoneyBook(db: SqlDriver, nowMs: number): void {
   const customers: [string, string, string | null][] = [
     ['cust-bilal', 'Bilal Hussain', '0300 4412233'],
     ['cust-hamza', 'Hamza Saeed', '0321 8899001'],
@@ -570,7 +570,7 @@ function seedMoneyBook(db: SqlDriver): void {
       `insert into jobs (id, org_id, label, contact, expected_back, status,
                          customer_id, closed_at)
        values (?, ?, ?, null, null, 'closed', ?, ?)`,
-      [id, ORG, label, customerId, new Date(msDaysAgo(closedDaysAgo)).toISOString()],
+      [id, ORG, label, customerId, new Date(msDaysAgo(closedDaysAgo, nowMs)).toISOString()],
     )
   }
 
@@ -601,7 +601,7 @@ function seedMoneyBook(db: SqlDriver): void {
       `insert into customer_ledger_entries
          (id, org_id, customer_id, kind, amount_minor, job_id, asset_id, note, created_at)
        values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, ORG, cust, kind, rupees * 100, job, asset, note, msDaysAgo(daysAgo)],
+      [id, ORG, cust, kind, rupees * 100, job, asset, note, msDaysAgo(daysAgo, nowMs)],
     )
   }
 
@@ -628,23 +628,23 @@ function seedMoneyBook(db: SqlDriver): void {
          (id, org_id, kind, amount_minor, asset_id, job_id, counterparty, note,
           reversal_of, created_at)
        values (?, ?, ?, ?, ?, ?, ?, ?, null, ?)`,
-      [id, ORG, kind, rupees * 100, asset, job, counterparty, note, msDaysAgo(daysAgo)],
+      [id, ORG, kind, rupees * 100, asset, job, counterparty, note, msDaysAgo(daysAgo, nowMs)],
     )
   }
 }
 
 /** Local `days` from today at `hour`:00 — a booking instant. Relative for
  *  the same reason the due dates are: a fixed calendar rots. */
-function atDays(days: number, hour: number): number {
-  const d = new Date()
+function atDays(days: number, hour: number, nowMs: number): number {
+  const d = new Date(nowMs)
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days, hour, 0, 0, 0).getTime()
 }
 
 /** The coming 20 December at `hour` — this year's if it is still ahead,
  *  otherwise next year's — so the wedding-season booking is always a
  *  future promise, not a stale one. */
-function nextDecember(day: number, hour: number): number {
-  const now = new Date()
+function nextDecember(day: number, hour: number, nowMs: number): number {
+  const now = new Date(nowMs)
   let y = now.getFullYear()
   if (new Date(y, 11, 20, 0, 0).getTime() <= now.getTime()) y++
   return new Date(y, 11, day, hour, 0, 0, 0).getTime()
@@ -683,11 +683,11 @@ interface BookingSpec {
  *
  * Numbers 1–6 are gapless and the local counter continues at 7 (D12).
  */
-function seedBookings(db: SqlDriver): void {
+function seedBookings(db: SqlDriver, nowMs: number): void {
   const specs: BookingSpec[] = [
     {
       id: 'bk-1', no: 1, customer: 'cust-hamza', status: 'confirmed',
-      startMs: atDays(7, 9), endMs: atDays(9, 18), note: 'Mehndi + baraat, DHA',
+      startMs: atDays(7, 9, nowMs), endMs: atDays(9, 18, nowMs), note: 'Mehndi + baraat, DHA',
       lines: [
         { product: 'fx9', qty: 1, alloc: ['asset-fx9-2'] },
         { product: 'aputure600', qty: 2, alloc: ['asset-aputure600-1', 'asset-aputure600-2'] },
@@ -695,7 +695,7 @@ function seedBookings(db: SqlDriver): void {
     },
     {
       id: 'bk-2', no: 2, customer: 'cust-imran', status: 'confirmed',
-      startMs: atDays(8, 10), endMs: atDays(10, 10), note: null,
+      startMs: atDays(8, 10, nowMs), endMs: atDays(10, 10, nowMs), note: null,
       lines: [
         { product: 'fx6', qty: 2, alloc: ['asset-fx6-1', 'asset-fx6-2'] },
         { product: 'mixpre', qty: 1, alloc: ['asset-mixpre-1'] },
@@ -703,7 +703,7 @@ function seedBookings(db: SqlDriver): void {
     },
     {
       id: 'bk-3', no: 3, customer: 'cust-bilal', status: 'pencil', expiresInHours: 5,
-      startMs: atDays(3, 8), endMs: atDays(4, 20), note: 'Waiting on the agency',
+      startMs: atDays(3, 8, nowMs), endMs: atDays(4, 20, nowMs), note: 'Waiting on the agency',
       lines: [
         { product: 'c300', qty: 1, alloc: [] },
         { product: 'sigma1835', qty: 2, alloc: [] },
@@ -711,12 +711,12 @@ function seedBookings(db: SqlDriver): void {
     },
     {
       id: 'bk-4', no: 4, customer: 'cust-ayesha', status: 'pencil', expiresInHours: -24,
-      startMs: atDays(5, 9), endMs: atDays(6, 9), note: null,
+      startMs: atDays(5, 9, nowMs), endMs: atDays(6, 9, nowMs), note: null,
       lines: [{ product: 'komodo', qty: 1, alloc: [] }],
     },
     {
       id: 'bk-5', no: 5, customer: 'cust-bilal', status: 'confirmed',
-      startMs: atDays(30, 9), endMs: atDays(32, 18), note: 'Corporate film, Gulberg',
+      startMs: atDays(30, 9, nowMs), endMs: atDays(32, 18, nowMs), note: 'Corporate film, Gulberg',
       lines: [
         { product: 'fx9', qty: 1, alloc: ['asset-fx9-2'] },
         { asset: 'asset-fx6-3' },
@@ -724,7 +724,7 @@ function seedBookings(db: SqlDriver): void {
     },
     {
       id: 'bk-6', no: 6, customer: 'cust-hamza', status: 'confirmed',
-      startMs: nextDecember(20, 9), endMs: nextDecember(22, 20), note: 'Shaadi — Bahria',
+      startMs: nextDecember(20, 9, nowMs), endMs: nextDecember(22, 20, nowMs), note: 'Shaadi — Bahria',
       lines: [
         { product: 'fx6', qty: 2, alloc: ['asset-fx6-1', 'asset-fx6-2'] },
         { product: 'ronin', qty: 1, alloc: ['asset-ronin-1'] },
@@ -733,7 +733,6 @@ function seedBookings(db: SqlDriver): void {
   ]
 
   const iso = (ms: number) => new Date(ms).toISOString()
-  const nowMs = Date.now()
   for (const b of specs) {
     const blocked = blockedPeriod(b.startMs, b.endMs, DEFAULT_BOOKING_SETTINGS)
     const name = db.get<{ name: string }>(`select name from customers where id = ?`, [b.customer])?.name ?? ''
