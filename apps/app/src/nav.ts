@@ -40,6 +40,14 @@ export type View =
  */
 export type ScanMode = 'out' | 'in' | 'lookup'
 
+/**
+ * 'YYYY-MM' — the hisaab link's month, and the one place its shape is
+ * written. The router refuses a month that is not one, and hisaab.ts's
+ * `msOfMonth` reads the same pattern's two groups, so a link the router
+ * accepts is always a month the screen can open (docs/principles.md #4).
+ */
+export const MONTH_KEY_RE = /^(\d{4})-(0[1-9]|1[0-2])$/
+
 export function parseHash(hash: string): View {
   const raw = hash.replace(/^#\/?/, '')
   const [path, query] = raw.split('?')
@@ -78,7 +86,7 @@ export function parseHash(hash: string): View {
       // to undefined, so a parsed view compares equal to the literal
       // that produced it. A malformed month is no month, not a crash.
       const m = params.get('m')
-      return m && /^\d{4}-(0[1-9]|1[0-2])$/.test(m)
+      return m && MONTH_KEY_RE.test(m)
         ? { name: 'hisaab', month: m }
         : { name: 'hisaab' }
     }

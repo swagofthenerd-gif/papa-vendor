@@ -16,6 +16,7 @@ import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 import { Sheet, SheetClose } from '../components/Sheet.tsx'
 import { HoldToFinish } from '../components/HoldToFinish.tsx'
+import { ReasonField } from '../components/ReasonField.tsx'
 // --- W13 the money doors
 import { DepositSection } from './DepositSection.tsx'
 import { LineSheet } from './CorrectionSheet.tsx'
@@ -430,15 +431,11 @@ function BalanceWriteOff({
     <section className="section">
       <SectionHead icon="hand" title={STR.moneyWriteOffBalanceTitle} />
       <p className="section-sub">{STR.moneyWriteOffBalanceWhat}</p>
-      <label className="field-label" htmlFor="writeoff-balance-why">{STR.moneyReasonLabel}</label>
-      <input
+      <ReasonField
         id="writeoff-balance-why"
-        className="sheet-search"
         value={reason}
         placeholder={STR.moneyWriteOffBalanceReasonPlaceholder}
-        onChange={(e) => setReason(e.target.value)}
-        autoCorrect="off"
-        spellCheck={false}
+        onChange={setReason}
       />
       <HoldToFinish
         label={STR.moneyWriteOffBalanceHold(rupees)}

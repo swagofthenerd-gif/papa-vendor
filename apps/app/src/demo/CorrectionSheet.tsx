@@ -3,6 +3,7 @@ import { Icon } from '@papa/icons'
 import { formatRupees, ledgerDate, signedRupees } from '@papa/core'
 import { Sheet, SheetClose } from '../components/Sheet.tsx'
 import { HoldToFinish } from '../components/HoldToFinish.tsx'
+import { ReasonField } from '../components/ReasonField.tsx'
 import { STR } from '../strings.ts'
 import type { LedgerRow } from './khata.ts'
 
@@ -90,15 +91,11 @@ export function LineSheet({
             {door === 'correct' ? STR.moneyCorrectTitle : STR.moneyWriteOffTitle}
           </p>
 
-          <label className="field-label" htmlFor="settle-reason">{STR.moneyReasonLabel}</label>
-          <input
+          <ReasonField
             id="settle-reason"
-            className="sheet-search"
             value={reason}
             placeholder={STR.moneyReasonPlaceholder}
-            onChange={(e) => setReason(e.target.value)}
-            autoCorrect="off"
-            spellCheck={false}
+            onChange={setReason}
             autoFocus
           />
 

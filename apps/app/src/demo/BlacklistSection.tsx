@@ -4,6 +4,7 @@ import { ledgerDate } from '@papa/core'
 import { SectionHead } from '../components/Shell.tsx'
 import { Sheet, SheetClose } from '../components/Sheet.tsx'
 import { HoldToFinish } from '../components/HoldToFinish.tsx'
+import { ReasonField } from '../components/ReasonField.tsx'
 import { STR } from '../strings.ts'
 import type { DemoStore } from './store.ts'
 
@@ -94,19 +95,13 @@ function BlacklistSheet({
       {blacklisted ? null : <p className="sheet-hint">{STR.moneyBlacklistWhat}</p>}
 
       {blacklisted ? null : (
-        <>
-          <label className="field-label" htmlFor="blacklist-why">{STR.moneyReasonLabel}</label>
-          <input
-            id="blacklist-why"
-            className="sheet-search"
-            value={why}
-            placeholder={STR.moneyBlacklistReasonPlaceholder}
-            onChange={(e) => setWhy(e.target.value)}
-            autoCorrect="off"
-            spellCheck={false}
-            autoFocus
-          />
-        </>
+        <ReasonField
+          id="blacklist-why"
+          value={why}
+          placeholder={STR.moneyBlacklistReasonPlaceholder}
+          onChange={setWhy}
+          autoFocus
+        />
       )}
 
       <HoldToFinish

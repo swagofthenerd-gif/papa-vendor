@@ -1,4 +1,4 @@
-import { CHARGE_KINDS, projectLedger, type LedgerEntryKind, type SqlDriver } from '@papa/core'
+import { CHARGE_KINDS, type LedgerEntryKind, type SqlDriver } from '@papa/core'
 import { decodeScanOps, stillOutCount } from './read-model.ts'
 import { customerView, recordEntry } from './khata.ts'
 import { NAMES, defaultIds, enqueueOp, type QueueIds } from './ops.ts'
@@ -388,22 +388,4 @@ export function applyTargets(db: SqlDriver, depositId: string): ApplyTargets {
       note: e.note ?? null,
     })),
   }
-}
-
-/** The pot as the ledger projects it, for a screen that wants the one
- *  number beside the rows — the same projection the balance uses, so the
- *  section head and the tally can never disagree. */
-export function depositHeldMinor(db: SqlDriver, customerId: string): number {
-  const entries = db.all<{ kind: string; amount_minor: number; created_at: number }>(
-    `select kind, amount_minor, created_at from customer_ledger_entries
-      where customer_id = ? order by created_at, rowid`,
-    [customerId],
-  )
-  return projectLedger(
-    entries.map((e) => ({
-      kind: e.kind as Parameters<typeof projectLedger>[0][number]['kind'],
-      amountMinor: Number(e.amount_minor),
-      createdAt: Number(e.created_at),
-    })),
-  ).depositHeldMinor
 }

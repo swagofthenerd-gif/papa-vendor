@@ -118,13 +118,7 @@ export function DepositSection({
                     )}
                   </div>
                 ) : null}
-                {blockers.length > 0 && d.remainingMinor > 0 ? (
-                  <ul className="line-why">
-                    {blockers.map((b) => (
-                      <li key={b.reason}>{STR.moneyDepositBlocker(b.reason, b.count)}</li>
-                    ))}
-                  </ul>
-                ) : null}
+                {d.remainingMinor > 0 ? <WhyNotYet blockers={blockers} /> : null}
               </li>
             )
           })}
@@ -174,6 +168,27 @@ export function DepositSection({
         />
       ) : null}
     </section>
+  )
+}
+
+/**
+ * Why a refund is not allowed yet, in the server's own vocabulary — one
+ * home for the refusal, because it is said TWICE: under the row, beside
+ * the disabled button, and again inside the refund sheet if the job stops
+ * being clear while the sheet is open. Two renderings of one refusal drift
+ * into two different sentences (docs/principles.md #4).
+ *
+ * Nothing at all when the list is empty: "this job is clear" is the
+ * ordinary case and needs no words.
+ */
+function WhyNotYet({ blockers }: { blockers: RefundBlocker[] }) {
+  if (blockers.length === 0) return null
+  return (
+    <ul className="line-why">
+      {blockers.map((b) => (
+        <li key={b.reason}>{STR.moneyDepositBlocker(b.reason, b.count)}</li>
+      ))}
+    </ul>
   )
 }
 
@@ -413,11 +428,7 @@ function RefundDepositSheet({
           <Icon name="ban" size={18} />
           <div>
             <strong>{STR.moneyDepositRefundBlocked}</strong>
-            <ul className="line-why">
-              {blockers.map((b) => (
-                <li key={b.reason}>{STR.moneyDepositBlocker(b.reason, b.count)}</li>
-              ))}
-            </ul>
+            <WhyNotYet blockers={blockers} />
           </div>
         </div>
       ) : null}

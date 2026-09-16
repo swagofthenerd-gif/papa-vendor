@@ -1,4 +1,4 @@
-import { formatRupees, type SqlDriver } from '@papa/core'
+import type { SqlDriver } from '@papa/core'
 import { assetEarnings } from './khata.ts'
 import { decodeScanOps } from './read-model.ts'
 
@@ -233,10 +233,4 @@ export function workedHardest(
     .filter((r) => r.daysOut > 0 || r.earnedMinor > 0)
     .sort((a, b) => b.daysOut - a.daysOut || b.earnedMinor - a.earnedMinor || a.code.localeCompare(b.code))
     .slice(0, limit)
-}
-
-/** 'Rs 4,000 a day' — the per-day figure in the money voice, or null when
- *  there is no honest denominator. One formatter, two screens. */
-export function perDayLabel(minor: number | null): string | null {
-  return minor === null ? null : formatRupees(minor)
 }

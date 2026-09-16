@@ -16,6 +16,7 @@ import { printThermal } from '../print/thermal.ts'
 import { thermalPrintSaid } from '../print/print-said.ts'
 import { Sheet, SheetClose } from '../components/Sheet.tsx'
 import { HoldToFinish } from '../components/HoldToFinish.tsx'
+import { ReasonField } from '../components/ReasonField.tsx'
 
 /**
  * The handover summary — live session or long finished.
@@ -343,15 +344,11 @@ export function KhataChargeSheet({
         waiving ? (
           <>
             <p className="sheet-hint">{STR.moneyWaiveWhat}</p>
-            <label className="field-label" htmlFor="waive-reason">{STR.moneyReasonLabel}</label>
-            <input
+            <ReasonField
               id="waive-reason"
-              className="sheet-search"
               value={reason}
               placeholder={STR.moneyWaiveReasonPlaceholder}
-              onChange={(e) => setReason(e.target.value)}
-              autoCorrect="off"
-              spellCheck={false}
+              onChange={setReason}
             />
             <HoldToFinish
               label={STR.moneyWaiveHold(formatRupees(Math.round(rupees * 100)))}

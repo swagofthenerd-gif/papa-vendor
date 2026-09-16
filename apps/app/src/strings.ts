@@ -77,15 +77,6 @@ const REFUND_BLOCKER_EN: Record<string, (n: number) => string> = {
   damage_unresolved: (n) => `${n} item${s(n)} flagged on this job ${n === 1 ? 'is' : 'are'} still not OK`,
 }
 
-/** A refused correction, in the desk's words (khata.ts SettleRefusal). */
-const SETTLE_REFUSAL_EN: Record<string, string> = {
-  not_found: 'That line is not in the book any more.',
-  no_reason: 'Say why — the reason is kept with the line.',
-  already_settled: 'This line has already been corrected.',
-  is_settlement: 'A correction cannot itself be corrected.',
-  deposit_line: 'Deposit money moves through Apply and Refund, not here.',
-}
-
 /** The three answers the health door offers, and what each one MEANS for
  *  the shelf — the availability rule said in words ('here' and ok). */
 const HEALTH_CALL_EN: Record<string, string> = {
@@ -688,8 +679,6 @@ const STR_EN = {
   moneyDepositNoJob: 'No job',
   moneyDepositSave: 'Record the deposit',
   moneyDepositStamp: (state: string): string => DEPOSIT_STATE_EN[state] ?? state,
-  moneyDepositRowNote: (rupees: string, job: string | null): string =>
-    job ? `${rupees} · ${job}` : rupees,
   moneyDepositRemaining: (rupees: string): string => `${rupees} still held`,
   moneyDepositApplied: (rupees: string): string => `${rupees} put against bills`,
   moneyDepositRefunded: (rupees: string): string => `${rupees} given back`,
@@ -713,7 +702,6 @@ const STR_EN = {
     REFUND_BLOCKER_EN[reason]?.(n) ?? reason,
   moneyDepositServerChecksAgain:
     'The server checks the job again when this sends. A refund it refuses comes back as one card, not as lost money.',
-  moneyDepositRefundNothingLeft: 'Nothing left to refund — it has all been applied.',
   // --- 2. Corrections and write-offs (`no-adjustment-door`) — 0018 D6.
   // Every line is a door: tapping one opens the two things a desk does to
   // money already written. Both need a reason (override 18: the owner's
@@ -733,13 +721,11 @@ const STR_EN = {
   moneyWriteOffHold: (rupees: string): string => `Hold to forgive ${rupees}`,
   moneySettledLine: (word: string, date: string, why: string | null): string =>
     why ? `${word} on ${date} — ${why}` : `${word} on ${date}`,
-  moneySettleRefused: (reason: string): string => SETTLE_REFUSAL_EN[reason] ?? reason,
   // The double-tap guard as a question, never a refusal: two identical
   // charges do genuinely happen, and only a person knows which this is.
   moneyDuplicateNotice: (kind: string, rupees: string, seconds: number): string =>
     `Two ${kind} lines of ${rupees}, ${seconds} second${s(seconds)} apart. Was that twice?`,
   moneyDuplicateKeep: 'Both are real',
-  moneyDuplicateKept: 'Kept — both lines stand',
   moneyWriteOffBalance: 'Write off what is owed',
   moneyWriteOffBalanceTitle: 'Write off the balance',
   moneyWriteOffBalanceWhat:
@@ -752,7 +738,6 @@ const STR_EN = {
   // net to nothing, both on the statement the client reads, so the
   // goodwill is visible to the person who received it.
   moneyWaiveIt: 'Waive it',
-  moneyWaiveTitle: 'Waive the late fee',
   moneyWaiveWhat:
     'The fee goes on the book and comes straight off it. Nothing is owed, and next quarter the khata still says the favour was given.',
   moneyWaiveHold: (rupees: string): string => `Hold to waive ${rupees}`,
@@ -761,8 +746,6 @@ const STR_EN = {
     why
       ? `${rupees} late fee — waived on ${date} — ${why}`
       : `${rupees} late fee — waived on ${date}`,
-  moneyWaivedHeading: 'Favours given',
-  moneyWaivedSub: (n: number): string => `${n} fee${s(n)} waived`,
   // --- 4. Do not rent to this client (`no-blacklist`) — 0029.
   // 0022's confirm gate has refused a blacklisted client since W5; this
   // is the switch it never had. A reason to turn it ON, none to lift it.
@@ -801,9 +784,6 @@ const STR_EN = {
   moneyMonthPrev: 'The month before',
   moneyMonthNext: 'The month after',
   moneyMonthThis: 'this month, so far',
-  moneyMonthHeading: 'The month',
-  moneyMonthMoved: (out: number, back: number): string =>
-    `${out} went out · ${back} came back`,
   moneyMonthNothingMoved: 'Nothing went out or came back this month.',
   moneyMonthStatements: 'Statements',
   moneyMonthStatementsSub: 'Tap a name to copy their statement for this month',
@@ -860,7 +840,6 @@ const STR_EN = {
   // than reading '0 days out' four times and inviting the wrong reading.
   moneyWorkersRowNotOut: (window: number, rupees: string): string =>
     `Not out in the last ${window} — earned ${rupees}`,
-  moneyWorkersNobody: 'Nothing has been out long enough to rank yet.',
 
 
 

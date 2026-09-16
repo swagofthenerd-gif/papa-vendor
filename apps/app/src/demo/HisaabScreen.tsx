@@ -5,6 +5,7 @@ import { Shell, SectionHead } from '../components/Shell.tsx'
 import { go, parseHash, type View } from '../nav.ts'
 import { DueBadge } from '../routes/Today.tsx'
 import { dayAccountText, monthKey, monthStep, msOfMonth, type DayItem } from './hisaab.ts'
+import type { KharchaSlice } from './kharcha.ts'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 
@@ -48,17 +49,21 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
     const from = m.name === 'hisaab' && m.month ? msOfMonth(m.month) : null
     return from ?? todayMs
   })
-  const isThisMonth = monthKey(monthMs) === monthKey(todayMs)
-  const view: View = isThisMonth
-    ? { name: 'hisaab' }
-    : { name: 'hisaab', month: monthKey(monthMs) }
+  // Which route names a given month — ONE place, because it is asked for
+  // the address bar on this render and again for every step of the picker.
+  // This month carries no query, exactly as gear's `q` is omitted rather
+  // than set to undefined, so a parsed view compares equal to the literal
+  // that produced it (nav.ts).
+  const viewFor = (ms: number): View =>
+    monthKey(ms) === monthKey(todayMs)
+      ? { name: 'hisaab' }
+      : { name: 'hisaab', month: monthKey(ms) }
+  const view = viewFor(monthMs)
 
   const step = (by: number) => {
     const next = monthStep(monthMs, by)
     setMonthMs(next)
-    go(monthKey(next) === monthKey(todayMs)
-      ? { name: 'hisaab' }
-      : { name: 'hisaab', month: monthKey(next) })
+    go(viewFor(next))
   }
 
   // Computed once per mount; the screen is a report, not a live feed.
@@ -69,6 +74,9 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
     () => store.monthAccount(monthMs, todayMs),
     [store, monthMs, todayMs],
   )
+  // The account already answered "is this the month with a today in it"
+  // (hisaab.ts); the screen reads its answer rather than re-deriving one.
+  const isThisMonth = monthly.isThisMonth
   const month = monthly.profit
   const [copiedName, setCopiedName] = useState<string | null>(null)
   const nameTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -195,32 +203,14 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
       {/* The day's expense side (0019): what the house PAID today, its own
           section with the day's total — an honest empty line on a day
           nothing was spent, because "no kharcha" is a fact, not a blank. */}
-      <section className="section">
-        <SectionHead
-          icon="receipt"
-          title={STR.kharchaHeading}
-          sub={
-            account.kharcha.rows.length === 0
-              ? STR.kharchaDayNone
-              : STR.kharchaDaySpent(formatRupees(account.kharcha.totalMinor))
-          }
-        />
-        {account.kharcha.rows.length === 0 ? null : (
-          <ul className="line-list">
-            {account.kharcha.rows.map((e) => (
-              <li key={e.id} className="line">
-                <span className="line-name">{STR.kharchaKindLabel(e.kind)}</span>
-                <span className="line-note">
-                  {[e.counterparty, e.assetCode, e.jobLabel, e.note]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
-                <span className="line-code code">{formatRupees(e.amountMinor)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <KharchaSection
+        slice={account.kharcha}
+        sub={
+          account.kharcha.rows.length === 0
+            ? STR.kharchaDayNone
+            : STR.kharchaDaySpent(formatRupees(account.kharcha.totalMinor))
+        }
+      />
 
       <section className="section">
         <SectionHead
@@ -299,32 +289,14 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
             </div>
           ) : null}
 
-          <section className="section">
-            <SectionHead
-              icon="receipt"
-              title={STR.kharchaHeading}
-              sub={
-                monthly.kharcha.rows.length === 0
-                  ? STR.moneyMonthKharchaNone
-                  : STR.moneyMonthKharchaSpent(formatRupees(monthly.kharcha.totalMinor))
-              }
-            />
-            {monthly.kharcha.rows.length === 0 ? null : (
-              <ul className="line-list">
-                {monthly.kharcha.rows.map((e) => (
-                  <li key={e.id} className="line">
-                    <span className="line-name">{STR.kharchaKindLabel(e.kind)}</span>
-                    <span className="line-note">
-                      {[e.counterparty, e.assetCode, e.jobLabel, e.note]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </span>
-                    <span className="line-code code">{formatRupees(e.amountMinor)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          <KharchaSection
+            slice={monthly.kharcha}
+            sub={
+              monthly.kharcha.rows.length === 0
+                ? STR.moneyMonthKharchaNone
+                : STR.moneyMonthKharchaSpent(formatRupees(monthly.kharcha.totalMinor))
+            }
+          />
 
           <section className="section">
             <SectionHead
@@ -396,6 +368,40 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
         </div>
       </section>
     </Shell>
+  )
+}
+
+/**
+ * What the house paid out inside a window — ONE section, read twice: the
+ * day's kharcha and, since W13, the chosen month's. The rows are the same
+ * expense book in the same grammar, so the only thing that differs is the
+ * sentence under the heading (today's total, or the month's), which the
+ * caller supplies. Two copies of this list would be two places to keep a
+ * kharcha row's shape in step (docs/principles.md #4).
+ *
+ * The empty case is a HEAD WITH NO LIST, both times: "no kharcha" is a
+ * fact worth stating, and an empty ul is not a way of saying it.
+ */
+function KharchaSection({ slice, sub }: { slice: KharchaSlice; sub: string }) {
+  return (
+    <section className="section">
+      <SectionHead icon="receipt" title={STR.kharchaHeading} sub={sub} />
+      {slice.rows.length === 0 ? null : (
+        <ul className="line-list">
+          {slice.rows.map((e) => (
+            <li key={e.id} className="line">
+              <span className="line-name">{STR.kharchaKindLabel(e.kind)}</span>
+              <span className="line-note">
+                {[e.counterparty, e.assetCode, e.jobLabel, e.note]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+              <span className="line-code code">{formatRupees(e.amountMinor)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }
 

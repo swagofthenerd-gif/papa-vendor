@@ -44,19 +44,6 @@ const KIND_UR: Record<string, string> = {
   write_off: 'write off',
 }
 
-/**
- * The expense book's row vocabulary (0019) — 'marammat' for a repair,
- * loanwords where the trade uses them (sub-hire, transport).
- */
-/** Darusti kyun mana hui (khata.ts SettleRefusal). */
-const SETTLE_REFUSAL_UR: Record<string, string> = {
-  not_found: 'Woh line ab khate mein nahi hai.',
-  no_reason: 'Wajah likhein — woh line ke saath rehti hai.',
-  already_settled: 'Yeh line pehle hi theek ho chuki hai.',
-  is_settlement: 'Darusti ki darusti nahi hoti.',
-  deposit_line: 'Zamanat ka paisa Lagayein aur Wapas se chalta hai, yahan se nahi.',
-}
-
 /** Sehat ke teen jawab, aur har ek ka shelf par matlab. */
 const HEALTH_CALL_UR: Record<string, string> = {
   broken: 'Kharab',
@@ -83,6 +70,10 @@ const ESCALATION_UR: Record<string, string> = {
   manager_escalation: 'manager ke paas',
 }
 
+/**
+ * The expense book's row vocabulary (0019) — 'marammat' for a repair,
+ * loanwords where the trade uses them (sub-hire, transport).
+ */
 const KHARCHA_UR: Record<string, string> = {
   repair: 'marammat',
   sub_hire: 'sub-hire',
@@ -643,8 +634,6 @@ export const STR_UR: StrTable = {
   moneyDepositNoJob: 'Koi job nahi',
   moneyDepositSave: 'Zamanat likh dein',
   moneyDepositStamp: (state: string): string => DEPOSIT_STATE_UR[state] ?? state,
-  moneyDepositRowNote: (rupees: string, job: string | null): string =>
-    job ? `${rupees} · ${job}` : rupees,
   moneyDepositRemaining: (rupees: string): string => `${rupees} abhi rakhi hui`,
   moneyDepositApplied: (rupees: string): string => `${rupees} billon par lag gaye`,
   moneyDepositRefunded: (rupees: string): string => `${rupees} wapas kar diye`,
@@ -664,7 +653,6 @@ export const STR_UR: StrTable = {
     REFUND_BLOCKER_UR[reason]?.(n) ?? reason,
   moneyDepositServerChecksAgain:
     'Jab yeh jati hai to server job dobara dekhta hai. Jo refund woh mana kare woh ek card ban kar aata hai, paisa gum nahi hota.',
-  moneyDepositRefundNothingLeft: 'Wapas karne ko kuch nahi — sab lag chuki hai.',
   // --- 2. Darusti aur write off (`no-adjustment-door`) — 0018 D6.
   moneyLineDoorHint: 'Line theek karne ya write off karne ke liye us par dabayein',
   moneyLineTitle: 'Yeh line',
@@ -680,11 +668,9 @@ export const STR_UR: StrTable = {
   moneyWriteOffHold: (rupees: string): string => `${rupees} maaf karne ke liye dabaye rakhein`,
   moneySettledLine: (word: string, date: string, why: string | null): string =>
     why ? `${date} ko ${word} — ${why}` : `${date} ko ${word}`,
-  moneySettleRefused: (reason: string): string => SETTLE_REFUSAL_UR[reason] ?? reason,
   moneyDuplicateNotice: (kind: string, rupees: string, seconds: number): string =>
     `${rupees} ki do ${kind} lines, ${seconds} second ke faasle par. Do dafa hua tha?`,
   moneyDuplicateKeep: 'Dono asli hain',
-  moneyDuplicateKept: 'Rakh liya — dono lines qaim hain',
   moneyWriteOffBalance: 'Jo baqi hai write off karein',
   moneyWriteOffBalanceTitle: 'Baqaya write off karein',
   moneyWriteOffBalanceWhat:
@@ -694,7 +680,6 @@ export const STR_UR: StrTable = {
 
   // --- 3. Maaf ki hui late fee (`waived-fee-invisible`).
   moneyWaiveIt: 'Maaf kar dein',
-  moneyWaiveTitle: 'Late fee maaf karein',
   moneyWaiveWhat:
     'Fee khate par aa kar foran utar jati hai. Kuch baqi nahi rehta, aur agle quarter bhi khata batata hai ke riayat di gayi thi.',
   moneyWaiveHold: (rupees: string): string => `${rupees} maaf karne ke liye dabaye rakhein`,
@@ -703,8 +688,6 @@ export const STR_UR: StrTable = {
     why
       ? `${rupees} late fee — ${date} ko maaf ki — ${why}`
       : `${rupees} late fee — ${date} ko maaf ki`,
-  moneyWaivedHeading: 'Di gayi riayatein',
-  moneyWaivedSub: (n: number): string => `${n} fee maaf ki`,
   // --- 4. Is client ko kiraye par na dena (`no-blacklist`) — 0029.
   moneyBlacklistStamp: 'kiraye par nahi',
   moneyBlacklistHeading: 'Is client ko dena hai ya nahi',
@@ -736,9 +719,6 @@ export const STR_UR: StrTable = {
   moneyMonthPrev: 'Pichla mahina',
   moneyMonthNext: 'Agla mahina',
   moneyMonthThis: 'yeh mahina, ab tak',
-  moneyMonthHeading: 'Mahina',
-  moneyMonthMoved: (out: number, back: number): string =>
-    `${out} bahar gaye · ${back} wapas aaye`,
   moneyMonthNothingMoved: 'Is mahine kuch bahar nahi gaya aur wapas nahi aaya.',
   moneyMonthStatements: 'Statement',
   moneyMonthStatementsSub: 'Is mahine ka statement copy karne ke liye naam dabayein',
@@ -784,7 +764,6 @@ export const STR_UR: StrTable = {
   moneyWorkersRow: (days: number, rupees: string): string => `${days} din bahar · ${rupees}`,
   moneyWorkersRowNotOut: (window: number, rupees: string): string =>
     `Pichle ${window} dinon mein bahar nahi — kamai ${rupees}`,
-  moneyWorkersNobody: 'Abhi koi itna bahar nahi raha ke rank bane.',
 
 
 

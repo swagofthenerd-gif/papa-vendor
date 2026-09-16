@@ -14,7 +14,7 @@ import {
   type SqlDriver,
 } from '@papa/core'
 import { defaultCardRateSql, decodeScanOps, lastSessionRecord, openJob } from './read-model.ts'
-import { assetCosts } from './kharcha.ts'
+import { assetCosts, billedBetween } from './kharcha.ts'
 import { NAMES, defaultIds, enqueueOp, type QueueIds } from './ops.ts'
 import type { StrTable } from '../strings.ts'
 
@@ -428,23 +428,18 @@ export function moneyStrip(db: SqlDriver, nowMs: number): MoneyStrip {
       .map((r) => r.customer_id),
   )
 
+  // What the month billed — the SAME read the hisaab's bottom line uses
+  // (kharcha.ts billedBetween), so the board and the month's statement
+  // can never disagree about the figure. Live lines only: a reversed
+  // charge was never income, and neither was a late fee the owner waived.
   const month = monthBounds(nowMs)
-  const earned = db.get<{ total: number | null }>(
-    // Live lines only: a reversed charge was never income, and neither was
-    // a late fee the owner waived (SETTLED_ENTRY_IDS_SQL — one home).
-    `select sum(amount_minor) as total from customer_ledger_entries
-      where kind in ('charge', 'late_fee', 'damage_charge')
-        and created_at >= ? and created_at < ?
-        and id not in (${SETTLED_ENTRY_IDS_SQL})`,
-    [month.startMs, month.endMs],
-  )
 
   return {
     owedMinor: owing.reduce((n, c) => n + c.balanceMinor, 0),
     dueTodayMinor: owing
       .filter((c) => dueToday.has(c.id))
       .reduce((n, c) => n + c.balanceMinor, 0),
-    earnedMonthMinor: Number(earned?.total ?? 0),
+    earnedMonthMinor: billedBetween(db, month.startMs, month.endMs),
     owingCount: owing.length,
   }
 }

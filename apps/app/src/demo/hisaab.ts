@@ -16,6 +16,7 @@ import {
 } from './read-model.ts'
 import { kharchaBetween, monthProfit, type KharchaSlice, type MonthProfit } from './kharcha.ts'
 import { customersByBalance } from './khata.ts'
+import { MONTH_KEY_RE } from '../nav.ts'
 
 /**
  * Din ka hisaab — the day's account.
@@ -363,9 +364,11 @@ export function monthKey(ms: number): string {
 }
 
 /** The first instant of 'YYYY-MM', or null when it is not a month. Local,
- *  because monthBounds is local: the vendor's month, not UTC's. */
+ *  because monthBounds is local: the vendor's month, not UTC's. The shape
+ *  is the router's own (nav.ts MONTH_KEY_RE), so the link and the read
+ *  cannot disagree about what a month is. */
 export function msOfMonth(key: string): number | null {
-  const m = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(key)
+  const m = MONTH_KEY_RE.exec(key)
   if (!m) return null
   return new Date(Number(m[1]), Number(m[2]) - 1, 1, 12).getTime()
 }

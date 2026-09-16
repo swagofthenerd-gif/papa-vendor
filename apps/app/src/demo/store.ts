@@ -1176,7 +1176,6 @@ export class DemoStore {
     })
   }
 
-  /** Din ka hisaab — the whole day, computed locally. See hisaab.ts. */
   /**
    * A whole month's account (W13, `no-month-history-screen`) — the read
    * the API could always answer and no caller could ask. `monthMs` is
@@ -1187,6 +1186,7 @@ export class DemoStore {
     return monthAccount(this.db, monthMs, todayMs)
   }
 
+  /** Din ka hisaab — the whole day, computed locally. See hisaab.ts. */
   dayAccount(nowMs: number = Date.now()): DayAccount {
     return dayAccount(this.db, nowMs)
   }
@@ -1795,7 +1795,6 @@ export class DemoStore {
     })
   }
 
-  /** Bring a terminal item home — the recovery door. */
   /**
    * Set a unit's health from the phone with no swap behind it (W13,
    * `no-health-door`). One real scan event through the append-only queue,
@@ -1808,6 +1807,7 @@ export class DemoStore {
     notifySync()
   }
 
+  /** Bring a terminal item home — the recovery door. */
   markFound(assetId: string): void {
     markFound(this.db, { assetId })
   }
@@ -1933,7 +1933,6 @@ export class DemoStore {
 
   // ---- the living fleet (Wave 3, migration 0021) -------------------------
 
-  /** One unit's wear facts — the asset page's service and cycle lines. */
   /**
    * How hard one unit works (W13, `no-utilization-read`) — days out in
    * the window, the service meter, what it earned and per day, and idle
@@ -1950,6 +1949,7 @@ export class DemoStore {
     return workedHardest(this.db, nowMs, limit)
   }
 
+  /** One unit's wear facts — the asset page's service and cycle lines. */
   serviceFacts(assetId: string): ServiceFacts | null {
     return serviceFacts(this.db, assetId)
   }
