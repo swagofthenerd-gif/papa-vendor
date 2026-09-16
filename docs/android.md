@@ -427,11 +427,25 @@ In the order it should happen, at a desk with a cable:
    real tags, gloves, and someone watching the clock on the scan feedback.
 
 Not done and not attempted in W12: a **release** build (signing keys, and
-`run-as` will not work on one, so §5(b) is debug-only as written), ProGuard
-rules for the SQLCipher and Tink classes, and a backup policy —
-`android:allowBackup="true"` is still the Capacitor default in the manifest,
-which for an encrypted database means the ciphertext could be backed up while
-the Keystore key cannot, so a restore onto a new phone would produce a file
-nothing can open. That is not data *loss* (the outbox is the only
-irreplaceable part and it is on the old phone), but it is a confusing failure
-and it should be an explicit `false` before anything ships.
+`run-as` will not work on one, so §5(b) is debug-only as written) and ProGuard
+rules for the SQLCipher and Tink classes.
+
+The backup policy IS done, in this wave: the manifest carries
+`android:allowBackup="false"`, `fullBackupContent="false"` and a
+`data_extraction_rules.xml`. Capacitor's default is `true`, and for an
+encrypted database that default is a trap — the ciphertext would be backed up
+while the Keystore key could not be, so a restore onto a new phone would
+produce a file nothing can open, and the customer list would have travelled
+for nothing. It is not data *loss* (the outbox is the only irreplaceable part
+and it stays on the old phone), but it is a confusing failure bought at the
+price of shipping the book off the device, so it is off.
+
+**The wipe has no button, deliberately.** `deviceKeys()` exposes the key
+provider so `wipe()` — destroy the key, making the book permanently
+unreadable — has a way to be reached, and its guard (refuse while the outbox
+holds anything unsent) is tested. No screen calls it. That is a decision, not
+an oversight: the only honest reasons to wipe a phone are "it is leaving the
+house" and "it is lost", and both are the owner's call at a desk, not a
+tech's on a scanner. When that screen is built it belongs in Settings behind
+a hold and a typed confirmation, next to sign-out, and it must attempt a
+flush first.
