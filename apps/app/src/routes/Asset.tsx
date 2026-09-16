@@ -176,18 +176,27 @@ function AssetMoneySection({
 function WorkLines({ work }: { work: Utilisation }) {
   return (
     <div className="work-lines">
-      <p className="section-sub">
-        {work.daysOut === 0 && work.idleDays === null
-          ? STR.moneyWorkNeverOut
-          : `${STR.moneyWorkDaysOut(work.daysOut, work.windowDays)} · ${STR.moneyWorkBusy(work.busyPct)}`}
-      </p>
-      <p className="section-sub">
-        {work.outNow
-          ? STR.moneyWorkOutNow
-          : work.idleDays === null
-            ? STR.moneyWorkNeverOut
-            : STR.moneyWorkIdle(work.idleDays)}
-      </p>
+      {/* An in-section sub-heading, the same instrument the day's account
+          uses for its two lists: this block lives INSIDE Sehat (wear is
+          one question) and must still be nameable on the page. */}
+      <h3 className="hisaab-sub">{STR.moneyWorkHeading}</h3>
+      {/* ONE sentence when the phone has never seen it leave: "not seen it
+          go out" and "idle since it last left" are the same silence, and
+          printing both twice is how a report stops being read. */}
+      {work.idleDays === null ? (
+        <p className="section-sub">{STR.moneyWorkNeverOut}</p>
+      ) : (
+        <>
+          <p className="section-sub">
+            {STR.moneyWorkDaysOut(work.daysOut, work.windowDays)}
+            {' · '}
+            {STR.moneyWorkBusy(work.busyPct)}
+          </p>
+          <p className="section-sub">
+            {work.outNow ? STR.moneyWorkOutNow : STR.moneyWorkIdle(work.idleDays)}
+          </p>
+        </>
+      )}
       <p className="section-sub">
         {STR.moneyWorkSinceService(work.rentalDaysSinceService, work.serviceDueAfter)}
       </p>
@@ -248,9 +257,8 @@ function HealthDoor({
 
   return (
     <div className="health-door">
-      <p className="section-sub">
-        {STR.moneyHealthHeading} · {STR.moneyHealthNow(STR.moneyHealthWord(health))}
-      </p>
+      <h3 className="hisaab-sub">{STR.moneyHealthHeading}</h3>
+      <p className="section-sub">{STR.moneyHealthNow(STR.moneyHealthWord(health))}</p>
       <div className="chip-row" role="group" aria-label={STR.moneyHealthHeading}>
         {calls.map((c) => (
           <button

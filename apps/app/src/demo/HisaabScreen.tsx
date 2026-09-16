@@ -305,8 +305,8 @@ export function HisaabScreen({ store }: { store: DemoStore }) {
               title={STR.kharchaHeading}
               sub={
                 monthly.kharcha.rows.length === 0
-                  ? STR.kharchaDayNone
-                  : STR.kharchaDaySpent(formatRupees(monthly.kharcha.totalMinor))
+                  ? STR.moneyMonthKharchaNone
+                  : STR.moneyMonthKharchaSpent(formatRupees(monthly.kharcha.totalMinor))
               }
             />
             {monthly.kharcha.rows.length === 0 ? null : (

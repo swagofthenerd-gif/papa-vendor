@@ -1580,6 +1580,11 @@ const STR_EN = {
   moneyMonthBilled: (rupees: string, paid: string): string =>
     `Billed ${rupees} · paid ${paid}`,
   moneyMonthCopied: 'Copied — paste it in WhatsApp',
+  // The kharcha head on a MONTH says month, not 'today' — the day's own
+  // words on a month's report is the drift that makes a reader distrust
+  // every other number on the page.
+  moneyMonthKharchaNone: 'Nothing spent this month.',
+  moneyMonthKharchaSpent: (rupees: string): string => `${rupees} spent this month`,
   // --- 7. What this client has been worth (`no-lifetime-value-view`).
   // Every figure is a sum over the book the khata page already loads.
   moneyWorthHeading: 'What this client has been worth',
@@ -1611,14 +1616,18 @@ const STR_EN = {
       ? `${days} rental day${s(days)} since its last service`
       : `${days} of ${due} rental days since its last service`,
   moneyWorkEarned: 'Earned',
-  moneyWorkPerDay: 'A day, since this phone first saw it',
-  moneyWorkPerDayUnknown: 'no date to divide by',
+  moneyWorkPerDay: 'A day, since first seen',
+  moneyWorkPerDayUnknown: 'no start date',
   moneyWorkLimit:
     'Days out come from this phone\u2019s own queue, and there is no purchase date on this side — so these are a floor, not a lifetime.',
   // The Sehat group: the fleet ranked, which is the AUG question.
   moneyWorkersHeading: 'Hardest workers',
   moneyWorkersSub: (window: number): string => `Days out in the last ${window}`,
-  moneyWorkersRow: (days: number, rupees: string): string => `${days} days out · ${rupees}`,
+  moneyWorkersRow: (days: number, rupees: string): string => `${days} day${s(days)} out · ${rupees}`,
+  // A unit that earned but never left THIS PHONE's log says so, rather
+  // than reading '0 days out' four times and inviting the wrong reading.
+  moneyWorkersRowNotOut: (window: number, rupees: string): string =>
+    `Not out in the last ${window} — earned ${rupees}`,
   moneyWorkersNobody: 'Nothing has been out long enough to rank yet.',
 
 

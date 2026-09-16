@@ -3,7 +3,7 @@ import { SectionHead } from '../components/Shell.tsx'
 import { go } from '../nav.ts'
 import { STR } from '../strings.ts'
 import type { Sehat } from './read-model.ts'
-import type { WorkerRow } from './utilisation.ts'
+import { UTILISATION_WINDOW_DAYS as WORK_WINDOW_DAYS, type WorkerRow } from './utilisation.ts'
 
 /**
  * Sehat — the fleet's health, as the smallest honest door (0021; Phase D
@@ -86,12 +86,14 @@ export function SehatSection({
           because the answer used to mean opening pages one at a time. */}
       {workers.length > 0 ? (
         <SehatGroup
-          heading={STR.moneyWorkersHeading}
+          heading={`${STR.moneyWorkersHeading} · ${STR.moneyWorkersSub(WORK_WINDOW_DAYS)}`}
           rows={workers.map((r) => ({
             id: r.id,
             code: r.code,
             name: r.name,
-            note: STR.moneyWorkersRow(r.daysOut, formatRupees(r.earnedMinor)),
+            note: r.daysOut === 0
+              ? STR.moneyWorkersRowNotOut(WORK_WINDOW_DAYS, formatRupees(r.earnedMinor))
+              : STR.moneyWorkersRow(r.daysOut, formatRupees(r.earnedMinor)),
           }))}
         />
       ) : null}

@@ -1721,6 +1721,16 @@ h2.stamp .h-ico { display: none; }
 .line-why li { padding: 1px 0; }
 .notice .line-why { margin-top: 3px; color: inherit; }
 
+/* The money column stays the money column. `.line-code` spans two rows
+   with no column of its own, so a third full-width child — the
+   settlement's reason, or a row's actions — reflows auto-placement and
+   the amount lands on the LEFT of the words. Pin it wherever W13 adds a
+   third row to a ledger line. */
+.line:has(.line-why) > .line-code,
+.line:has(.row-actions) > .line-code,
+.khata-book .line-code,
+.work-lines .line-code { grid-column: 2; }
+
 /* A line the book has SETTLED — reversed, or a fee written off. Struck
    through in the margin voice, with the settlement's own words beneath:
    the pair reads as one story, and both rows are still in the book

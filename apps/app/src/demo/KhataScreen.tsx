@@ -276,7 +276,11 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
                   ) : null}
                 </>
               )
-              const cls = `line line-stack${settled ? ' line-settled' : ''}`
+              // Plain `.line`, not `.line-stack`: the amount belongs in the
+              // money column on the right like every other ledger row, and
+              // the settlement's sub-line spans the grid itself
+              // (`.line-why { grid-column: 1 / -1 }`).
+              const cls = `line${settled ? ' line-settled' : ''}`
               return (
                 <li key={e.id}>
                   {openable ? (

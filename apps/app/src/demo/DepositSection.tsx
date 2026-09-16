@@ -68,7 +68,10 @@ export function DepositSection({
           {deposits.map((d) => {
             const blockers = d.state === 'refunded' ? [] : store.refundBlockers(d.jobId)
             return (
-              <li key={d.id} className="line line-stack">
+              // Plain `.line`: the amount in the money column, the state
+              // badge beside it, the actions and the reasons spanning the
+              // grid on their own rows.
+              <li key={d.id} className="line">
                 <span className="line-name code">{formatRupees(d.amountMinor)}</span>
                 <span className="line-note">
                   {[

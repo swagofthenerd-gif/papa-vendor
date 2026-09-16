@@ -1440,6 +1440,8 @@ export const STR_UR: StrTable = {
   moneyMonthBilled: (rupees: string, paid: string): string =>
     `Bill ${rupees} · wusooli ${paid}`,
   moneyMonthCopied: 'Copy ho gaya — WhatsApp mein paste karein',
+  moneyMonthKharchaNone: 'Is mahine kuch kharch nahi hua.',
+  moneyMonthKharchaSpent: (rupees: string): string => `Is mahine ${rupees} kharch hue`,
   // --- 7. Yeh client kitna ka raha (`no-lifetime-value-view`).
   moneyWorthHeading: 'Yeh client kitna ka raha',
   moneyWorthCharged: 'Kul bill',
@@ -1466,13 +1468,15 @@ export const STR_UR: StrTable = {
       ? `Aakhri service ke baad ${days} kiraye ke din`
       : `Aakhri service ke baad ${due} mein se ${days} kiraye ke din`,
   moneyWorkEarned: 'Kamai',
-  moneyWorkPerDay: 'Roz, jab se is phone ne dekha',
-  moneyWorkPerDayUnknown: 'taqseem karne ko tareekh nahi',
+  moneyWorkPerDay: 'Roz, jab se pehli dafa dekha',
+  moneyWorkPerDayUnknown: 'shuru ki tareekh nahi',
   moneyWorkLimit:
     'Bahar ke din is phone ki apni queue se aate hain, aur is taraf khareed ki tareekh nahi hai — to yeh kam se kam hai, poori umar nahi.',
   moneyWorkersHeading: 'Sab se zyada kaam karne wale',
   moneyWorkersSub: (window: number): string => `Pichle ${window} dinon mein bahar ke din`,
   moneyWorkersRow: (days: number, rupees: string): string => `${days} din bahar · ${rupees}`,
+  moneyWorkersRowNotOut: (window: number, rupees: string): string =>
+    `Pichle ${window} dinon mein bahar nahi — kamai ${rupees}`,
   moneyWorkersNobody: 'Abhi koi itna bahar nahi raha ke rank bane.',
 
 
