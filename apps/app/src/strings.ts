@@ -62,6 +62,21 @@ const KIND_EN: Record<string, string> = {
   write_off: 'write-off',
 }
 
+/** The three words a deposit's state says on its stamp (0017 D4). */
+const DEPOSIT_STATE_EN: Record<string, string> = {
+  held: 'held',
+  partially_applied: 'part used',
+  refunded: 'refunded',
+}
+
+/** Why a refund is refused, in the desk's words — one sentence per reason
+ *  the local gate can see (deposits.ts refundBlockers). */
+const REFUND_BLOCKER_EN: Record<string, (n: number) => string> = {
+  gear_still_out: (n) => `${n} item${s(n)} on this job ${n === 1 ? 'is' : 'are'} still out`,
+  no_return_recorded: (n) => `${n} item${s(n)} went out and nothing has been scanned back`,
+  damage_unresolved: (n) => `${n} item${s(n)} flagged on this job ${n === 1 ? 'is' : 'are'} still not OK`,
+}
+
 /** The overdue ladder's rungs, by the action each day asks for. */
 const ESCALATION_EN: Record<string, string> = {
   whatsapp_nudge: 'first nudge',
@@ -120,6 +135,11 @@ const OP_EN: Record<string, string> = {
   record_ledger_entry: 'a khata line',
   record_expense: 'a kharcha entry',
   reverse_expense: 'reversing a kharcha entry',
+  // W13 — the money doors.
+  hold_deposit: 'a deposit taken',
+  apply_deposit: 'a deposit put against a bill',
+  refund_deposit: 'a deposit refunded',
+  set_customer_blacklisted: 'a do-not-rent decision',
 }
 
 /**
@@ -1387,7 +1407,57 @@ const STR_EN = {
   pipeLiveQueueStatus: (n: number): string =>
     n === 0 ? 'Queue empty · synced with the server' : `${n} write${s(n)} queued · sending when the server answers`,
   pipeOpName: (op: string): string => OP_EN[op] ?? op,
+
+  // ===================================================== W13 — money doors
+  // The eight screens the simulated year asked for and could not find:
+  // deposits, corrections and write-offs, the waived fee, the do-not-rent
+  // decision, the health toggle, the month picker, what a client is worth,
+  // how hard a unit works. One block, one wave — every key below is new in
+  // W13 and every one of them has its twin in strings-ur.ts.
+
+  // --- 1. Deposits (`no-deposit-door`) — hold / apply / refund, 0017 D4.
+  moneyDepositsHeading: 'Deposits',
+  moneyDepositsNone: 'Nothing held for this client.',
+  moneyDepositsHeldSub: (rupees: string): string => `${rupees} in the drawer`,
+  moneyTakeDeposit: 'Take a deposit',
+  moneyDepositAmount: 'Amount (Rs)',
+  moneyDepositHowHeld: 'How it is held',
+  moneyDepositCash: 'Cash',
+  moneyDepositCheque: 'Cheque',
+  moneyDepositNoteOptional: 'Note — cheque number, who handed it over',
+  moneyDepositAgainstJob: 'Against which job',
+  moneyDepositNoJob: 'No job',
+  moneyDepositSave: 'Record the deposit',
+  moneyDepositStamp: (state: string): string => DEPOSIT_STATE_EN[state] ?? state,
+  moneyDepositRowNote: (rupees: string, job: string | null): string =>
+    job ? `${rupees} · ${job}` : rupees,
+  moneyDepositRemaining: (rupees: string): string => `${rupees} still held`,
+  moneyDepositApplied: (rupees: string): string => `${rupees} put against bills`,
+  moneyDepositRefunded: (rupees: string): string => `${rupees} given back`,
+  moneyDepositApply: 'Apply to a bill',
+  moneyDepositApplyTitle: 'Apply the deposit',
+  moneyDepositApplyPick: 'Apply it to',
+  moneyDepositApplyBalance: (rupees: string): string => `Everything owed — ${rupees}`,
+  moneyDepositApplyCharge: (kind: string, rupees: string): string => `${kind} — ${rupees}`,
+  moneyDepositApplySave: 'Apply it',
+  moneyDepositApplyTooMuch: (rupees: string): string =>
+    `Only ${rupees} is still held.`,
+  moneyDepositRefund: 'Refund',
+  moneyDepositRefundTitle: 'Refund the deposit',
+  moneyDepositRefundHold: (rupees: string): string => `Hold to give ${rupees} back`,
+  // The gate, said BEFORE the tap. The server refuses a refund while the
+  // job is not QC-clear (override 15) and names every blocker; the phone
+  // says the same thing here, and says out loud that it can only see its
+  // own half.
+  moneyDepositRefundBlocked: 'Not yet — this job is not clear',
+  moneyDepositBlocker: (reason: string, n: number): string =>
+    REFUND_BLOCKER_EN[reason]?.(n) ?? reason,
+  moneyDepositServerChecksAgain:
+    'The server checks the job again when this sends. A refund it refuses comes back as one card, not as lost money.',
+  moneyDepositRefundNothingLeft: 'Nothing left to refund — it has all been applied.',
+  // ======================================================================
 }
+
 
 /**
  * The shape every language table must satisfy: the English table's keys and

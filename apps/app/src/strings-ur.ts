@@ -99,6 +99,25 @@ const OP_UR: Record<string, string> = {
   record_ledger_entry: 'khata ki line',
   record_expense: 'kharcha ki entry',
   reverse_expense: 'kharcha entry wapas lena',
+  // W13 — paise ke darwaze.
+  hold_deposit: 'zamanat li',
+  apply_deposit: 'zamanat bill par lagai',
+  refund_deposit: 'zamanat wapas ki',
+  set_customer_blacklisted: 'is ko kiraye par na dene ka faisla',
+}
+
+/** Zamanat ki teen halaten (0017 D4) — stamp par ek lafz. */
+const DEPOSIT_STATE_UR: Record<string, string> = {
+  held: 'rakhi hui',
+  partially_applied: 'thori lag gayi',
+  refunded: 'wapas ho gayi',
+}
+
+/** Refund kyun mana hua — har wajah ka ek jumla (deposits.ts refundBlockers). */
+const REFUND_BLOCKER_UR: Record<string, (n: number) => string> = {
+  gear_still_out: (n) => `is job ki ${n} ${cheezein(n)} abhi bahar hai`,
+  no_return_recorded: (n) => `${n} ${cheezein(n)} gayi thi, wapas koi scan nahi hua`,
+  damage_unresolved: (n) => `is job par flag hui ${n} ${cheezein(n)} abhi theek nahi`,
 }
 
 export const STR_UR: StrTable = {
@@ -1271,4 +1290,47 @@ export const STR_UR: StrTable = {
   pipeLiveQueueStatus: (n: number): string =>
     n === 0 ? 'Queue khali · server ke saath sync hai' : `${n} likhai queue mein · server jawab de to jati hai`,
   pipeOpName: (op: string): string => OP_UR[op] ?? op,
+
+  // ===================================================== W13 — paise ke darwaze
+  // Woh aath screenein jo saal maangta raha: zamanat, darusti aur write off,
+  // maaf ki hui late fee, 'is ko na dena', sehat ka switch, mahine ka
+  // picker, client ki kul qeemat, unit kitna kaam karta hai.
+
+  // --- 1. Zamanat (`no-deposit-door`) — rakhna / lagana / wapas, 0017 D4.
+  moneyDepositsHeading: 'Zamanat',
+  moneyDepositsNone: 'Is client ki koi zamanat nahi rakhi.',
+  moneyDepositsHeldSub: (rupees: string): string => `${rupees} daraz mein`,
+  moneyTakeDeposit: 'Zamanat lein',
+  moneyDepositAmount: 'Raqam (Rs)',
+  moneyDepositHowHeld: 'Kis tarah rakhi hai',
+  moneyDepositCash: 'Cash',
+  moneyDepositCheque: 'Cheque',
+  moneyDepositNoteOptional: 'Note — cheque number, kis ne di',
+  moneyDepositAgainstJob: 'Kis job ke against',
+  moneyDepositNoJob: 'Koi job nahi',
+  moneyDepositSave: 'Zamanat likh dein',
+  moneyDepositStamp: (state: string): string => DEPOSIT_STATE_UR[state] ?? state,
+  moneyDepositRowNote: (rupees: string, job: string | null): string =>
+    job ? `${rupees} · ${job}` : rupees,
+  moneyDepositRemaining: (rupees: string): string => `${rupees} abhi rakhi hui`,
+  moneyDepositApplied: (rupees: string): string => `${rupees} billon par lag gaye`,
+  moneyDepositRefunded: (rupees: string): string => `${rupees} wapas kar diye`,
+  moneyDepositApply: 'Bill par lagayein',
+  moneyDepositApplyTitle: 'Zamanat lagayein',
+  moneyDepositApplyPick: 'Kis par lagani hai',
+  moneyDepositApplyBalance: (rupees: string): string => `Poora hisaab — ${rupees}`,
+  moneyDepositApplyCharge: (kind: string, rupees: string): string => `${kind} — ${rupees}`,
+  moneyDepositApplySave: 'Laga dein',
+  moneyDepositApplyTooMuch: (rupees: string): string =>
+    `Sirf ${rupees} rakhi hui hai.`,
+  moneyDepositRefund: 'Wapas karein',
+  moneyDepositRefundTitle: 'Zamanat wapas karein',
+  moneyDepositRefundHold: (rupees: string): string => `${rupees} wapas dene ke liye dabaye rakhein`,
+  moneyDepositRefundBlocked: 'Abhi nahi — yeh job clear nahi hai',
+  moneyDepositBlocker: (reason: string, n: number): string =>
+    REFUND_BLOCKER_UR[reason]?.(n) ?? reason,
+  moneyDepositServerChecksAgain:
+    'Jab yeh jati hai to server job dobara dekhta hai. Jo refund woh mana kare woh ek card ban kar aata hai, paisa gum nahi hota.',
+  moneyDepositRefundNothingLeft: 'Wapas karne ko kuch nahi — sab lag chuki hai.',
+  // ======================================================================
 }

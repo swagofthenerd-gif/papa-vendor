@@ -87,7 +87,7 @@ describe('the ledger', () => {
     assert.deepEqual(c.payload, {
       client_ledger_entry_id: charge, p_customer_id: 'cust-bilal', p_entry_kind: 'damage_charge',
       p_amount_minor: rs(5_000), p_job_id: 'job-wedding', p_asset_id: 'asset-fx9-1',
-      p_note: 'Cracked filter', p_reversal_of: null,
+      p_note: 'Cracked filter', p_reversal_of: null, p_corrects_entry_id: null,
     })
     assert.equal(c.dependsOn, null, 'a seeded customer and job: nothing pending to wait for')
     assert.equal(r.payload.p_entry_kind, 'reversal')

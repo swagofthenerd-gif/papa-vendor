@@ -14,6 +14,8 @@ import { DueBadge } from '../routes/Today.tsx'
 import type { DemoStore } from './store.ts'
 import { STR } from '../strings.ts'
 import { Sheet, SheetClose } from '../components/Sheet.tsx'
+// --- W13 the money doors
+import { DepositSection } from './DepositSection.tsx'
 
 /**
  * One customer's khata — the page the whole money book opens to.
@@ -120,6 +122,21 @@ export function KhataScreen({ store, customerId }: { store: DemoStore; customerI
           store.reverseEntry(entryId)
           setTick((t) => t + 1)
         }}
+      />
+
+      {/* Deposits (W13, `no-deposit-door`): security money is not debt in
+          either direction, so it gets its own section rather than a line
+          in the book — held, applied, refunded, with the refund's gate
+          read before the tap. Above the book because a deposit is a
+          STATE the desk acts on; the book below is history. */}
+      <DepositSection
+        key={`deposits-${tick}`}
+        store={store}
+        customerId={customerId}
+        customerName={customer.name}
+        heldMinor={customer.depositHeldMinor}
+        jobs={customer.jobs}
+        onWrite={() => setTick((t) => t + 1)}
       />
 
       <section className="section">

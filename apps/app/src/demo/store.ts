@@ -144,6 +144,20 @@ import {
   type LateFeeDraftView,
   type MoneyStrip,
 } from './khata.ts'
+// --- W13 the money doors: the deposit state machine (0017 D4).
+import {
+  applyTargets,
+  applyDeposit,
+  depositsFor,
+  holdDeposit,
+  refundBlockers,
+  refundDeposit,
+  type ApplyDepositResult,
+  type ApplyTargets,
+  type DepositRow,
+  type RefundBlocker,
+  type RefundDepositResult,
+} from './deposits.ts'
 import {
   availabilityFor,
   bookingConfirmText,
@@ -1479,6 +1493,68 @@ export class DemoStore {
         (filter.jobId === undefined || n.jobId === filter.jobId) &&
         (filter.customerId === undefined || n.customerId === filter.customerId),
     )
+  }
+
+  // ------------------------------------ W13: the deposit door (0017 D4)
+
+  /** One customer's deposits, oldest first — the khata's deposit section. */
+  deposits(customerId: string): DepositRow[] {
+    return depositsFor(this.db, customerId)
+  }
+
+  /** What a deposit may be put against: the balance, or one live charge on
+   *  the deposit's own job. */
+  depositApplyTargets(depositId: string): ApplyTargets {
+    return applyTargets(this.db, depositId)
+  }
+
+  /** Why a refund on this job would be refused — read BEFORE the tap, so
+   *  the desk can tell the client why they are waiting. Empty is clear. */
+  refundBlockers(jobId: string | null): RefundBlocker[] {
+    return refundBlockers(this.db, jobId)
+  }
+
+  /** Take a deposit: cash or a held cheque, against a job or standing.
+   *  A past fact — the money is in the drawer — so it needs no server. */
+  holdDeposit(
+    input: {
+      customerId: string
+      amountMinor: number
+      jobId?: string | null
+      note?: string | null
+    },
+    whenMs: number = Date.now(),
+  ): string | null {
+    return holdDeposit(this.db, {
+      orgId: this.seed.orgId,
+      customerId: input.customerId,
+      amountMinor: input.amountMinor,
+      jobId: input.jobId ?? null,
+      note: input.note ?? null,
+      heldAt: whenMs,
+    })
+  }
+
+  /** Spend held money against what is owed — one line, both halves. */
+  applyDeposit(
+    depositId: string,
+    amountMinor: number,
+    note: string | null = null,
+    whenMs: number = Date.now(),
+  ): ApplyDepositResult {
+    return applyDeposit(this.db, {
+      orgId: this.seed.orgId, depositId, amountMinor, note, whenMs,
+    })
+  }
+
+  /** Give the remainder back — gated on the job being clear, here as well
+   *  as on the server (override 15). */
+  refundDeposit(
+    depositId: string,
+    note: string | null = null,
+    whenMs: number = Date.now(),
+  ): RefundDepositResult {
+    return refundDeposit(this.db, { orgId: this.seed.orgId, depositId, note, whenMs })
   }
 
   /** Write the correction a notice drafted — the owner's confirm tap. */

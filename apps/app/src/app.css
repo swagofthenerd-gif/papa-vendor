@@ -1702,3 +1702,43 @@ h2.stamp .h-ico { display: none; }
 
 .attention-card { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-2) 0 var(--sp-3); }
 .attention-card .line-note { color: var(--status-attention); }
+
+/* ==================== W13 — the money doors ==================== */
+/* The eight screens the simulated year asked for. Everything here is
+   furniture the existing grammar did not have a name for yet: a reason
+   list under a refused action, a settled ledger line, a month picker,
+   and the two read-only strips (what a client is worth, how hard a unit
+   works) which are `.line-list` rows and need nothing of their own. */
+
+/* Why an action is refused, listed under it in the margin voice. Not a
+   notice block: a disabled button with its reasons printed beneath is a
+   ledger annotation, and the desk reads it aloud to the client. */
+.line-why {
+  grid-column: 1 / -1;
+  list-style: none; margin: var(--sp-2) 0 0; padding: 0;
+  color: var(--muted); font-size: var(--fs-xs); font-weight: 600;
+}
+.line-why li { padding: 1px 0; }
+.notice .line-why { margin-top: 3px; color: inherit; }
+
+/* A line the book has SETTLED — reversed, or a fee written off. Struck
+   through in the margin voice, with the settlement's own words beneath:
+   the pair reads as one story, and both rows are still in the book
+   because the client saw both happen. */
+.line-settled .line-name,
+.line-settled .line-code { color: var(--muted); text-decoration: line-through; }
+.line-settled .line-why { text-decoration: none; }
+
+/* The month picker on Din ka hisaab: a back/forward pair around the
+   month's own name, in the mono voice the dates use. Disabled forward
+   on the current month — there is no account of a month that has not
+   happened. */
+.month-picker {
+  display: grid; grid-template-columns: var(--tap) 1fr var(--tap);
+  align-items: center; gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+.month-picker-label {
+  text-align: center; font-size: var(--fs-md); font-weight: 800;
+}
+/* ============================================================== */

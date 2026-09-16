@@ -1,6 +1,7 @@
 import {
   liveExpenses,
   monthBounds,
+  SETTLED_ENTRY_IDS_SQL,
   totalExpenses,
   type ExpenseKind,
   type ExpenseView,
@@ -259,8 +260,7 @@ export function monthProfit(db: SqlDriver, nowMs: number): MonthProfit {
     `select sum(amount_minor) as total from customer_ledger_entries
       where kind in ('charge', 'late_fee', 'damage_charge')
         and created_at >= ? and created_at < ?
-        and id not in (select reversal_of from customer_ledger_entries
-                        where reversal_of is not null)`,
+        and id not in (${SETTLED_ENTRY_IDS_SQL})`,
     [month.startMs, month.endMs],
   )
   const spent = liveExpenses(expenseRows(db)).filter(
@@ -300,8 +300,7 @@ export function jobMargin(db: SqlDriver, jobId: string): JobMargin {
   const income = db.get<{ total: number | null }>(
     `select sum(amount_minor) as total from customer_ledger_entries
       where job_id = ? and kind in ('charge', 'late_fee', 'damage_charge')
-        and id not in (select reversal_of from customer_ledger_entries
-                        where reversal_of is not null)`,
+        and id not in (${SETTLED_ENTRY_IDS_SQL})`,
     [jobId],
   )
   const bookingId = db.get<{ booking_id: string | null }>(

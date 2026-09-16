@@ -49,7 +49,7 @@ export type { MoneyTotal } from './money.ts'
 export {
   projectLedger, oldestUnpaidMs, lateFeeDraft, paybackPercent,
   signedRupees, ledgerDate, monthBounds, balanceCardText, monthlyStatementText,
-  CHARGE_KINDS,
+  CHARGE_KINDS, SETTLED_ENTRY_IDS_SQL,
 } from './ledger.ts'
 export type {
   LedgerEntryKind, LedgerEntryView, LedgerProjection, KhataStrings,

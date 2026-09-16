@@ -117,6 +117,12 @@ export const NAMES = {
   ],
   ledgerEntry: (id: string | null | undefined): Named[] => [
     { key: 'client_ledger_entry_id', id }, { key: 'p_reversal_of', id },
+    { key: 'p_corrects_entry_id', id },
+  ],
+  /** W13: the deposit state machine's row — hold mints it, apply and
+   *  refund name it as `p_deposit_id`. */
+  deposit: (id: string | null | undefined): Named[] => [
+    { key: 'client_deposit_id', id }, { key: 'p_deposit_id', id },
   ],
 }
 
@@ -134,7 +140,14 @@ export const APP_REKEY_COLUMNS: Record<string, string[]> = {
   job_meta: ['job_id'],
   scan_sessions: ['job_id'],
   customers: ['id'],
-  customer_ledger_entries: ['id', 'customer_id', 'job_id', 'asset_id', 'reversal_of'],
+  customer_ledger_entries: [
+    'id', 'customer_id', 'job_id', 'asset_id', 'reversal_of', 'corrects_entry_id',
+    'deposit_id',
+  ],
+  // W13: the deposit door's own row. `hold_deposit` names it in its reply,
+  // so the phone's `dep-…` becomes the server's the moment the hold lands,
+  // and the apply and the refund queued behind it go out under that name.
+  deposits: ['id', 'customer_id', 'job_id'],
   org_expenses: ['id', 'asset_id', 'job_id', 'booking_id', 'reversal_of'],
   demand_log: ['product_id'],
   partner_customer_links: ['partner_house_id', 'customer_id'],

@@ -4,6 +4,7 @@ import {
   lateFeeDraft,
   monthBounds,
   projectLedger,
+  SETTLED_ENTRY_IDS_SQL,
   paybackPercent,
   type DepositHint,
   type KhataStrings,
@@ -48,6 +49,30 @@ export interface LedgerRow extends LedgerEntryView {
   jobId: string | null
   assetId: string | null
   reversalOf: string | null
+  /** The earlier line this one supersedes (the server's own column). */
+  correctsEntryId: string | null
+  /** The deposit this line belongs to — the three deposit kinds only. */
+  depositId: string | null
+}
+
+/**
+ * A line and the line that settled it, as ONE story (W13, the
+ * `no-adjustment-door` and `waived-fee-invisible` doors).
+ *
+ * The book stays append-only and both rows stay in `entries` — the client
+ * saw both happen, and every projection still sums both. This is the
+ * READING: the corrected line is struck through and the settlement's own
+ * words sit under it, so a correction is never two mystery rows the owner
+ * has to pair up in his head. `kind` is the settling line's kind, which is
+ * the whole vocabulary: 'reversal' undid it, 'write_off' forgave it.
+ */
+export interface Settled {
+  /** The settling line's id — the row a screen does NOT render on its own. */
+  byId: string
+  kind: LedgerEntryKind
+  amountMinor: number
+  note: string | null
+  createdAt: number
 }
 
 export interface CustomerLinkedJob {
@@ -65,6 +90,9 @@ export interface CustomerView {
   depositHeldMinor: number
   /** Newest first — the page reads as a story, latest entry on top. */
   entries: LedgerRow[]
+  /** Settled line id → the line that settled it (reversal or write-off).
+   *  The page renders the pair as one row; both are still in `entries`. */
+  settled: Map<string, Settled>
   jobs: CustomerLinkedJob[]
 }
 
@@ -80,6 +108,8 @@ function rowsFor(db: SqlDriver, customerId: string): LedgerRow[] {
       created_at: number
       seq: number
       reversal_of: string | null
+      corrects_entry_id: string | null
+      deposit_id: string | null
       job_label: string | null
     }>(
       // rowid rides along as `seq` so pure re-sorts downstream
@@ -87,7 +117,8 @@ function rowsFor(db: SqlDriver, customerId: string): LedgerRow[] {
       // exactly the way this ORDER BY does — a same-millisecond
       // charge/payment pair must never flip and dip the running balance.
       `select e.id, e.kind, e.amount_minor, e.job_id, e.asset_id, e.note,
-              e.created_at, e.rowid as seq, e.reversal_of, j.label as job_label
+              e.created_at, e.rowid as seq, e.reversal_of, e.corrects_entry_id,
+              e.deposit_id, j.label as job_label
          from customer_ledger_entries e
          left join jobs j on j.id = e.job_id
         where e.customer_id = ?
@@ -103,9 +134,39 @@ function rowsFor(db: SqlDriver, customerId: string): LedgerRow[] {
       jobId: r.job_id,
       assetId: r.asset_id,
       reversalOf: r.reversal_of,
+      correctsEntryId: r.corrects_entry_id,
+      depositId: r.deposit_id,
       note: r.note,
       jobLabel: r.job_label,
     }))
+}
+
+/**
+ * Which lines were settled by which, from the two links the server owns:
+ * `reversal_of` (a reversal voided it) and `corrects_entry_id` (a
+ * write-off forgave it, a later line superseded it). Keyed by the SETTLED
+ * line's id — one home for the pairing, read by the khata page, the
+ * lifetime-value view and the waiver read alike.
+ */
+export function settlements(entries: LedgerRow[]): Map<string, Settled> {
+  const present = new Set(entries.map((e) => e.id))
+  const out = new Map<string, Settled>()
+  for (const e of entries) {
+    const target = e.reversalOf ?? e.correctsEntryId
+    if (!target || !present.has(target)) continue
+    // First settlement wins: a second row naming the same line is refused
+    // at every write side, so this can only be old or synced data — and a
+    // line that reads as settled twice reads as nothing at all.
+    if (out.has(target)) continue
+    out.set(target, {
+      byId: e.id,
+      kind: e.kind,
+      amountMinor: e.amountMinor,
+      note: e.note ?? null,
+      createdAt: e.createdAt,
+    })
+  }
+  return out
 }
 
 /** Every customer with their projected balance, biggest debt first —
@@ -156,6 +217,7 @@ export function customerView(db: SqlDriver, id: string): CustomerView | null {
     balanceMinor: p.balanceMinor,
     depositHeldMinor: p.depositHeldMinor,
     entries: [...entries].reverse(),
+    settled: settlements(entries),
     jobs: jobs.map((j) => ({
       id: j.id,
       label: j.label ?? 'Unnamed job',
@@ -232,12 +294,21 @@ export interface RecordEntryInput {
   note?: string | null
   /** For kind 'reversal': the entry this line voids. */
   reversalOf?: string | null
+  /** The earlier line this one supersedes without voiding it — the server's
+   *  `corrects_entry_id` (0017). A waived late fee's write-off names the fee
+   *  here, because the server allows `p_reversal_of` on 'reversal' alone
+   *  and a forgiven fee is a decision, not an error. */
+  correctsEntryId?: string | null
+  /** For the three deposit kinds: the `deposits` row the line belongs to
+   *  (deposits.ts). The server's own link, and only deposit kinds carry it. */
+  depositId?: string | null
   createdAt: number
 }
 
 /** Deposit lines move only through the server's hold/apply/refund state
- *  machine (0017 D4); the phone has no deposit door yet (year finding
- *  `no-deposit-door`), so a deposit row here can only be the seed's. */
+ *  machine (0017 D4), which writes its own ledger row inside each RPC — so
+ *  a deposit line on the phone queues NO op of its own: the deposit op
+ *  (deposits.ts) is what carries it, and a second op would be a second row. */
 const DEPOSIT_KINDS: ReadonlySet<string> = new Set(['deposit_hold', 'deposit_apply', 'deposit_refund'])
 
 /**
@@ -263,12 +334,13 @@ export function recordEntry(
     db.exec(
       `insert into customer_ledger_entries
          (id, org_id, customer_id, kind, amount_minor, job_id, asset_id, note,
-          reversal_of, created_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          reversal_of, corrects_entry_id, deposit_id, created_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id, input.orgId, input.customerId, input.kind, input.amountMinor,
         input.jobId ?? null, input.assetId ?? null, input.note ?? null,
-        input.reversalOf ?? null, input.createdAt,
+        input.reversalOf ?? null, input.correctsEntryId ?? null,
+        input.depositId ?? null, input.createdAt,
       ],
     )
     if (!ids || DEPOSIT_KINDS.has(input.kind)) return
@@ -276,6 +348,7 @@ export function recordEntry(
       ...NAMES.customer(input.customerId),
       ...NAMES.job(input.jobId),
       ...NAMES.ledgerEntry(input.reversalOf),
+      ...NAMES.ledgerEntry(input.correctsEntryId),
     ]
     if (input.kind === 'payment') {
       enqueueOp(db, ids, 'record_payment', {
@@ -296,6 +369,7 @@ export function recordEntry(
       p_asset_id: input.assetId ?? null,
       p_note: input.note ?? null,
       p_reversal_of: input.reversalOf ?? null,
+      p_corrects_entry_id: input.correctsEntryId ?? null,
     }, named)
   })
   return id
@@ -336,9 +410,12 @@ export function moneyStrip(db: SqlDriver, nowMs: number): MoneyStrip {
 
   const month = monthBounds(nowMs)
   const earned = db.get<{ total: number | null }>(
+    // Live lines only: a reversed charge was never income, and neither was
+    // a late fee the owner waived (SETTLED_ENTRY_IDS_SQL — one home).
     `select sum(amount_minor) as total from customer_ledger_entries
       where kind in ('charge', 'late_fee', 'damage_charge')
-        and created_at >= ? and created_at < ?`,
+        and created_at >= ? and created_at < ?
+        and id not in (${SETTLED_ENTRY_IDS_SQL})`,
     [month.startMs, month.endMs],
   )
 
@@ -400,8 +477,7 @@ export function assetEarnings(db: SqlDriver, assetId: string): AssetEarnings {
             count(distinct job_id) as jobs
        from customer_ledger_entries
       where asset_id = ? and kind in ('charge', 'late_fee')
-        and id not in (select reversal_of from customer_ledger_entries
-                        where reversal_of is not null)`,
+        and id not in (${SETTLED_ENTRY_IDS_SQL})`,
     [assetId],
   )
   const rate = db.get<{ replacement_minor: number | null }>(
