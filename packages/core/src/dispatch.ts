@@ -85,6 +85,14 @@ export const ID_REPLY_RULES: Record<string, IdReplyRule[]> = {
   record_expense: [{ client: 'client_expense_id', reply: 'id', kind: 'expense' }],
   // The reversal is its own row; the target is named in p_expense_id.
   reverse_expense: [{ client: 'client_expense_id', reply: 'id', kind: 'expense' }],
+  // W13 — the money doors. `hold_deposit` returns the `deposits` row it
+  // minted (0017 D4), so the phone's `dep-…` takes the server's name and
+  // the apply / refund queued behind it name the server's deposit. Those
+  // two mint only the ledger line they write inside themselves, which
+  // their reply does not carry — a guess stays a prefix there (rule 3)
+  // until the money lane pulls.
+  // ASSUMPTION: see docs/assumptions.md#deposit-line-ids
+  hold_deposit: [{ client: 'client_deposit_id', reply: 'id', kind: 'deposit' }],
 }
 
 /**

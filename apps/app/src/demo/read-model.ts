@@ -103,6 +103,13 @@ create table if not exists customers (
   phone  text,
   note   text,
   blacklisted integer not null default 0,
+  -- WHY the house refuses this client, and when the decision was made
+  -- (W13, no-blacklist). The server keeps the reason in its audit log —
+  -- a boolean column cannot be asked why — so the phone keeps its own
+  -- copy for the stamp to say out loud. The FLAG is what 0022's confirm
+  -- gate reads; these two are the sentence beside it.
+  blacklist_reason text,
+  blacklisted_at integer,
   credentials_verified integer not null default 0
 );
 create index if not exists jobs_customer_idx on jobs (customer_id);
@@ -121,10 +128,48 @@ create table if not exists customer_ledger_entries (
   -- happened (the debt clock, asset earnings) while both lines stay on
   -- the page. Server side this column is a follow-up migration.
   reversal_of  text,
+  -- The OTHER correction link, and the server's own column since 0017:
+  -- "corrections point forward" — a line that supersedes an earlier one
+  -- names it here. Kind 'reversal' uses reversal_of and negates exactly; a
+  -- WAIVER uses this, because the server refuses p_reversal_of on any
+  -- kind but 'reversal' and a forgiven late fee is not an error to void
+  -- (W13, the waived-fee-invisible door). Both links drop the named
+  -- line out of asset earnings, on this side and in 0018's view.
+  corrects_entry_id text,
+  -- The deposit a deposit_hold / deposit_apply / deposit_refund line
+  -- belongs to — the server's column (0017), mirrored so the khata can
+  -- read a deposit's own state and its lines as one story (W13, the
+  -- no-deposit-door door). Null on every other kind, exactly as the
+  -- server's ledger_deposit_link constraint insists.
+  deposit_id   text,
   created_at   integer not null
 );
 create index if not exists ledger_customer_idx on customer_ledger_entries (customer_id, created_at);
 create index if not exists ledger_asset_idx on customer_ledger_entries (asset_id);
+create index if not exists ledger_deposit_idx on customer_ledger_entries (deposit_id);
+
+-- Security money in the drawer (0017 D4): the deposit state machine's own
+-- row, mirroring the server's deposits shape. The LEDGER is still the
+-- money — hold/apply/refund each write a line — and this table is the
+-- state: how much came in, how much has been applied, whether it has been
+-- refunded. Nothing here is ever the source of a balance; projectLedger
+-- stays the only arithmetic (see @papa/core ledger.ts).
+create table if not exists deposits (
+  id             text primary key,
+  org_id         text not null,
+  customer_id    text not null,
+  job_id         text,
+  amount_minor   integer not null,
+  applied_minor  integer not null default 0,
+  refunded_minor integer,
+  -- held | partially_applied | refunded, the server's three words.
+  state          text not null default 'held',
+  note           text,
+  held_at        integer not null,
+  refunded_at    integer
+);
+create index if not exists deposits_customer_idx on deposits (customer_id, held_at);
+create index if not exists deposits_job_idx on deposits (job_id);
 
 -- The expense side of the book (0019): what the HOUSE paid out — repairs,
 -- sub-hire, purchases. Mirrors the server's org_expenses shape. Same

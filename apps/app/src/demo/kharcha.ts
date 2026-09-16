@@ -1,6 +1,7 @@
 import {
   liveExpenses,
   monthBounds,
+  SETTLED_ENTRY_IDS_SQL,
   totalExpenses,
   type ExpenseKind,
   type ExpenseView,
@@ -248,6 +249,33 @@ export interface MonthProfit {
 }
 
 /**
+ * What the house BILLED inside a window — live charge-side lines only, so
+ * a reversed charge and a waived late fee are not income
+ * (SETTLED_ENTRY_IDS_SQL, the one settled rule).
+ *
+ * One home because two screens ask it of the same month: the Today
+ * board's money strip (khata.ts moneyStrip) and the month's bottom line
+ * below. The two carried the identical query until W13 and would have
+ * drifted the first time one of them learned a new kind — which is the
+ * "earned this month" on the board disagreeing with the "earned" on the
+ * hisaab, in front of the owner, on the same afternoon.
+ *
+ * It lives beside the profit maths rather than in khata.ts because khata
+ * already imports this module (assetCosts) and the reverse edge would be
+ * a cycle.
+ */
+export function billedBetween(db: SqlDriver, startMs: number, endMs: number): number {
+  const row = db.get<{ total: number | null }>(
+    `select sum(amount_minor) as total from customer_ledger_entries
+      where kind in ('charge', 'late_fee', 'damage_charge')
+        and created_at >= ? and created_at < ?
+        and id not in (${SETTLED_ENTRY_IDS_SQL})`,
+    [startMs, endMs],
+  )
+  return Number(row?.total ?? 0)
+}
+
+/**
  * The month's bottom line, from the two sides of the local book — the
  * vendor's-dream question ("what did the month actually make") as one
  * read. Month boundary = the device's calendar month (monthBounds),
@@ -255,18 +283,10 @@ export interface MonthProfit {
  */
 export function monthProfit(db: SqlDriver, nowMs: number): MonthProfit {
   const month = monthBounds(nowMs)
-  const earned = db.get<{ total: number | null }>(
-    `select sum(amount_minor) as total from customer_ledger_entries
-      where kind in ('charge', 'late_fee', 'damage_charge')
-        and created_at >= ? and created_at < ?
-        and id not in (select reversal_of from customer_ledger_entries
-                        where reversal_of is not null)`,
-    [month.startMs, month.endMs],
-  )
   const spent = liveExpenses(expenseRows(db)).filter(
     (e) => e.createdAt >= month.startMs && e.createdAt < month.endMs,
   )
-  const earnedMinor = Number(earned?.total ?? 0)
+  const earnedMinor = billedBetween(db, month.startMs, month.endMs)
   const spentMinor = spent.reduce((n, e) => n + e.amountMinor, 0)
   return {
     monthLabel: month.label,
@@ -300,8 +320,7 @@ export function jobMargin(db: SqlDriver, jobId: string): JobMargin {
   const income = db.get<{ total: number | null }>(
     `select sum(amount_minor) as total from customer_ledger_entries
       where job_id = ? and kind in ('charge', 'late_fee', 'damage_charge')
-        and id not in (select reversal_of from customer_ledger_entries
-                        where reversal_of is not null)`,
+        and id not in (${SETTLED_ENTRY_IDS_SQL})`,
     [jobId],
   )
   const bookingId = db.get<{ booking_id: string | null }>(

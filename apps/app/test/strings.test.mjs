@@ -41,7 +41,10 @@ const APP = resolve(HERE, '..')
 const require = createRequire(import.meta.url)
 const ts = require('typescript')
 
-const PREFIXES = ['today', 'scan', 'session', 'gear', 'enquiry', 'hisaab', 'labels', 'common', 'customer', 'closed', 'kharcha', 'fleet', 'sehat', 'awaaz', 'booking', 'quote', 'network', 'pipe']
+// 'money' is W13's prefix: the eight money doors span the khata, the
+// asset page and the hisaab, so they are grouped by what they are about
+// rather than by which screen happens to host them.
+const PREFIXES = ['today', 'scan', 'session', 'gear', 'enquiry', 'hisaab', 'labels', 'common', 'customer', 'closed', 'kharcha', 'fleet', 'sehat', 'awaaz', 'booking', 'quote', 'network', 'pipe', 'money']
 
 /** Sample args so parameterised strings can be rendered and checked. */
 function renderValue(value) {

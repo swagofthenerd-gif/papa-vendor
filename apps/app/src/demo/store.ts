@@ -6,6 +6,7 @@ import {
   voidScan,
   markTerminal,
   markFound,
+  markHealth,
   swapAsset,
   cycleCountDiff,
   recordServiced,
@@ -13,6 +14,7 @@ import {
   type VoiceNoteRow,
   type VoidScanResult,
   type Disposition,
+  type HealthCall,
   type SwapFlag,
   type SwapResult,
   type CountDiff,
@@ -108,7 +110,14 @@ import {
   type OpenJobRow,
   type SubstituteRow,
 } from './read-model.ts'
-import { dayAccount, type DayAccount } from './hisaab.ts'
+import { dayAccount, monthAccount, type DayAccount, type MonthAccount } from './hisaab.ts'
+// --- W13: how hard a unit works (`no-utilization-read`).
+import {
+  utilisation,
+  workedHardest,
+  type Utilisation,
+  type WorkerRow,
+} from './utilisation.ts'
 import {
   jobMargin,
   monthProfit,
@@ -129,6 +138,14 @@ import {
   lateFeeDraftFor,
   moneyStrip,
   recordReversalOf,
+  correctEntry,
+  writeOffEntry,
+  writeOffBalance,
+  duplicateEntries,
+  waiveLateFee,
+  waivedFees,
+  setBlacklisted,
+  lifetimeValue,
   paymentLine,
   paymentQr,
   recordEntry,
@@ -141,9 +158,28 @@ import {
   type ChargedButReturned,
   type CustomerListRow,
   type CustomerView,
+  type DuplicateEntry,
   type LateFeeDraftView,
   type MoneyStrip,
+  type BlacklistResult,
+  type LifetimeValue,
+  type SettleResult,
+  type WaivedFee,
 } from './khata.ts'
+// --- W13 the money doors: the deposit state machine (0017 D4).
+import {
+  applyTargets,
+  applyDeposit,
+  depositsFor,
+  holdDeposit,
+  refundBlockers,
+  refundDeposit,
+  type ApplyDepositResult,
+  type ApplyTargets,
+  type DepositRow,
+  type RefundBlocker,
+  type RefundDepositResult,
+} from './deposits.ts'
 import {
   availabilityFor,
   bookingConfirmText,
@@ -1140,6 +1176,16 @@ export class DemoStore {
     })
   }
 
+  /**
+   * A whole month's account (W13, `no-month-history-screen`) — the read
+   * the API could always answer and no caller could ask. `monthMs` is
+   * any instant inside the wanted month; `todayMs` is the real clock,
+   * and the only thing that decides whether the month has a 'today'.
+   */
+  monthAccount(monthMs: number, todayMs: number = Date.now()): MonthAccount {
+    return monthAccount(this.db, monthMs, todayMs)
+  }
+
   /** Din ka hisaab — the whole day, computed locally. See hisaab.ts. */
   dayAccount(nowMs: number = Date.now()): DayAccount {
     return dayAccount(this.db, nowMs)
@@ -1486,6 +1532,141 @@ export class DemoStore {
     )
   }
 
+  // -------------------------- W13: the correction door (`no-adjustment-door`)
+
+  /**
+   * "Correct this" — a reversal naming the line, with the reason kept.
+   * The amount is copied from the target inside khata.ts; the caller
+   * supplies only the judgement.
+   */
+  correctEntry(entryId: string, reason: string, whenMs: number = Date.now()): SettleResult {
+    return correctEntry(this.db, { orgId: this.seed.orgId, entryId, reason, whenMs })
+  }
+
+  /** "Write it off" — debt the house has decided not to chase, named
+   *  onto the line it forgives. Never printed as the house's own error. */
+  writeOffEntry(entryId: string, reason: string, whenMs: number = Date.now()): SettleResult {
+    return writeOffEntry(this.db, { orgId: this.seed.orgId, entryId, reason, whenMs })
+  }
+
+  /** "Write off what's owed" — the whole balance, given up, naming no
+   *  line. The absconded-client case: a payment is not allocated to a
+   *  charge, so "the unpaid lines" do not exist on a running account. */
+  writeOffBalance(customerId: string, reason: string, whenMs: number = Date.now()): SettleResult {
+    return writeOffBalance(this.db, { orgId: this.seed.orgId, customerId, reason, whenMs })
+  }
+
+  /** Identical charge-side lines a few seconds apart — the double-tap
+   *  question, for one khata or the whole book. Never a refusal. */
+  duplicateEntries(filter: { customerId?: string } = {}): DuplicateEntry[] {
+    return duplicateEntries(this.db).filter(
+      (d) => filter.customerId === undefined || d.customerId === filter.customerId,
+    )
+  }
+
+  /**
+   * The drafted late fee the owner chooses NOT to charge (W13,
+   * `waived-fee-invisible`). Written and written off in one transaction —
+   * nothing owed, and the khata still says the favour was given.
+   */
+  waiveLateFee(
+    jobId: string,
+    amountMinor: number,
+    reason: string,
+    whenMs: number = Date.now(),
+  ): SettleResult {
+    return waiveLateFee(this.db, { orgId: this.seed.orgId, jobId, amountMinor, reason, whenMs })
+  }
+
+  /**
+   * What this client has been worth (W13, `no-lifetime-value-view`) —
+   * every figure a sum over the book the page already loads.
+   */
+  lifetimeValue(customerId: string): LifetimeValue {
+    return lifetimeValue(this.db, customerId)
+  }
+
+  /** Fees this client has been forgiven — the goodwill, in one read. */
+  waivedFees(customerId: string): WaivedFee[] {
+    return waivedFees(this.db, customerId)
+  }
+
+  /**
+   * The do-not-rent decision (W13, `no-blacklist`) — the switch 0022's
+   * confirm gate never had. A reason to refuse a client, none to let
+   * them back in; owner/manager on the server, audited there.
+   */
+  setBlacklisted(
+    customerId: string,
+    on: boolean,
+    reason: string | null = null,
+    whenMs: number = Date.now(),
+  ): BlacklistResult {
+    return setBlacklisted(this.db, { customerId, on, reason, whenMs }, defaultIds(whenMs))
+  }
+
+  // ------------------------------------ W13: the deposit door (0017 D4)
+
+  /** One customer's deposits, oldest first — the khata's deposit section. */
+  deposits(customerId: string): DepositRow[] {
+    return depositsFor(this.db, customerId)
+  }
+
+  /** What a deposit may be put against: the balance, or one live charge on
+   *  the deposit's own job. */
+  depositApplyTargets(depositId: string): ApplyTargets {
+    return applyTargets(this.db, depositId)
+  }
+
+  /** Why a refund on this job would be refused — read BEFORE the tap, so
+   *  the desk can tell the client why they are waiting. Empty is clear. */
+  refundBlockers(jobId: string | null): RefundBlocker[] {
+    return refundBlockers(this.db, jobId)
+  }
+
+  /** Take a deposit: cash or a held cheque, against a job or standing.
+   *  A past fact — the money is in the drawer — so it needs no server. */
+  holdDeposit(
+    input: {
+      customerId: string
+      amountMinor: number
+      jobId?: string | null
+      note?: string | null
+    },
+    whenMs: number = Date.now(),
+  ): string | null {
+    return holdDeposit(this.db, {
+      orgId: this.seed.orgId,
+      customerId: input.customerId,
+      amountMinor: input.amountMinor,
+      jobId: input.jobId ?? null,
+      note: input.note ?? null,
+      heldAt: whenMs,
+    })
+  }
+
+  /** Spend held money against what is owed — one line, both halves. */
+  applyDeposit(
+    depositId: string,
+    amountMinor: number,
+    note: string | null = null,
+    whenMs: number = Date.now(),
+  ): ApplyDepositResult {
+    return applyDeposit(this.db, {
+      orgId: this.seed.orgId, depositId, amountMinor, note, whenMs,
+    })
+  }
+
+  /** Give the remainder back — gated on the job being clear, here as well
+   *  as on the server (override 15). */
+  refundDeposit(
+    depositId: string,
+    note: string | null = null,
+    whenMs: number = Date.now(),
+  ): RefundDepositResult {
+    return refundDeposit(this.db, { orgId: this.seed.orgId, depositId, note, whenMs })
+  }
+
   /** Write the correction a notice drafted — the owner's confirm tap. */
   reverseEntry(entryId: string, whenMs: number = Date.now()): boolean {
     return recordReversalOf(
@@ -1614,6 +1795,18 @@ export class DemoStore {
     })
   }
 
+  /**
+   * Set a unit's health from the phone with no swap behind it (W13,
+   * `no-health-door`). One real scan event through the append-only queue,
+   * projected optimistically — so the shelf stops offering a broken
+   * camera at once and the log still explains why.
+   */
+  markHealth(assetId: string, call: HealthCall, note: string | null = null): void {
+    markHealth(this.db, { assetId, call, note })
+    this.refreshCatalogue()
+    notifySync()
+  }
+
   /** Bring a terminal item home — the recovery door. */
   markFound(assetId: string): void {
     markFound(this.db, { assetId })
@@ -1739,6 +1932,22 @@ export class DemoStore {
   }
 
   // ---- the living fleet (Wave 3, migration 0021) -------------------------
+
+  /**
+   * How hard one unit works (W13, `no-utilization-read`) — days out in
+   * the window, the service meter, what it earned and per day, and idle
+   * days. Every figure from something that already exists; the two
+   * honest limits ride on the screen beside them.
+   */
+  utilisation(assetId: string, nowMs: number = Date.now()): Utilisation {
+    return utilisation(this.db, assetId, nowMs)
+  }
+
+  /** The fleet ranked by how hard it works — the AUG question ("which
+   *  camera earned best") that used to mean opening pages one at a time. */
+  workedHardest(nowMs: number = Date.now(), limit = 5): WorkerRow[] {
+    return workedHardest(this.db, nowMs, limit)
+  }
 
   /** One unit's wear facts — the asset page's service and cycle lines. */
   serviceFacts(assetId: string): ServiceFacts | null {

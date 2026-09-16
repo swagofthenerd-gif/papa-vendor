@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Icon } from '@papa/icons'
-import { bookingDateLabel, formatRupees, type Disposition as MarkDisposition, type PromisedSoon } from '@papa/core'
+import { bookingDateLabel, formatRupees, type Disposition as MarkDisposition, type HealthCall, type PromisedSoon } from '@papa/core'
+import type { Utilisation } from '../demo/utilisation.ts'
 import { go } from '../nav.ts'
 import { dayLabel } from '../booking-view.ts'
 import { SectionHead } from '../components/Shell.tsx'
@@ -163,6 +164,146 @@ function AssetMoneySection({
 }
 
 /**
+ * How hard this unit works (W13, `no-utilization-read`) — days out in
+ * the window, 0021's service meter, what it earned and per day, and
+ * idle days.
+ *
+ * EVERY LINE CARRIES ITS OWN HONESTY. "Never seen it go out" is not
+ * "idle 90 days", a per-day figure with no date to divide by says so
+ * rather than showing zero, and the section closes with the limit the
+ * numbers actually have: the phone's log is a floor, not a lifetime.
+ */
+function WorkLines({ work }: { work: Utilisation }) {
+  return (
+    <div className="work-lines">
+      {/* An in-section sub-heading, the same instrument the day's account
+          uses for its two lists: this block lives INSIDE Sehat (wear is
+          one question) and must still be nameable on the page. */}
+      <h3 className="hisaab-sub">{STR.moneyWorkHeading}</h3>
+      {/* ONE sentence when the phone has never seen it leave: "not seen it
+          go out" and "idle since it last left" are the same silence, and
+          printing both twice is how a report stops being read. */}
+      {work.idleDays === null ? (
+        <p className="section-sub">{STR.moneyWorkNeverOut}</p>
+      ) : (
+        <>
+          <p className="section-sub">
+            {STR.moneyWorkDaysOut(work.daysOut, work.windowDays)}
+            {' · '}
+            {STR.moneyWorkBusy(work.busyPct)}
+          </p>
+          <p className="section-sub">
+            {work.outNow ? STR.moneyWorkOutNow : STR.moneyWorkIdle(work.idleDays)}
+          </p>
+        </>
+      )}
+      <p className="section-sub">
+        {STR.moneyWorkSinceService(work.rentalDaysSinceService, work.serviceDueAfter)}
+      </p>
+      <ul className="line-list">
+        <li className="line">
+          <span className="line-name">{STR.moneyWorkEarned}</span>
+          <span className="line-code code">{formatRupees(work.earnedMinor)}</span>
+        </li>
+        <li className="line">
+          <span className="line-name">{STR.moneyWorkPerDay}</span>
+          <span className="line-code code">
+            {work.earnedPerDayMinor === null
+              ? STR.moneyWorkPerDayUnknown
+              : formatRupees(work.earnedPerDayMinor)}
+          </span>
+        </li>
+      </ul>
+      <p className="section-sub">{STR.moneyWorkLimit}</p>
+    </div>
+  )
+}
+
+/**
+ * "How is it?" — the standalone health door (W13, `no-health-door`).
+ *
+ * Availability honesty DEPENDS on health: the shelf offers a unit only
+ * when it is here and health='ok'. Until W13 the only thing that could
+ * move it was the crisis-day swap, which needs a substitute and a live
+ * job — so JAN's dropped FX9 needed SQL, and a lens dropped on the bench
+ * with no job behind it had no door at all.
+ *
+ * THREE ANSWERS, EACH A REAL SCAN VERB (0003, projected by project.ts's
+ * one HEALTH_FOR rule): broken → `quarantine`, needs a look →
+ * `send_to_service`, fine → `release`. No new axis, no new projection,
+ * and the log still explains why the mirror says what it says — the
+ * evidence rule, kept.
+ *
+ * Reveal-then-confirm, like the terminal door above it: the first tap
+ * picks an answer and SAYS WHAT IT MEANS for the shelf, the second
+ * writes. No hold, because this is an observation and not a
+ * destruction — a wrongly-quarantined camera is released in two taps.
+ */
+function HealthDoor({
+  health,
+  onMark,
+}: {
+  health: string
+  onMark: (call: HealthCall, note: string | null) => void
+}) {
+  const [picked, setPicked] = useState<HealthCall | null>(null)
+  const [note, setNote] = useState('')
+
+  const calls: { call: HealthCall; label: string }[] = [
+    { call: 'broken', label: STR.moneyHealthBroken },
+    { call: 'needs_a_look', label: STR.moneyHealthNeedsALook },
+    { call: 'ok', label: STR.moneyHealthOk },
+  ]
+
+  return (
+    <div className="health-door">
+      <h3 className="hisaab-sub">{STR.moneyHealthHeading}</h3>
+      <p className="section-sub">{STR.moneyHealthNow(STR.moneyHealthWord(health))}</p>
+      <div className="chip-row" role="group" aria-label={STR.moneyHealthHeading}>
+        {calls.map((c) => (
+          <button
+            key={c.call}
+            className={`filter-chip${picked === c.call ? ' active' : ''}`}
+            aria-pressed={picked === c.call}
+            onClick={() => setPicked(picked === c.call ? null : c.call)}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+      {picked ? (
+        <>
+          <p className="section-sub">{STR.moneyHealthWhat(picked)}</p>
+          <label className="field-label" htmlFor="health-note">
+            {STR.moneyHealthNoteLabel}
+          </label>
+          <input
+            id="health-note"
+            className="sheet-search"
+            value={note}
+            placeholder={STR.moneyHealthNotePlaceholder}
+            onChange={(e) => setNote(e.target.value)}
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <p className="section-sub">{STR.moneyHealthIsEvidence}</p>
+          <button
+            className="btn btn-primary btn-block"
+            onClick={() => {
+              onMark(picked, note.trim() || null)
+              setPicked(null)
+              setNote('')
+            }}
+          >
+            {STR.moneyHealthSave(picked)}
+          </button>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
+/**
  * The Sehat section of one unit's page (0021): the service line — the
  * usage meter said in words, with a NEEDS-A-LOOK notice once it passes the
  * product's threshold — the cycle line for flagged products, the Serviced
@@ -172,14 +313,19 @@ function AssetMoneySection({
 function AssetSehatSection({
   asset,
   service,
+  work,
   voiceNotes,
   onServiced,
+  onMarkHealth,
   onVoiceSave,
 }: {
   asset: AssetView
   service: ServiceFacts | null
+  work?: Utilisation | null
   voiceNotes: VoiceNoteRow[]
   onServiced: () => void
+  /** W13: set this unit's health with no swap behind it. */
+  onMarkHealth?: (call: HealthCall, note: string | null) => void
   onVoiceSave: (rec: AwaazRecording) => AwaazSaveResult
 }) {
   return (
@@ -214,6 +360,22 @@ function AssetSehatSection({
             <strong>{STR.sehatCycleOverStamp}</strong>
           </div>
         </div>
+      ) : null}
+
+      {/* How hard it works (W13, `no-utilization-read`): the four numbers
+          the AUG question wanted, each from something that already
+          exists — and the two limits named, because the phone's queue is
+          not the unit's life and there is no purchase date on this side
+          of the pipe. */}
+      {work ? <WorkLines work={work} /> : null}
+
+      {/* The health door (W13, `no-health-door`): the tech who drops a
+          lens on the bench says so HERE, with no swap and no job needed.
+          Above the Serviced door because "is it broken" is the question
+          asked first, and deliberately separate from it: a service is
+          not a release, and one tap must not be two decisions. */}
+      {onMarkHealth ? (
+        <HealthDoor health={asset.health} onMark={onMarkHealth} />
       ) : null}
 
       {/* The Serviced door — a write, kept with the other writes and away
@@ -448,11 +610,13 @@ export function Asset({
   money,
   promised,
   service,
+  work,
   voiceNotes,
   photoPairs,
   onProveIt,
   onRepairCost,
   onServiced,
+  onMarkHealth,
   onVoiceSave,
   onMarkTerminal,
   onFound,
@@ -469,6 +633,9 @@ export function Asset({
   promised: PromisedSoon | null
   /** The unit's wear facts (0021) — the service and cycle lines. */
   service: ServiceFacts | null
+  /** How hard this unit works (W13) — days out, the meter, earnings per
+   *  day and idle days, with the two honest limits said on screen. */
+  work?: Utilisation | null
   /** Spoken evidence over this unit, newest first — played inline. */
   voiceNotes: VoiceNoteRow[]
   photoPairs: PhotoPair[]
@@ -479,6 +646,8 @@ export function Asset({
   onRepairCost: () => void
   /** Open the Serviced sheet — note + optional cost in one flow (0021). */
   onServiced: () => void
+  /** Set this unit's health with no swap behind it (W13). */
+  onMarkHealth?: (call: HealthCall, note: string | null) => void
   /** Keep a hold-to-record awaaz note about this unit. */
   onVoiceSave: (rec: AwaazRecording) => AwaazSaveResult
   /** Declare the item lost/stolen/sold — behind the hold-gated disclosure. */
@@ -586,6 +755,8 @@ export function Asset({
         <AssetSehatSection
           asset={asset}
           service={service}
+          work={work}
+          onMarkHealth={onMarkHealth}
           voiceNotes={voiceNotes}
           onServiced={onServiced}
           onVoiceSave={onVoiceSave}

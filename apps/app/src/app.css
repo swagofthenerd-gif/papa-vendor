@@ -1702,3 +1702,78 @@ h2.stamp .h-ico { display: none; }
 
 .attention-card { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-2) 0 var(--sp-3); }
 .attention-card .line-note { color: var(--status-attention); }
+
+/* ==================== W13 — the money doors ==================== */
+/* The eight screens the simulated year asked for. Everything here is
+   furniture the existing grammar did not have a name for yet: a reason
+   list under a refused action, a settled ledger line, a month picker,
+   and the two read-only strips (what a client is worth, how hard a unit
+   works) which are `.line-list` rows and need nothing of their own. */
+
+/* Why an action is refused, listed under it in the margin voice. Not a
+   notice block: a disabled button with its reasons printed beneath is a
+   ledger annotation, and the desk reads it aloud to the client. */
+.line-why {
+  grid-column: 1 / -1;
+  list-style: none; margin: var(--sp-2) 0 0; padding: 0;
+  color: var(--muted); font-size: var(--fs-xs); font-weight: 600;
+}
+.line-why li { padding: 1px 0; }
+.notice .line-why { margin-top: 3px; color: inherit; }
+
+/* The money column stays the money column. `.line-code` spans two rows
+   with no column of its own, so a third full-width child — the
+   settlement's reason, or a row's actions — reflows auto-placement and
+   the amount lands on the LEFT of the words. Pin it wherever W13 adds a
+   third row to a ledger line. */
+.line:has(.line-why) > .line-code,
+.line:has(.row-actions) > .line-code,
+.khata-book .line-code,
+.work-lines .line-code { grid-column: 2; }
+
+/* A line the book has SETTLED — reversed, or a fee written off. Struck
+   through in the margin voice, with the settlement's own words beneath:
+   the pair reads as one story, and both rows are still in the book
+   because the client saw both happen. */
+.line-settled .line-name,
+.line-settled .line-code { color: var(--muted); text-decoration: line-through; }
+.line-settled .line-why { text-decoration: none; }
+
+/* Every book row is a door to the correction sheet, so every book row
+   takes a gloved thumb: the two-line rows already clear the floor, a
+   one-line row would not. */
+.khata-book .line-tap { min-height: var(--row-h-glove); }
+
+/* The month picker on Din ka hisaab: a back/forward pair around the
+   month's own name, in the mono voice the dates use. Disabled forward
+   on the current month — there is no account of a month that has not
+   happened. */
+.month-picker {
+  display: grid; grid-template-columns: var(--tap) 1fr var(--tap);
+  align-items: center; gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+.month-picker-label {
+  text-align: center; font-size: var(--fs-md); font-weight: 800;
+}
+/* ============================================================== */
+
+/* The do-not-rent stamp under the khata's figure (W13): the stamp, then
+   the sentence beside it in the margin voice. */
+.khata-refused {
+  display: flex; align-items: center; gap: var(--sp-3);
+  flex-wrap: wrap; margin: 0 0 var(--sp-3);
+}
+/* On a list row the stamp sits after the name, not under it. */
+.line-name > .stamp { margin-left: var(--sp-2); font-size: var(--fs-xs); }
+
+/* The health door on a unit's page (W13): the question, three chips, and
+   the consequence spelled out under the one that is picked. */
+.health-door { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.health-door .section-sub { margin: 0; }
+
+/* How hard a unit works (W13): three margin lines, two money rows, and
+   the limit under them — a report, not a dashboard. */
+.work-lines { display: flex; flex-direction: column; gap: var(--gap-hair); margin-bottom: var(--sp-3); }
+.work-lines .section-sub { margin: 0; }
+.work-lines .line-list { margin-top: var(--sp-2); }

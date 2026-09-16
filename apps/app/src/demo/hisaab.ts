@@ -1,4 +1,11 @@
-import { formatRupees, moneyLabel, type MoneyTotal, type SqlDriver } from '@papa/core'
+import {
+  formatRupees,
+  moneyLabel,
+  monthBounds,
+  SETTLED_ENTRY_IDS_SQL,
+  type MoneyTotal,
+  type SqlDriver,
+} from '@papa/core'
 import {
   assetFacts,
   decodeScanOps,
@@ -7,7 +14,9 @@ import {
   type DecodedScanOp,
   type OutDueRow,
 } from './read-model.ts'
-import { kharchaBetween, type KharchaSlice } from './kharcha.ts'
+import { kharchaBetween, monthProfit, type KharchaSlice, type MonthProfit } from './kharcha.ts'
+import { customersByBalance } from './khata.ts'
+import { MONTH_KEY_RE } from '../nav.ts'
 
 /**
  * Din ka hisaab — the day's account.
@@ -306,4 +315,140 @@ export function dayAccountText(account: DayAccount): string {
   }
 
   return lines.join('\n')
+}
+
+// ------------------------- W13: the month behind the day (`no-month-history-screen`)
+
+export interface MonthCustomer {
+  id: string
+  name: string
+  /** Charge-side money written on this khata inside the month — what the
+   *  month billed this client, minus anything settled. */
+  billedMinor: number
+  /** Money received from them inside the month. */
+  paidMinor: number
+  /** Their balance NOW — the statement's closing figure is the month's,
+   *  this is the reason to call them. */
+  balanceMinor: number
+}
+
+export interface MonthAccount {
+  /** 'Sep 2026' — monthBounds' own label, so the picker and the figures
+   *  can never name different months. */
+  monthLabel: string
+  /** 'YYYY-MM', the deep link's own shape. */
+  month: string
+  startMs: number
+  endMs: number
+  /** True when the month containing `nowMs` IS this month — the only
+   *  month that has a 'today' to show under it. */
+  isThisMonth: boolean
+  /** Distinct units that went out, and that came back, inside the month.
+   *  Deduped per (asset, direction) like the day's account: a rescan is
+   *  the same physical fact, not a second departure. */
+  wentOut: number
+  cameBack: number
+  /** What the house spent inside the month — the same expense book. */
+  kharcha: KharchaSlice
+  /** Earned, spent, and the bottom line (kharcha.ts monthProfit). */
+  profit: MonthProfit
+  /** Everyone whose khata moved this month, biggest biller first — the
+   *  statement links, which is what collections week actually needs. */
+  customers: MonthCustomer[]
+}
+
+/** 'YYYY-MM' for the month containing `ms`, local calendar. */
+export function monthKey(ms: number): string {
+  const d = new Date(ms)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+/** The first instant of 'YYYY-MM', or null when it is not a month. Local,
+ *  because monthBounds is local: the vendor's month, not UTC's. The shape
+ *  is the router's own (nav.ts MONTH_KEY_RE), so the link and the read
+ *  cannot disagree about what a month is. */
+export function msOfMonth(key: string): number | null {
+  const m = MONTH_KEY_RE.exec(key)
+  if (!m) return null
+  return new Date(Number(m[1]), Number(m[2]) - 1, 1, 12).getTime()
+}
+
+/** The month before / after the one containing `ms` — the picker's two
+ *  taps, DST-safe because the Date constructor rolls the month. */
+export function monthStep(ms: number, by: number): number {
+  const d = new Date(ms)
+  return new Date(d.getFullYear(), d.getMonth() + by, 1, 12).getTime()
+}
+
+/**
+ * A whole month's account — the read `moneyStrip(nowMs)` and
+ * `monthProfit(nowMs)` could always answer and no caller could ask,
+ * because every caller hardcoded `Date.now()` (year finding
+ * `no-month-history-screen`: "the API is already honest").
+ *
+ * This is a picker plus a title, not new maths: the window is
+ * `monthBounds`, the money is `monthProfit`, the spending is
+ * `kharchaBetween`, and the movement counts are the day account's own
+ * `classifyDayScans` over a month-wide window. `todayMs` is the real
+ * clock — the only thing that decides whether the chosen month is the
+ * one with a 'today' under it.
+ */
+export function monthAccount(db: SqlDriver, monthMs: number, todayMs: number): MonthAccount {
+  const month = monthBounds(monthMs)
+  const facts = classifyDayScans(decodeScanOps(db), month.startMs, month.endMs)
+
+  let wentOut = 0
+  let cameBack = 0
+  for (const job of facts.jobs.values()) {
+    wentOut += job.out.size
+    cameBack += job.back.size
+  }
+
+  const rows = db.all<{
+    id: string
+    name: string
+    billed: number | null
+    paid: number | null
+  }>(
+    // Live lines only on the billed side — a reversed or waived charge was
+    // never billed (SETTLED_ENTRY_IDS_SQL, the one home).
+    `select c.id, c.name,
+            (select sum(e.amount_minor) from customer_ledger_entries e
+              where e.customer_id = c.id
+                and e.kind in ('charge', 'late_fee', 'damage_charge')
+                and e.created_at >= ? and e.created_at < ?
+                and e.id not in (${SETTLED_ENTRY_IDS_SQL})) as billed,
+            (select sum(-e.amount_minor) from customer_ledger_entries e
+              where e.customer_id = c.id and e.kind = 'payment'
+                and e.created_at >= ? and e.created_at < ?) as paid
+       from customers c
+      where exists (
+        select 1 from customer_ledger_entries e
+         where e.customer_id = c.id
+           and e.created_at >= ? and e.created_at < ?)
+      order by c.name`,
+    [month.startMs, month.endMs, month.startMs, month.endMs, month.startMs, month.endMs],
+  )
+  const balances = new Map(customersByBalance(db).map((c) => [c.id, c.balanceMinor]))
+
+  return {
+    monthLabel: month.label,
+    month: monthKey(monthMs),
+    startMs: month.startMs,
+    endMs: month.endMs,
+    isThisMonth: monthKey(monthMs) === monthKey(todayMs),
+    wentOut,
+    cameBack,
+    kharcha: kharchaBetween(db, month.startMs, month.endMs),
+    profit: monthProfit(db, monthMs),
+    customers: rows
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        billedMinor: Number(r.billed ?? 0),
+        paidMinor: Number(r.paid ?? 0),
+        balanceMinor: balances.get(r.id) ?? 0,
+      }))
+      .sort((a, b) => b.billedMinor - a.billedMinor || a.name.localeCompare(b.name)),
+  }
 }

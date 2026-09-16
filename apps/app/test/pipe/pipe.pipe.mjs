@@ -18,6 +18,11 @@
  * sub-hire borrowed against a pencil and converted lands its bill on the
  * job's margin.
  *
+ * W13 adds the money doors' own write: a deposit TAKEN OFFLINE lands as a
+ * held `deposits` row with its ledger line, the phone adopts the server's
+ * name for it, and an apply queued behind the hold moves both the pot and
+ * the balance by the same rupee on both sides.
+ *
  * Deliberately NOT part of `npm test`: it needs containers. Run it with
  * `npm run test:pipe` (db/pipe-test.sh), or bring the pipe up yourself and
  * point PAPA_PIPE_URL / PAPA_PIPE_PG at it.
@@ -34,7 +39,9 @@ import {
 import { DEMO_SCHEMA } from '../../src/demo/read-model.ts'
 import { NETWORK_SCHEMA } from '../../src/demo/network.ts'
 import { createBooking, confirmBooking, convertBookingToJob, listBookings } from '../../src/demo/bookings.ts'
-import { createCustomer, customersByBalance, isoDate, recordEntry } from '../../src/demo/khata.ts'
+import { createCustomer, customersByBalance, customerView, isoDate, recordEntry } from '../../src/demo/khata.ts'
+// --- W13 the money doors: the deposit state machine (0017 D4).
+import { applyDeposit, depositsFor, holdDeposit } from '../../src/demo/deposits.ts'
 import { jobMargin, recordExpense, reverseExpense } from '../../src/demo/kharcha.ts'
 import { closeJob, createJob } from '../../src/demo/read-model.ts'
 import { recordSubHireIn, upsertPartner } from '../../src/demo/network.ts'
@@ -518,4 +525,93 @@ test('(10) a sub-hire IN with a cost tagged to a pencil → confirm → convert 
     'the server\'s job_margin reads the bill through jobs.booking_id (0028)')
   assert.equal(jobMargin(B.db, serverJob).expenseMinor, 1_500_000, 'and the phone\'s, under the server\'s name')
   assert.equal(asMember(IMRAN, `select booking_sub_hire_cost('${serverBooking}')`), '1500000')
+})
+
+test('(11) a deposit taken offline lands as a HELD deposit on the server, and the apply follows it', async () => {
+  // A cheque taken at the counter with no network: 0017 D4's own door.
+  // The ledger line rides inside hold_deposit on the server, so the phone
+  // queues ONE op — a second would be a second row.
+  const local = holdDeposit(A.db, {
+    orgId: ORG, customerId: CUSTOMER, amountMinor: 10_000_00,
+    jobId: JOB, note: 'Cheque held — HBL 4471', heldAt: now,
+  })
+  assert.ok(local && isClientMinted(local), 'the phone minted a dep-… id')
+  assert.equal(A.outbox.pendingCount(), 1, 'one op: the deposit line queues none of its own')
+  assert.equal(A.db.get(`select op from outbox where state = 'pending'`).op, 'hold_deposit')
+  // The pot rose on the phone before anything left it; the balance did not.
+  const beforeSync = customerView(A.db, CUSTOMER)
+  assert.equal(beforeSync.depositHeldMinor, 10_000_00)
+
+  const held = await A.sync()
+  assert.equal(held.error, null, held.error)
+  assert.equal(A.outbox.pendingCount(), 0)
+  assert.equal(A.outbox.failures().length, 0, JSON.stringify(A.outbox.failures()))
+
+  // The server has a real deposits row, held, on the right customer and job.
+  const map = new IdMap(A.db)
+  const serverDeposit = map.serverIdFor(local)
+  assert.ok(serverDeposit && !isClientMinted(serverDeposit), 'the server named it')
+  assert.equal(
+    sql(`select state || '|' || amount_minor || '|' || applied_minor || '|' || customer_id::text || '|' || job_id::text
+           from deposits where id = '${serverDeposit}'`),
+    `held|1000000|0|${CUSTOMER}|${JOB}`,
+  )
+  // …and its ledger line, written INSIDE the RPC, stamped with the
+  // session's user and pointing back at the deposit (0017's own link).
+  assert.equal(
+    sql(`select entry_kind || '|' || amount_minor || '|' || created_by::text
+           from customer_ledger_entries where deposit_id = '${serverDeposit}'`),
+    `deposit_hold|1000000|${BILAL}`,
+  )
+  // The phone adopted the server's name for the deposit row and for the
+  // ledger line that points at it (APP_REKEY_COLUMNS).
+  assert.equal(depositsFor(A.db, CUSTOMER)[0].id, serverDeposit)
+  assert.equal(
+    A.db.get(`select count(*) as n from customer_ledger_entries where deposit_id = ?`, [serverDeposit]).n,
+    1,
+    'the local line points at the server\'s deposit too',
+  )
+  // And the two books agree on the pot to the rupee.
+  assert.equal(
+    asMember(BILAL, `select deposit_held_minor from customer_balances where customer_id = '${CUSTOMER}'`),
+    String(customerView(A.db, CUSTOMER).depositHeldMinor),
+    'customer_balances.deposit_held_minor equals the phone\'s projection',
+  )
+
+  // Now spend Rs 4,000 of it against what the client owes. Queued behind
+  // the hold under the SERVER's name — the chain survived the rename —
+  // and the one line does both halves: the pot drops and the debt drops.
+  const owedBefore = Number(
+    asMember(BILAL, `select balance_minor from customer_balances where customer_id = '${CUSTOMER}'`),
+  )
+  const applied = applyDeposit(A.db, {
+    orgId: ORG, depositId: serverDeposit, amountMinor: 4_000_00,
+    note: 'Against the TVC damage', whenMs: now + 1,
+  })
+  assert.equal(applied.ok, true, JSON.stringify(applied))
+  assert.equal(applied.remainingMinor, 6_000_00)
+  assert.equal(A.outbox.pendingCount(), 1)
+  assert.equal(A.db.get(`select op from outbox where state = 'pending'`).op, 'apply_deposit')
+
+  const spent = await A.sync()
+  assert.equal(spent.error, null, spent.error)
+  assert.equal(A.outbox.failures().length, 0, JSON.stringify(A.outbox.failures()))
+  assert.equal(
+    sql(`select state || '|' || applied_minor from deposits where id = '${serverDeposit}'`),
+    'partially_applied|400000',
+  )
+  assert.equal(
+    count(`select count(*) from customer_ledger_entries
+            where deposit_id = '${serverDeposit}' and entry_kind = 'deposit_apply'`),
+    1,
+    'exactly one apply line on the server — replay_op ran the RPC once',
+  )
+  assert.equal(
+    asMember(BILAL, `select balance_minor || '|' || deposit_held_minor from customer_balances where customer_id = '${CUSTOMER}'`),
+    `${owedBefore - 400_000}|600000`,
+    'held money paid a debt: both halves moved, same rupee',
+  )
+  const phoneNow = customerView(A.db, CUSTOMER)
+  assert.equal(phoneNow.depositHeldMinor, 6_000_00, 'and the phone says the same')
+  assert.equal(depositsFor(A.db, CUSTOMER)[0].state, 'partially_applied')
 })

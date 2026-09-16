@@ -1,8 +1,9 @@
-import { moneyLabel } from '@papa/core'
+import { formatRupees, moneyLabel } from '@papa/core'
 import { SectionHead } from '../components/Shell.tsx'
 import { go } from '../nav.ts'
 import { STR } from '../strings.ts'
 import type { Sehat } from './read-model.ts'
+import { UTILISATION_WINDOW_DAYS as WORK_WINDOW_DAYS, type WorkerRow } from './utilisation.ts'
 
 /**
  * Sehat — the fleet's health, as the smallest honest door (0021; Phase D
@@ -16,11 +17,21 @@ import type { Sehat } from './read-model.ts'
  * the fleet is clean: a health surface with no findings is noise, and the
  * day it reappears IS the signal.
  */
-export function SehatSection({ sehat }: { sehat: Sehat }) {
+export function SehatSection({
+  sehat,
+  workers = [],
+}: {
+  sehat: Sehat
+  /** The fleet ranked by how hard it works (W13, `no-utilization-read`):
+   *  the AUG question — "which camera earned best" — which used to mean
+   *  opening asset pages one at a time. */
+  workers?: WorkerRow[]
+}) {
   const empty =
     sehat.serviceDue.length === 0 &&
     sehat.cyclesOver.length === 0 &&
-    sehat.deadStock.length === 0
+    sehat.deadStock.length === 0 &&
+    workers.length === 0
   if (empty) return null
 
   const deadValue = moneyLabel(sehat.deadStockValue)
@@ -64,6 +75,25 @@ export function SehatSection({ sehat }: { sehat: Sehat }) {
             code: r.code,
             name: r.name,
             note: STR.sehatDeadRow(r.idleDays),
+          }))}
+        />
+      ) : null}
+
+      {/* The hardest workers (W13, `no-utilization-read`): the fleet
+          ranked by days out inside the window, with what each one earned.
+          A group beside the sick ones because "which camera earned best"
+          and "which camera needs a service" are the same glance — and
+          because the answer used to mean opening pages one at a time. */}
+      {workers.length > 0 ? (
+        <SehatGroup
+          heading={`${STR.moneyWorkersHeading} · ${STR.moneyWorkersSub(WORK_WINDOW_DAYS)}`}
+          rows={workers.map((r) => ({
+            id: r.id,
+            code: r.code,
+            name: r.name,
+            note: r.daysOut === 0
+              ? STR.moneyWorkersRowNotOut(WORK_WINDOW_DAYS, formatRupees(r.earnedMinor))
+              : STR.moneyWorkersRow(r.daysOut, formatRupees(r.earnedMinor)),
           }))}
         />
       ) : null}

@@ -16,7 +16,9 @@ export type View =
   | { name: 'session'; sessionId: string }       // the reconciliation card
   | { name: 'asset'; assetId: string }
   | { name: 'gear'; query?: string }             // search-first inventory
-  | { name: 'hisaab' }                           // din ka hisaab: the day's account
+  // din ka hisaab: the day's account — and, with `month`, a past month's
+  // (W13, `no-month-history-screen`). 'YYYY-MM', absent = this month.
+  | { name: 'hisaab'; month?: string }
   | { name: 'customer'; customerId: string }     // the khata page
   | { name: 'owed' }                             // customers by balance, owed first
   | { name: 'closed' }                           // finished jobs, off the boards
@@ -37,6 +39,14 @@ export type View =
  * thing?" must never be answered by quietly marking the thing returned.
  */
 export type ScanMode = 'out' | 'in' | 'lookup'
+
+/**
+ * 'YYYY-MM' — the hisaab link's month, and the one place its shape is
+ * written. The router refuses a month that is not one, and hisaab.ts's
+ * `msOfMonth` reads the same pattern's two groups, so a link the router
+ * accepts is always a month the screen can open (docs/principles.md #4).
+ */
+export const MONTH_KEY_RE = /^(\d{4})-(0[1-9]|1[0-2])$/
 
 export function parseHash(hash: string): View {
   const raw = hash.replace(/^#\/?/, '')
@@ -71,8 +81,15 @@ export function parseHash(hash: string): View {
       const q = params.get('q')
       return q ? { name: 'gear', query: q } : { name: 'gear' }
     }
-    case 'hisaab':
-      return { name: 'hisaab' }
+    case 'hisaab': {
+      // Same reasoning as gear's `q`: the key is omitted rather than set
+      // to undefined, so a parsed view compares equal to the literal
+      // that produced it. A malformed month is no month, not a crash.
+      const m = params.get('m')
+      return m && MONTH_KEY_RE.test(m)
+        ? { name: 'hisaab', month: m }
+        : { name: 'hisaab' }
+    }
     case 'customer':
       return parts[1] ? { name: 'customer', customerId: parts[1] } : { name: 'owed' }
     case 'owed':
@@ -123,7 +140,7 @@ export function viewToHash(view: View): string {
     case 'gear':
       return view.query ? `#/gear?q=${encodeURIComponent(view.query)}` : '#/gear'
     case 'hisaab':
-      return '#/hisaab'
+      return view.month ? `#/hisaab?m=${view.month}` : '#/hisaab'
     case 'customer':
       return `#/customer/${view.customerId}`
     case 'owed':

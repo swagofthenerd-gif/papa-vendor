@@ -596,12 +596,38 @@ function seedMoneyBook(db: SqlDriver, nowMs: number): void {
     ['led-imran-2', 'cust-imran', 'deposit_hold', 50_000, 'job-imran-drama', null, 'Cheque held', 6],
     ['led-imran-3', 'cust-imran', 'payment', -40_000, 'job-imran-drama', null, 'Bank transfer', 5],
   ]
+  // Imran's held cheque is a real `deposits` row (0017 D4), not a lone
+  // ledger line: the khata's deposit door reads a deposit's STATE — how
+  // much is left, whether it has been applied — and the demo has to show
+  // one standing so Apply and Refund have something honest to act on. The
+  // drama job is closed and its gear is home, so the refund gate is open
+  // on this one; Sana's later shaadi deposit is the gated case the year
+  // simulation walks.
+  const deposits: [string, string, string, number, string | null, string | null, number][] = [
+    ['dep-imran-1', 'led-imran-2', 'cust-imran', 50_000, 'job-imran-drama', 'Cheque held', 6],
+  ]
+  const depositOfEntry = new Map(deposits.map(([depId, entryId]) => [entryId, depId]))
+  for (const [id, entryId, cust, rupees, job, note, daysAgo] of deposits) {
+    void entryId
+    db.exec(
+      `insert into deposits
+         (id, org_id, customer_id, job_id, amount_minor, applied_minor,
+          refunded_minor, state, note, held_at, refunded_at)
+       values (?, ?, ?, ?, ?, 0, null, 'held', ?, ?, null)`,
+      [id, ORG, cust, job, rupees * 100, note, msDaysAgo(daysAgo, nowMs)],
+    )
+  }
+
   for (const [id, cust, kind, rupees, job, asset, note, daysAgo] of entries) {
     db.exec(
       `insert into customer_ledger_entries
-         (id, org_id, customer_id, kind, amount_minor, job_id, asset_id, note, created_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, ORG, cust, kind, rupees * 100, job, asset, note, msDaysAgo(daysAgo, nowMs)],
+         (id, org_id, customer_id, kind, amount_minor, job_id, asset_id, note,
+          deposit_id, created_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id, ORG, cust, kind, rupees * 100, job, asset, note,
+        depositOfEntry.get(id) ?? null, msDaysAgo(daysAgo, nowMs),
+      ],
     )
   }
 

@@ -265,6 +265,9 @@ function LateFeeFromBoard({
       onSave={(amountMinor, note) => {
         if (store.recordLateFee(jobId, amountMinor, note)) onDone()
       }}
+      onWaive={(amountMinor, reason) => {
+        if (store.waiveLateFee(jobId, amountMinor, reason).ok) onDone()
+      }}
       onClose={onDone}
     />
   )

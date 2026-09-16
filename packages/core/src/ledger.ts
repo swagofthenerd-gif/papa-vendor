@@ -105,6 +105,26 @@ export const CHARGE_KINDS: ReadonlySet<LedgerEntryKind> = new Set([
 ])
 
 /**
+ * The SQL form of "this line was settled by a later one" — the ids a
+ * money-EARNED sum must leave out, stated once for every query that asks
+ * (per-asset earnings, the month's profit, a job's margin, the Today
+ * strip). Two links, both the server's own columns, both read by 0018's
+ * `asset_earnings` view: `reversal_of` (a reversal voided it exactly) and
+ * `corrects_entry_id` (a later line superseded it — a WAIVED late fee's
+ * write-off names the fee here, because the server allows `p_reversal_of`
+ * on kind 'reversal' alone).
+ *
+ * A subquery, not a predicate, so a caller writes
+ * `id not in (${SETTLED_ENTRY_IDS_SQL})` and cannot get the polarity
+ * wrong. Both rows stay in the book and both stay in the BALANCE — they
+ * cancel there by arithmetic; this is only about what the house EARNED.
+ */
+export const SETTLED_ENTRY_IDS_SQL =
+  `select reversal_of from customer_ledger_entries where reversal_of is not null
+   union all
+   select corrects_entry_id from customer_ledger_entries where corrects_entry_id is not null`
+
+/**
  * The projection. Balance sums every non-deposit line plus `deposit_apply`
  * (held money paying a debt); the pot sums the three deposit kinds — hold
  * positive, apply and refund negative, so the pot drains as it is used.

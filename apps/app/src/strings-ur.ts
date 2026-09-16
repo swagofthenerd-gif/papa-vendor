@@ -44,10 +44,24 @@ const KIND_UR: Record<string, string> = {
   write_off: 'write off',
 }
 
-/**
- * The expense book's row vocabulary (0019) — 'marammat' for a repair,
- * loanwords where the trade uses them (sub-hire, transport).
- */
+/** Sehat ke teen jawab, aur har ek ka shelf par matlab. */
+const HEALTH_CALL_UR: Record<string, string> = {
+  broken: 'Kharab',
+  needs_a_look: 'Dekhna parega',
+  ok: 'Theek',
+}
+const HEALTH_WHAT_UR: Record<string, string> = {
+  broken: 'Shelf se bahar. Jab tak koi theek na kahe, kisi ko offer nahi hoga.',
+  needs_a_look: 'Workshop ki line mein, aur intezar ke doran shelf se bahar.',
+  ok: 'Dobara service mein aur offer hone laga.',
+}
+/** assets.health, desk ke lafzon mein. */
+const HEALTH_WORD_UR: Record<string, string> = {
+  ok: 'theek',
+  servicing: 'workshop mein',
+  quarantined: 'kharab',
+}
+
 /** Overdue ladder ke rung — us din ka kaam. */
 const ESCALATION_UR: Record<string, string> = {
   whatsapp_nudge: 'pehla nudge',
@@ -56,6 +70,10 @@ const ESCALATION_UR: Record<string, string> = {
   manager_escalation: 'manager ke paas',
 }
 
+/**
+ * The expense book's row vocabulary (0019) — 'marammat' for a repair,
+ * loanwords where the trade uses them (sub-hire, transport).
+ */
 const KHARCHA_UR: Record<string, string> = {
   repair: 'marammat',
   sub_hire: 'sub-hire',
@@ -99,6 +117,25 @@ const OP_UR: Record<string, string> = {
   record_ledger_entry: 'khata ki line',
   record_expense: 'kharcha ki entry',
   reverse_expense: 'kharcha entry wapas lena',
+  // W13 — paise ke darwaze.
+  hold_deposit: 'zamanat li',
+  apply_deposit: 'zamanat bill par lagai',
+  refund_deposit: 'zamanat wapas ki',
+  set_customer_blacklisted: 'is ko kiraye par na dene ka faisla',
+}
+
+/** Zamanat ki teen halaten (0017 D4) — stamp par ek lafz. */
+const DEPOSIT_STATE_UR: Record<string, string> = {
+  held: 'rakhi hui',
+  partially_applied: 'thori lag gayi',
+  refunded: 'wapas ho gayi',
+}
+
+/** Refund kyun mana hua — har wajah ka ek jumla (deposits.ts refundBlockers). */
+const REFUND_BLOCKER_UR: Record<string, (n: number) => string> = {
+  gear_still_out: (n) => `is job ki ${n} ${cheezein(n)} abhi bahar hai`,
+  no_return_recorded: (n) => `${n} ${cheezein(n)} gayi thi, wapas koi scan nahi hua`,
+  damage_unresolved: (n) => `is job par flag hui ${n} ${cheezein(n)} abhi theek nahi`,
 }
 
 export const STR_UR: StrTable = {
@@ -577,6 +614,164 @@ export const STR_UR: StrTable = {
   customerReverseConfirm: (rupees: string): string =>
     `Pakka karein — ${rupees} wapas likhein`,
   customerReversedNote: 'Charge hua, phir cheez wapas aa gayi — mansookh',
+
+  // ===================================================== W13 — paise ke darwaze
+  // Woh aath screenein jo saal maangta raha: zamanat, darusti aur write off,
+  // maaf ki hui late fee, 'is ko na dena', sehat ka switch, mahine ka
+  // picker, client ki kul qeemat, unit kitna kaam karta hai.
+
+  // --- 1. Zamanat (`no-deposit-door`) — rakhna / lagana / wapas, 0017 D4.
+  moneyDepositsHeading: 'Zamanat',
+  moneyDepositsNone: 'Is client ki koi zamanat nahi rakhi.',
+  moneyDepositsHeldSub: (rupees: string): string => `${rupees} daraz mein`,
+  moneyTakeDeposit: 'Zamanat lein',
+  moneyDepositAmount: 'Raqam (Rs)',
+  moneyDepositHowHeld: 'Kis tarah rakhi hai',
+  moneyDepositCash: 'Cash',
+  moneyDepositCheque: 'Cheque',
+  moneyDepositNoteOptional: 'Note — cheque number, kis ne di',
+  moneyDepositAgainstJob: 'Kis job ke against',
+  moneyDepositNoJob: 'Koi job nahi',
+  moneyDepositSave: 'Zamanat likh dein',
+  moneyDepositStamp: (state: string): string => DEPOSIT_STATE_UR[state] ?? state,
+  moneyDepositRemaining: (rupees: string): string => `${rupees} abhi rakhi hui`,
+  moneyDepositApplied: (rupees: string): string => `${rupees} billon par lag gaye`,
+  moneyDepositRefunded: (rupees: string): string => `${rupees} wapas kar diye`,
+  moneyDepositApply: 'Bill par lagayein',
+  moneyDepositApplyTitle: 'Zamanat lagayein',
+  moneyDepositApplyPick: 'Kis par lagani hai',
+  moneyDepositApplyBalance: (rupees: string): string => `Poora hisaab — ${rupees}`,
+  moneyDepositApplyCharge: (kind: string, rupees: string): string => `${kind} — ${rupees}`,
+  moneyDepositApplySave: 'Laga dein',
+  moneyDepositApplyTooMuch: (rupees: string): string =>
+    `Sirf ${rupees} rakhi hui hai.`,
+  moneyDepositRefund: 'Wapas karein',
+  moneyDepositRefundTitle: 'Zamanat wapas karein',
+  moneyDepositRefundHold: (rupees: string): string => `${rupees} wapas dene ke liye dabaye rakhein`,
+  moneyDepositRefundBlocked: 'Abhi nahi — yeh job clear nahi hai',
+  moneyDepositBlocker: (reason: string, n: number): string =>
+    REFUND_BLOCKER_UR[reason]?.(n) ?? reason,
+  moneyDepositServerChecksAgain:
+    'Jab yeh jati hai to server job dobara dekhta hai. Jo refund woh mana kare woh ek card ban kar aata hai, paisa gum nahi hota.',
+  // --- 2. Darusti aur write off (`no-adjustment-door`) — 0018 D6.
+  moneyLineDoorHint: 'Line theek karne ya write off karne ke liye us par dabayein',
+  moneyLineTitle: 'Yeh line',
+  moneyCorrectThis: 'Yeh theek karein',
+  moneyWriteItOff: 'Write off karein',
+  moneyCorrectTitle: 'Yeh line theek karein',
+  moneyWriteOffTitle: 'Is ko write off karein',
+  moneyCorrectWhat: 'Ghalti thi — line khate se nikal jati hai aur client ko dono rows dikhti hain.',
+  moneyWriteOffWhat: 'Ghalti nahi — woh paisa jo house ne na maangne ka faisla kiya.',
+  moneyReasonLabel: 'Wajah (line ke saath rehti hai)',
+  moneyReasonPlaceholder: 'jaise: dock par do dafa lag gayi',
+  moneyCorrectHold: (rupees: string): string => `${rupees} wapas likhne ke liye dabaye rakhein`,
+  moneyWriteOffHold: (rupees: string): string => `${rupees} maaf karne ke liye dabaye rakhein`,
+  moneySettledLine: (word: string, date: string, why: string | null): string =>
+    why ? `${date} ko ${word} — ${why}` : `${date} ko ${word}`,
+  moneyDuplicateNotice: (kind: string, rupees: string, seconds: number): string =>
+    `${rupees} ki do ${kind} lines, ${seconds} second ke faasle par. Do dafa hua tha?`,
+  moneyDuplicateKeep: 'Dono asli hain',
+  moneyWriteOffBalance: 'Jo baqi hai write off karein',
+  moneyWriteOffBalanceTitle: 'Baqaya write off karein',
+  moneyWriteOffBalanceWhat:
+    'Poora baqaya chhor dena — woh client jo bhaag gaya. Yeh kisi ek charge ka naam nahi leta, kyunke chalti hui khate par wusooli kisi ek line se nahi juri hoti.',
+  moneyWriteOffBalanceHold: (rupees: string): string => `${rupees} chhorne ke liye dabaye rakhein`,
+  moneyWriteOffBalanceReasonPlaceholder: 'jaise: bhaag gaya — FIR ho gayi',
+
+  // --- 3. Maaf ki hui late fee (`waived-fee-invisible`).
+  moneyWaiveIt: 'Maaf kar dein',
+  moneyWaiveWhat:
+    'Fee khate par aa kar foran utar jati hai. Kuch baqi nahi rehta, aur agle quarter bhi khata batata hai ke riayat di gayi thi.',
+  moneyWaiveHold: (rupees: string): string => `${rupees} maaf karne ke liye dabaye rakhein`,
+  moneyWaiveReasonPlaceholder: 'jaise: purana client, pehli dafa late',
+  moneyFeeWaived: (rupees: string, date: string, why: string | null): string =>
+    why
+      ? `${rupees} late fee — ${date} ko maaf ki — ${why}`
+      : `${rupees} late fee — ${date} ko maaf ki`,
+  // --- 4. Is client ko kiraye par na dena (`no-blacklist`) — 0029.
+  moneyBlacklistStamp: 'kiraye par nahi',
+  moneyBlacklistHeading: 'Is client ko dena hai ya nahi',
+  moneyBlacklistOn: 'Is client ko kiraye par na dein',
+  moneyBlacklistOff: 'Is client ko dobara ijazat dein',
+  moneyBlacklistLine: (date: string, why: string | null): string =>
+    why ? `${date} se mana — ${why}` : `${date} se mana`,
+  moneyBlacklistOpen: 'Yeh client aam tarah booking aur confirm kar sakta hai.',
+  moneyBlacklistWhat:
+    'Is client ki booking confirm nahi ho sakti. Server bhi naam le kar mana karta hai, is liye koi phone is ke around gear promise nahi kar sakta.',
+  moneyBlacklistHold: 'Is client ko mana karne ke liye dabaye rakhein',
+  moneyBlacklistLiftHold: 'Dobara ijazat dene ke liye dabaye rakhein',
+  moneyBlacklistReasonPlaceholder: 'jaise: Rs 2.6M ka saman wapas nahi aaya',
+  moneyBlacklistOnConfirm: 'Yeh client do-not-rent list par hai — confirm mana ho jayega.',
+  // --- 5. Sehat ka darwaza (`no-health-door`) — 0003 ke verb, naya axis nahi.
+  moneyHealthHeading: 'Yeh kaisa hai?',
+  moneyHealthNow: (word: string): string => `Abhi: ${word}`,
+  moneyHealthBroken: 'Yeh kharab hai',
+  moneyHealthNeedsALook: 'Dekhna parega',
+  moneyHealthOk: 'Yeh theek hai',
+  moneyHealthWhat: (call: string): string => HEALTH_WHAT_UR[call] ?? call,
+  moneyHealthNoteLabel: 'Kya hua (optional)',
+  moneyHealthNotePlaceholder: 'jaise: bench par gir gaya, mount dheela hai',
+  moneyHealthSave: (call: string): string => `${HEALTH_CALL_UR[call] ?? call} — likh dein`,
+  moneyHealthWord: (health: string): string => HEALTH_WORD_UR[health] ?? health,
+  moneyHealthIsEvidence:
+    'Yeh log mein scan event ban kar jata hai, baqi sab ki tarah — shelf aur calendar log ko mante hain, kisi switch ko nahi.',
+  // --- 6. Din ke peeche ka mahina (`no-month-history-screen`).
+  moneyMonthPrev: 'Pichla mahina',
+  moneyMonthNext: 'Agla mahina',
+  moneyMonthThis: 'yeh mahina, ab tak',
+  moneyMonthNothingMoved: 'Is mahine kuch bahar nahi gaya aur wapas nahi aaya.',
+  moneyMonthStatements: 'Statement',
+  moneyMonthStatementsSub: 'Is mahine ka statement copy karne ke liye naam dabayein',
+  moneyMonthNobody: 'Is mahine koi khata nahi chala.',
+  moneyMonthBilled: (rupees: string, paid: string): string =>
+    `Bill ${rupees} · wusooli ${paid}`,
+  moneyMonthCopied: 'Copy ho gaya — WhatsApp mein paste karein',
+  moneyMonthKharchaNone: 'Is mahine kuch kharch nahi hua.',
+  moneyMonthKharchaSpent: (rupees: string): string => `Is mahine ${rupees} kharch hue`,
+  // --- 7. Yeh client kitna ka raha (`no-lifetime-value-view`).
+  moneyWorthHeading: 'Yeh client kitna ka raha',
+  moneyWorthCharged: 'Kul bill',
+  moneyWorthPaid: 'Wusooli',
+  moneyWorthWrittenOff: 'Write off',
+  moneyWorthWaived: 'Maaf kiye fees',
+  moneyWorthJobs: 'Jobs',
+  moneyWorthAverage: 'Ausat job',
+  moneyWorthSpan: (first: string, last: string): string => `${first} → ${last}`,
+  moneyWorthFirstOnly: (first: string): string => `${first} se`,
+  moneyWorthNothing: 'Khate par abhi kuch nahi — dikhane ko tareekh nahi.',
+  moneyWorthLimit:
+    'Is phone ke khate se. Jo khata app se pehle shuru hua, ya jo sync nahi hua, woh is se lamba hai.',
+  moneyWorthNoAverage: 'abhi koi priced job nahi',
+  // --- 8. Yeh kitna kaam karta hai (`no-utilization-read`).
+  moneyWorkHeading: 'Yeh kitna kaam karta hai',
+  moneyWorkDaysOut: (days: number, window: number): string =>
+    `Pichle ${window} dinon mein ${days} din bahar`,
+  moneyWorkBusy: (pct: number): string => `Window ka ${pct}% masroof`,
+  moneyWorkNeverOut: 'Is phone ne is ko bahar jate nahi dekha.',
+  moneyWorkOutNow: 'Abhi bahar hai.',
+  moneyWorkIdle: (days: number): string => `Aakhri dafa jane ke baad ${days} din khali`,
+  moneyWorkSinceService: (days: number, due: number | null): string =>
+    due === null
+      ? `Aakhri service ke baad ${days} kiraye ke din`
+      : `Aakhri service ke baad ${due} mein se ${days} kiraye ke din`,
+  moneyWorkEarned: 'Kamai',
+  moneyWorkPerDay: 'Roz, jab se pehli dafa dekha',
+  moneyWorkPerDayUnknown: 'shuru ki tareekh nahi',
+  moneyWorkLimit:
+    'Bahar ke din is phone ki apni queue se aate hain, aur is taraf khareed ki tareekh nahi hai — to yeh kam se kam hai, poori umar nahi.',
+  moneyWorkersHeading: 'Sab se zyada kaam karne wale',
+  moneyWorkersSub: (window: number): string => `Pichle ${window} dinon mein bahar ke din`,
+  moneyWorkersRow: (days: number, rupees: string): string => `${days} din bahar · ${rupees}`,
+  moneyWorkersRowNotOut: (window: number, rupees: string): string =>
+    `Pichle ${window} dinon mein bahar nahi — kamai ${rupees}`,
+
+
+
+
+
+
+
+  // ======================================================================
 
   // --------------------------------------------------------------- kharcha
   kharchaHeading: 'Kharcha',

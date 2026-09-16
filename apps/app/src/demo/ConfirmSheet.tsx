@@ -64,7 +64,10 @@ export function ConfirmSheet({
 
   // Money honesty: unpriced lines are COUNTED here, never a reason to
   // refuse — the promise can stand while the desk finds the rate.
-  const unpriced = store.quoteFor(booking.id)?.totals.unpricedCount ?? 0
+  // One read: the unpriced count and the client's own flags (W13's
+  // do-not-rent stamp among them) come off the same quote.
+  const quote = store.quoteFor(booking.id)
+  const unpriced = quote?.totals.unpricedCount ?? 0
   const gate = !plan.ok && 'reason' in plan && plan.reason === 'needs_credentials' ? plan : null
   // --- network --- a shortfall is a question for the partner houses.
   const short = !plan.ok && 'reason' in plan && plan.reason === 'short' ? plan.short : null
@@ -83,6 +86,19 @@ export function ConfirmSheet({
         <SheetClose />
       </header>
       <p className="sheet-hint">{STR.bookingConfirmSheetHint}</p>
+
+      {/* The do-not-rent decision, said BEFORE the tap (W13): the plan's
+          refusal already names it, but a desk about to promise a Rs 4M
+          body should read it at the top of the sheet, not at the bottom
+          of a refusal. */}
+      {quote?.flags?.blacklisted ? (
+        <div className="notice notice-warn">
+          <Icon name="ban" size={18} />
+          <div>
+            <strong>{STR.moneyBlacklistOnConfirm}</strong>
+          </div>
+        </div>
+      ) : null}
 
       <ul className="line-list">
         {booking.lines.map((l, i) => {

@@ -50,6 +50,7 @@ import {
   voidScan,
   markTerminal,
   markFound,
+  markHealth,
   swapAsset,
   cycleCountDiff,
   recordServiced,
@@ -103,19 +104,37 @@ import {
 import { SessionRegistry } from '../src/demo/sessions.ts'
 import {
   assetEarnings,
+  correctEntry,
   createCustomer,
   customerForJob,
   customersByBalance,
   customerView,
+  duplicateEntries,
   isoDate,
   khataLabels,
   lateFeeDraftFor,
+  lifetimeValue,
   moneyStrip,
   recordEntry,
   recordTurnedAway,
+  setBlacklisted,
   turnedAwayByReason,
   turnedAwayThisMonth,
+  waiveLateFee,
+  waivedFees,
+  writeOffBalance,
+  writeOffEntry,
 } from '../src/demo/khata.ts'
+// --- W13 the money doors: the eight screens the year kept asking for.
+import {
+  applyDeposit,
+  depositsFor,
+  holdDeposit,
+  refundBlockers,
+  refundDeposit,
+} from '../src/demo/deposits.ts'
+import { monthAccount, monthKey } from '../src/demo/hisaab.ts'
+import { utilisation, workedHardest } from '../src/demo/utilisation.ts'
 import {
   bookingView,
   cancelBooking,
@@ -263,8 +282,104 @@ function post(customerId, kind, rupees, opts) {
     b.balance += amountMinor
   }
   books.set(customerId, b)
-  if (CHARGE_KINDS.has(kind)) monthCharged[opts.k] += amountMinor
+  if (CHARGE_KINDS.has(kind)) {
+    monthCharged[opts.k] += amountMinor
+    chargeMonth.set(id, opts.k)
+  }
   return id
+}
+
+/**
+ * Which simulated month each posted charge landed in (W13). A correction
+ * or a waiver takes the charge back out of THAT month's earnings — the
+ * same rule monthProfit now uses (SETTLED_ENTRY_IDS_SQL) — and the
+ * settlement can be written months later, so the month has to be
+ * remembered rather than inferred from the tap.
+ */
+const chargeMonth = new Map()
+
+/** Move money on the hand-kept books without writing a row — the shared
+ *  bookkeeping every W13 helper below does after its real door has run. */
+function moveBooks(customerId, { balance = 0, deposit = 0 }) {
+  const b = books.get(customerId) ?? { balance: 0, deposit: 0 }
+  b.balance += balance
+  b.deposit += deposit
+  books.set(customerId, b)
+}
+
+/** "Correct this" through the real door (W13 `no-adjustment-door`). */
+function correct(entryId, customerId, rupees, reason, opts) {
+  const r = correctEntry(db, {
+    orgId: seed.orgId, entryId, reason,
+    whenMs: at(opts.k, opts.d ?? 0, opts.hour ?? 12),
+  })
+  assert.equal(r.ok, true, `correction wrote: ${JSON.stringify(r)}`)
+  moveBooks(customerId, { balance: -rs(rupees) })
+  const k = chargeMonth.get(entryId)
+  if (k !== undefined) monthCharged[k] -= rs(rupees)
+  return r.id
+}
+
+/** "Write it off" through the real door (W13 `no-adjustment-door`). */
+function writeOff(entryId, customerId, rupees, reason, opts) {
+  const r = writeOffEntry(db, {
+    orgId: seed.orgId, entryId, reason,
+    whenMs: at(opts.k, opts.d ?? 0, opts.hour ?? 12),
+  })
+  assert.equal(r.ok, true, `write-off wrote: ${JSON.stringify(r)}`)
+  moveBooks(customerId, { balance: -rs(rupees) })
+  const k = chargeMonth.get(entryId)
+  if (k !== undefined) monthCharged[k] -= rs(rupees)
+  return r.id
+}
+
+/**
+ * A waived late fee through the real door (W13 `waived-fee-invisible`):
+ * the fee is written and written off in one transaction, so the balance
+ * does not move and the month earns nothing — and the khata still says
+ * the favour was given.
+ */
+function waive(jobId, customerId, rupees, reason, opts) {
+  const r = waiveLateFee(db, {
+    orgId: seed.orgId, jobId, amountMinor: rs(rupees), reason,
+    whenMs: at(opts.k, opts.d ?? 0, opts.hour ?? 12),
+  })
+  assert.equal(r.ok, true, `waiver wrote: ${JSON.stringify(r)}`)
+  void customerId
+  return r.id
+}
+
+/** Take a deposit through the real door (W13 `no-deposit-door`). */
+function hold(customerId, rupees, opts) {
+  const id = holdDeposit(db, {
+    orgId: seed.orgId, customerId, amountMinor: rs(rupees),
+    jobId: opts.jobId ?? null, note: opts.note ?? null,
+    heldAt: at(opts.k, opts.d ?? 0, opts.hour ?? 12),
+  })
+  assert.ok(id, 'the deposit wrote')
+  moveBooks(customerId, { deposit: rs(rupees) })
+  return id
+}
+
+/** Put held money against a bill. The one line does both halves. */
+function applyHeld(depositId, customerId, rupees, opts) {
+  const r = applyDeposit(db, {
+    orgId: seed.orgId, depositId, amountMinor: rs(rupees), note: opts.note ?? null,
+    whenMs: at(opts.k, opts.d ?? 0, opts.hour ?? 12),
+  })
+  assert.equal(r.ok, true, `apply wrote: ${JSON.stringify(r)}`)
+  moveBooks(customerId, { deposit: -rs(rupees), balance: -rs(rupees) })
+}
+
+/** Give the remainder back — gated on the job being clear. */
+function refund(depositId, customerId, rupees, opts) {
+  const r = refundDeposit(db, {
+    orgId: seed.orgId, depositId, note: opts.note ?? null,
+    whenMs: at(opts.k, opts.d ?? 0, opts.hour ?? 12),
+  })
+  assert.equal(r.ok, true, `refund wrote: ${JSON.stringify(r)}`)
+  assert.equal(r.refundedMinor, rs(rupees), 'the refund is exactly what was left')
+  moveBooks(customerId, { deposit: -rs(rupees) })
 }
 
 function assertBooks() {
@@ -643,6 +758,24 @@ describe('a year in the life of the rental house', () => {
     assert.equal(wedSummary.missing.length, 0)
     assert.equal(wedSummary.exceptions.length, 0)
 
+    // --- A deposit, taken at the counter (W13, was `no-deposit-door`) -----
+    // Eleven items and a Rs 4M camera walking out to a shaadi lawn: the
+    // desk takes a cheque against the job. Security money is the client's,
+    // sitting in the house's drawer — it goes in its own pot and does not
+    // touch the balance (@papa/core ledger.ts), and it is refundable only
+    // when the job comes back clear.
+    const wedDeposit = hold('cust-hamza', 50_000, {
+      k: 0, d: -1, hour: 13, jobId: wedJob.jobId, note: 'Cheque held — MCB 20114',
+    })
+    assert.equal(customerView(db, 'cust-hamza').depositHeldMinor, rs(50_000))
+    assert.equal(customerView(db, 'cust-hamza').balanceMinor, 0, 'a deposit is not a debt')
+    // The refund is refused while eleven items are on a lawn in Johar Town,
+    // and the desk can read the reason to the client before it taps.
+    assert.ok(
+      refundBlockers(db, wedJob.jobId).some((b) => b.reason === 'gear_still_out'),
+      'the gate names what is still out',
+    )
+
     // 11 TVC + 11 wedding + 1 pre-existing (FX6-03 on the documentary).
     assertPhysical()
     assert.equal(sqlOutSet().size, 23)
@@ -659,24 +792,52 @@ describe('a year in the life of the rental house', () => {
     post('cust-bilal', 'payment', -25_000, { k: 0, d: 2, note: 'JazzCash' })
     post('cust-ayesha', 'payment', -15_000, { k: 0, d: 2, note: 'Cash' })
     // Imran's cheque, held since the drama shoot, is released after
-    // inspection. The ledger kind exists; no screen writes it (see DEC).
-    post('cust-imran', 'deposit_refund', -50_000, { k: 0, d: 2, note: 'Cheque returned' })
+    // inspection — through `refund_deposit`'s own door now, on the seed's
+    // real deposits row. The drama job is closed and its gear is home, so
+    // the gate is open.
+    const imranHeld = depositsFor(db, 'cust-imran').find((d) => d.state === 'held')
+    assert.ok(imranHeld, 'the seeded cheque is a real deposit, not a lone ledger line')
+    assert.deepEqual(refundBlockers(db, imranHeld.jobId), [], 'the drama job is clear')
+    refund(imranHeld.id, 'cust-imran', 50_000, { k: 0, d: 2, note: 'Cheque returned' })
 
     // --- The wedding comes home a day early -------------------------------
     jobBack(wedJob.jobId, 'cust-hamza', at(0, 2, 19), {
       k: 0, d: 2, chargeRs: 60_000, payRs: 60_000,
     })
+    // Everything is home and nothing is flagged, so the gate opens and the
+    // cheque goes back — the whole arc of a deposit in one month.
+    assert.deepEqual(refundBlockers(db, wedJob.jobId), [], 'home, counted, nothing flagged')
+    refund(wedDeposit, 'cust-hamza', 50_000, { k: 0, d: 3, note: 'Cheque returned, gear clear' })
+    assert.equal(customerView(db, 'cust-hamza').depositHeldMinor, 0)
+    assert.equal(depositsFor(db, 'cust-hamza')[0].state, 'refunded')
 
     // --- The documentary limps home, 11 days late -------------------------
     const late = dueStatus(iso(0, -5), at(0, 6))
     assert.equal(late.state, 'overdue')
     assert.equal(late.daysLate, 11)
     // The by-the-book draft: 11 days × the FX6 still out = Rs 198,000 on a
-    // Rs 55,000 job. The owner waives it — and the waiver leaves NO trace:
-    // no entry, no note, nothing to show the client goodwill was extended.
+    // Rs 55,000 job. The owner waives it — and since W13 the waiver LEAVES
+    // A TRACE (was `waived-fee-invisible`): the fee is written and written
+    // off in one transaction, so Ayesha owes nothing extra and the khata
+    // still says, next quarter, that she already had her favour.
     const draft = lateFeeDraft(late.daysLate, [rs(18_000)])
     assert.equal(draft.totalMinor, rs(198_000))
-    finding('waived-fee-invisible')
+    const owedBefore = customerView(db, 'cust-ayesha').balanceMinor
+    const waived = waive('job-doc', 'cust-ayesha', 198_000, '11 days late — long client, forgiven', { k: 0, d: 6 })
+    assert.equal(
+      customerView(db, 'cust-ayesha').balanceMinor, owedBefore,
+      'the favour costs the client nothing',
+    )
+    const [favour] = waivedFees(db, 'cust-ayesha')
+    assert.equal(favour.entryId, waived)
+    assert.equal(favour.amountMinor, rs(198_000))
+    assert.equal(favour.jobId, 'job-doc')
+    assert.match(favour.reason, /forgiven/)
+    // And it is not income: the month earned nothing from a fee nobody paid.
+    assert.equal(
+      monthProfit(db, at(0, 6)).earnedMinor, monthCharged[0],
+      'a waived fee never billed anybody',
+    )
     const docBack = openSession('job-doc', 'in', at(0, 6))
     assert.deepEqual(docBack.expected, ['asset-fx6-3'])
     scanAll(docBack, docBack.expected, 'check_in')
@@ -1260,26 +1421,63 @@ describe('a year in the life of the rental house', () => {
     assert.ok(board.outJobs.length >= 8, `${board.outJobs.length} jobs with gear out at peak`)
 
     // --- The double charge, corrected in the open -------------------------
+    // Double-tap at the dock: two identical lines seconds apart. The ledger
+    // is append-only (correct), and since W13 the phone ASKS about the pair
+    // instead of letting the second line stand in silence — and the
+    // correction door writes the reversal the year used to need SQL for
+    // (was `no-adjustment-door`).
     const dupJob = decJobs[3] // Imran's Komodo day
     post('cust-imran', 'damage_charge', 30_000, { k: 3, d: 1, jobId: dupJob.job.id, note: 'Cracked monitor hood' })
-    post('cust-imran', 'damage_charge', 30_000, { k: 3, d: 1, jobId: dupJob.job.id, note: 'Cracked monitor hood' })
-    // Double-tap at the dock: two identical lines, no guard, no void. The
-    // ledger is append-only (correct), but the only correction is an
-    // 'adjustment' entry that NO screen can write. Finding `no-adjustment-door`.
-    post('cust-imran', 'adjustment', -30_000, { k: 3, d: 1, note: 'Entered twice — corrected' })
-    finding('no-adjustment-door')
+    const dupSecond = post('cust-imran', 'damage_charge', 30_000, {
+      k: 3, d: 1, hour: 12, jobId: dupJob.job.id, note: 'Cracked monitor hood',
+    })
+    const asked = duplicateEntries(db).filter((d) => d.customerId === 'cust-imran')
+    assert.equal(asked.length, 1, 'one question, about the SECOND line')
+    assert.equal(asked[0].entryId, dupSecond)
+    assert.equal(asked[0].amountMinor, rs(30_000))
+
+    correct(dupSecond, 'cust-imran', 30_000, 'Entered twice at the dock', { k: 3, d: 1, hour: 13 })
     const imranEntries = customerView(db, 'cust-imran').entries
-    assert.equal(imranEntries.filter((e) => e.kind === 'damage_charge').length, 2)
-    assert.equal(imranEntries.filter((e) => e.kind === 'adjustment').length, 1)
+    assert.equal(imranEntries.filter((e) => e.kind === 'damage_charge').length, 2,
+      'both lines stay on the page — the client saw both happen')
+    // But the page reads them as ONE story, and the money is right.
+    const imranSettled = customerView(db, 'cust-imran').settled
+    assert.equal(imranSettled.get(dupSecond).kind, 'reversal')
+    assert.equal(imranSettled.get(dupSecond).note, 'Entered twice at the dock')
+    assert.equal(duplicateEntries(db).filter((d) => d.customerId === 'cust-imran').length, 0,
+      'a corrected duplicate stops asking')
+    // And it stops being the camera's earnings, on both sides of the pipe.
+    assert.equal(
+      assetEarnings(db, 'asset-komodo-1').earnedMinor,
+      rs(40_000), 'the seeded Komodo charge only — the reversed damage never earned',
+    )
 
     // --- The deposit, held and applied against damage ---------------------
-    // Sana's big shaadi: Rs 100,000 held at checkout. The ledger projects
-    // deposits perfectly — but only the seed has ever written these kinds;
-    // no store method or screen exists. Finding `no-deposit-door`.
+    // Sana's big shaadi: Rs 100,000 held at checkout — through the real
+    // door now, `hold_deposit`'s own state machine (was `no-deposit-door`;
+    // only the seed had ever written these kinds).
     const shaadi = decJobs[2]
-    post('cust-sana', 'deposit_hold', 100_000, { k: 3, d: -7, jobId: shaadi.job.id, note: 'Cheque held' })
+    const sanaDeposit = hold('cust-sana', 100_000, {
+      k: 3, d: -7, jobId: shaadi.job.id, note: 'Cheque held — HBL 88213',
+    })
     post('cust-sana', 'charge', 90_000, { k: 3, d: -7, jobId: shaadi.job.id, note: 'C300 kit, shaadi week' })
-    finding('no-deposit-door')
+    const [held] = depositsFor(db, 'cust-sana')
+    assert.equal(held.id, sanaDeposit)
+    assert.equal(held.state, 'held')
+    assert.equal(held.remainingMinor, rs(100_000))
+    assert.equal(held.jobId, shaadi.job.id)
+    // Security money is not debt: the pot rose, the balance did not.
+    assert.equal(customerView(db, 'cust-sana').balanceMinor, rs(90_000))
+    assert.equal(customerView(db, 'cust-sana').depositHeldMinor, rs(100_000))
+    // And the refund is REFUSED while her gear is still out — the reason
+    // readable at the desk before the tap, not an hour later as a card.
+    const stillOutBlockers = refundBlockers(db, shaadi.job.id)
+    assert.ok(stillOutBlockers.some((b) => b.reason === 'gear_still_out'),
+      'the desk can say why the client waits')
+    assert.equal(
+      refundDeposit(db, { orgId: seed.orgId, depositId: sanaDeposit, whenMs: at(3, -6) }).reason,
+      'job_not_clear',
+    )
 
     // Returns, staggered.
     for (const { job, customerId, backD } of decJobs) {
@@ -1288,8 +1486,16 @@ describe('a year in the life of the rental house', () => {
         const back = openSession(job.id, 'in', at(3, backD))
         scanAll(back, back.expected, 'check_in')
         post('cust-sana', 'damage_charge', 40_000, { k: 3, d: backD, jobId: job.id, note: 'Lens scratch' })
-        post('cust-sana', 'deposit_apply', -40_000, { k: 3, d: backD, jobId: job.id, note: 'Held cheque applied' })
-        post('cust-sana', 'deposit_refund', -60_000, { k: 3, d: backD, jobId: job.id, note: 'Balance of cheque returned' })
+        // The apply and the refund through the real doors (W13). The gate
+        // has opened: everything is home, so the remainder can go back.
+        applyHeld(sanaDeposit, 'cust-sana', 40_000, { k: 3, d: backD, note: 'Held cheque applied' })
+        assert.deepEqual(refundBlockers(db, job.id), [], 'the job is clear now')
+        refund(sanaDeposit, 'cust-sana', 60_000, { k: 3, d: backD, note: 'Balance of cheque returned' })
+        const done = depositsFor(db, 'cust-sana')[0]
+        assert.equal(done.state, 'refunded')
+        assert.equal(done.appliedMinor, rs(40_000))
+        assert.equal(done.refundedMinor, rs(60_000))
+        assert.equal(done.remainingMinor, 0)
         post('cust-sana', 'payment', -50_000, { k: 3, d: backD, note: 'Cash' })
         mustClose(job.id, at(3, backD))
         continue
@@ -1422,10 +1628,50 @@ describe('a year in the life of the rental house', () => {
     assert.ok(mine.in.capturedAt >= mine.out.capturedAt)
 
     // The swap flagged the broken FX9 quarantined, so it drops out of
-    // availability with no SQL health hack. But the general health door is
-    // still missing — a "this is broken" toggle with no swap behind it has
-    // no screen (`no-health-door` stands, narrowed).
-    finding('no-health-door')
+    // availability with no SQL health hack. And since W13 the STANDALONE
+    // door exists too (was `no-health-door`): the same three verbs, with
+    // no swap and no job behind them. The prep tech who knocks the Sigma
+    // off the bench this afternoon says so on its own page —
+    const lensOnHandBefore = checkAvailability(
+      db,
+      matchKitList(parseKitList('1x Sigma 50-100mm'), demoCatalogue()),
+      openJobCommitments(db),
+      at(4, -2, 15),
+    ).lines[0].onHand
+    const bench = markHealth(db, {
+      assetId: 'asset-sigma50100-1', call: 'needs_a_look',
+      note: 'Knocked off the bench — focus ring stiff', now: () => at(4, -2, 16),
+    })
+    assert.ok(bench.outboxId)
+    expectedScanOps += 1
+    assert.equal(
+      db.get(`select health from assets where id = 'asset-sigma50100-1'`).health,
+      'servicing',
+      'one real send_to_service event, projected at once',
+    )
+    // — and the shelf stops offering it before any sync.
+    const lensAsk = checkAvailability(
+      db,
+      matchKitList(parseKitList('1x Sigma 50-100mm'), demoCatalogue()),
+      openJobCommitments(db),
+      at(4, -2, 17),
+    )
+    assert.equal(
+      lensAsk.lines[0].onHand, lensOnHandBefore - 1,
+      'a lens in the workshop is not on hand',
+    )
+    // The bench clears it the same evening: two taps, back in service, and
+    // the service METER is untouched — a release is not a service (0021 D2).
+    const meterBefore = serviceFacts(db, 'asset-sigma50100-1').daysSinceService
+    const cleared = markHealth(db, {
+      assetId: 'asset-sigma50100-1', call: 'ok',
+      note: 'Cleaned and checked', now: () => at(4, -2, 19),
+    })
+    assert.ok(cleared.outboxId)
+    expectedScanOps += 1
+    assert.equal(db.get(`select health from assets where id = 'asset-sigma50100-1'`).health, 'ok')
+    assert.equal(serviceFacts(db, 'asset-sigma50100-1').daysSinceService, meterBefore)
+
     const avail = checkAvailability(
       db,
       matchKitList(parseKitList('1x Sony FX9'), demoCatalogue()),
@@ -1593,15 +1839,50 @@ describe('a year in the life of the rental house', () => {
     )
     assert.match(nudge, /^https:\/\/wa\.me\//)
 
-    // The write-off now has its own kind — legible on every statement as
-    // 'write-off', never mistakable for a discount or a data fix (POLICY,
-    // owner may overrule; no screen writes it yet — `no-adjustment-door`).
-    post('cust-farhan', 'write_off', -38_000, { k: 5, d: 8, note: 'Written off — client absconded' })
+    // The write-off is a REAL DOOR now (was `no-adjustment-door`): the
+    // owner opens each of Farhan's two outstanding lines and writes it
+    // off with a reason. Legible on every statement as 'write-off', never
+    // mistakable for a discount or a data fix — and the reason is required,
+    // because the owner's judgement is always recorded (override 18).
+    // The BALANCE door, not the line door: Farhan has paid Rs 40,000 of
+    // Rs 78,000 billed, and a payment on a running account is not attached
+    // to a charge — so "the unpaid lines" do not exist. What the owner
+    // decides is "we are not chasing the Rs 38,000", and that is one
+    // write-off naming no line.
+    const farhanOwedMinor = customerView(db, 'cust-farhan').balanceMinor
+    assert.equal(farhanOwedMinor, rs(38_000))
+    assert.equal(
+      writeOffBalance(db, {
+        orgId: seed.orgId, customerId: 'cust-farhan',
+        reason: 'Client absconded — FIR filed', whenMs: at(5, 8, 12),
+      }).ok,
+      true,
+    )
+    moveBooks('cust-farhan', { balance: -farhanOwedMinor })
     assert.equal(L.kindLabel('write_off'), 'write-off')
     assert.equal(books.get('cust-farhan').balance, 0)
     assert.ok(
       !customersByBalance(db).some((c) => c.id === 'cust-farhan' && c.balanceMinor > 0),
     )
+    // Writing off nothing is refused — it would hand the client money.
+    assert.equal(
+      writeOffBalance(db, {
+        orgId: seed.orgId, customerId: 'cust-farhan', reason: 'Again', whenMs: at(5, 8, 13),
+      }).ok,
+      false,
+    )
+    // The statement never says 'adjustment' — the house did not make this
+    // error; it gave up chasing the money, and says so in that word.
+    const farhanAfter = customerView(db, 'cust-farhan')
+    const farhanStatement = monthlyStatementText(
+      {
+        customerName: 'Farhan Malik', houseName: seed.houseName,
+        entries: farhanAfter.entries, nowMs: at(5, 8), paymentLine: null,
+      },
+      L,
+    )
+    assert.match(farhanStatement, /write-off/)
+    assert.doesNotMatch(farhanStatement, /adjustment/)
 
     // The GEAR side finally has a home too (0020, was the terminal half of
     // `no-blacklist-or-theft-export` and `no-terminal-asset-state`): the
@@ -1660,9 +1941,41 @@ describe('a year in the life of the rental house', () => {
     assert.ok(theft.includes(fx6.asset_code))
     assert.match(theft, /Contact: JazzCash: 0300 1234567/)
     assert.match(theft, new RegExp(seed.houseName))
-    // The blacklist flag on the CUSTOMER is still missing — the theft export
-    // ships, the customer-side blacklist door does not yet.
-    finding('no-blacklist')
+    // AND THE CUSTOMER SIDE, at last (was `no-blacklist`). 0022's confirm
+    // gate has refused a blacklisted client by name since W5 and nothing
+    // could ever set the flag; 0029's door can. Farhan does not rent from
+    // this house again, and the decision carries the sentence that explains
+    // it — on the khata, on the owed list, and on the confirm sheet.
+    assert.equal(
+      setBlacklisted(db, {
+        customerId: 'cust-farhan', on: true,
+        reason: 'Absconded with FX6 + lens, Rs 2.6M — FIR filed',
+        whenMs: at(5, 8, 15),
+      }).ok,
+      true,
+    )
+    const farhanFlagged = customerView(db, 'cust-farhan')
+    assert.equal(farhanFlagged.blacklisted, true)
+    assert.match(farhanFlagged.blacklistReason, /FIR filed/)
+    assert.equal(farhanFlagged.blacklistedAt, at(5, 8, 15))
+    assert.equal(
+      customersByBalance(db).find((c) => c.id === 'cust-farhan').blacklisted, true,
+      'the owed list carries the stamp — it is where the desk looks',
+    )
+    // And the gate bites: a pencil he could still place cannot be confirmed.
+    const farhanTries = createBooking(db, seed.orgId, {
+      customerId: 'cust-farhan', startMs: at(5, 20, 9), endMs: at(5, 21, 18),
+      lines: [{ productId: 'prod-fx6', qty: 1 }], status: 'pencil',
+    }, at(5, 9))
+    assert.equal(farhanTries.ok, true, 'a pencil is not a promise')
+    const farhanRefused = confirmBooking(db, seed.orgId, farhanTries.bookingId, {}, at(5, 9, 10))
+    assert.equal(farhanRefused.ok, false)
+    assert.equal(farhanRefused.reason, 'blacklisted')
+    assert.equal(
+      cancelBooking(db, farhanTries.bookingId, 'Blacklisted', at(5, 9, 11)).ok,
+      true,
+      'and the desk closes the pencil through the door, not by leaving it to rot',
+    )
 
     // --- An extension collides; the SUBSTITUTE door settles it (0022 D10)
     // Bilal holds FX9-02 — the body he always takes — for three days; Sana
@@ -1762,9 +2075,31 @@ describe('a year in the life of the rental house', () => {
     // Past months ARE answerable by the API — the strip takes any clock…
     assert.equal(moneyStrip(db, at(1, 0)).earnedMonthMinor, monthCharged[1])
     assert.equal(moneyStrip(db, at(3, 0)).earnedMonthMinor, monthCharged[3])
-    // …but no screen passes anything except Date.now(). The owner cannot
-    // see October from March. Finding `no-month-history-screen`.
-    finding('no-month-history-screen')
+    // …and since W13 a screen asks: the hisaab's month picker, deep-linked
+    // as #/hisaab?m=YYYY-MM (was `no-month-history-screen`). From March the
+    // owner opens October and December and gets each month's own account —
+    // its profit, what moved, its kharcha, and the statement links.
+    const october = monthAccount(db, at(1, 0), at(6, 0))
+    assert.equal(october.isThisMonth, false)
+    assert.equal(october.profit.earnedMinor, monthCharged[1])
+    assert.equal(october.profit.spentMinor, monthSpent[1])
+    assert.equal(october.profit.profitMinor, monthCharged[1] - monthSpent[1])
+    assert.ok(october.wentOut > 0, 'October moved gear, and the month remembers')
+    assert.ok(
+      october.customers.some((c) => c.id === 'cust-farhan'),
+      'the corporate shoot is on October\u2019s statement list',
+    )
+    const december = monthAccount(db, at(3, 0), at(6, 0))
+    assert.equal(december.profit.earnedMinor, monthCharged[3])
+    assert.equal(december.month, monthKey(at(3, 0)))
+    // The billed/paid split per client is the month's own, not the balance:
+    // December's peak week billed far more than any one client owes now.
+    assert.ok(
+      december.customers.reduce((n, c) => n + c.billedMinor, 0) === monthCharged[3],
+      'the month\u2019s per-client billing sums to the month',
+    )
+    // And this month IS this month — the only one with a day under it.
+    assert.equal(monthAccount(db, at(6, 0), at(6, 0)).isThisMonth, true)
 
     // Ramzan trickle.
     const m1 = jobOut('Iftar transmission — set light', 'cust-hamza',
@@ -1840,9 +2175,40 @@ describe('a year in the life of the rental house', () => {
     assert.ok(deadIds.includes('asset-sachdeva-3'), 'the unpriced tripod too')
     assert.ok(!deadIds.includes(m1.expected[0]), 'a unit rented this month is working, not idle')
     assert.ok(idle.deadStockValue.totalMinor >= rs(4_500_000), 'the idleness is said in money')
-    // What REMAINS of the finding is the ranking: no fleet leaderboard of
-    // earners — the owner still opens asset pages one by one (AUG Q4).
-    finding('no-utilization-read')
+    // AND THE RANKING, which is what remained of the finding (was
+    // `no-utilization-read`): the fleet in one glance, hardest worker
+    // first, instead of opening asset pages one by one. The FX9 that has
+    // worked since September outranks the Xeen set that has never left.
+    const league = workedHardest(db, at(6, 10), 5)
+    assert.ok(league.length > 0, 'the fleet ranks')
+    assert.ok(
+      league.every((r, i) => i === 0 || league[i - 1].daysOut >= r.daysOut),
+      'hardest worker first',
+    )
+    assert.ok(
+      !league.some((r) => r.id === 'asset-samyang-1'),
+      'a unit nobody rented is not in the league, however valuable',
+    )
+    // And one unit's own page answers the same question about itself.
+    const fx9work = utilisation(db, 'asset-fx9-1', at(6, 10))
+    assert.equal(fx9work.windowDays, 90)
+    assert.ok(fx9work.daysOut > 0, 'the FX9 has worked inside the window')
+    assert.equal(fx9work.busyPct, Math.round((fx9work.daysOut / 90) * 100))
+    assert.equal(fx9work.earnedMinor, fx9.earnedMinor, 'the same rental-money-only figure')
+    assert.ok(fx9work.knownDays !== null && fx9work.earnedPerDayMinor !== null)
+    // The honest limit, asserted as a limit: a unit this phone has never
+    // seen move reports NULL idle days, not a confident ninety.
+    const neverOut = utilisation(db, 'asset-sachdeva-3', at(6, 10))
+    assert.equal(neverOut.daysOut, 0)
+    assert.equal(neverOut.idleDays, null,
+      '"this phone has never seen it go out" is not "idle 90 days"')
+    // Dead stock still calls the same tripod idle, and rightly: that read
+    // has a SECOND anchor (last_scanned_at) and asks a different question.
+    // The two are not in conflict — one asks "has it worked", the other
+    // "is capital sitting still" — and each says which evidence it used.
+    assert.ok(deadIds.includes('asset-sachdeva-3'))
+    // The Xeen set HAS been out once, long ago, so its idle days are real.
+    assert.ok(utilisation(db, 'asset-samyang-1', at(6, 10)).idleDays > 90)
 
     assertBooks()
     assertNoLostScans()
@@ -2105,14 +2471,30 @@ describe('a year in the life of the rental house', () => {
     })
     assert.equal(customerView(db, 'cust-imran').balanceMinor, books.get('cust-imran').balance)
 
-    // Six days later the bank returns the cheque. The correction now has a
-    // NAME: a 'reversal' that points at the payment it voids. The client's
-    // statement reads 'reversed', never 'adjustment' — the house made no
-    // error — though no screen writes it yet (`no-adjustment-door` holds).
-    post('cust-imran', 'reversal', 40_000, {
-      k: 8, d: 5, note: 'Cheque 114202 bounced', reversalOf: chequeId,
-    })
-    finding('no-adjustment-door')
+    // Six days later the bank returns the cheque. The correction has a
+    // NAME and, since W13, A DOOR (was `no-adjustment-door`): the desk
+    // opens the payment line on the khata and corrects it with a reason.
+    // The client's statement reads 'reversed', never 'adjustment' — the
+    // house made no error — and the reason is kept with the line.
+    correct(chequeId, 'cust-imran', -40_000, 'Cheque 114202 bounced', { k: 8, d: 5 })
+    const imranPair = customerView(db, 'cust-imran').settled.get(chequeId)
+    assert.equal(imranPair.kind, 'reversal')
+    assert.equal(imranPair.note, 'Cheque 114202 bounced')
+    assert.equal(imranPair.amountMinor, rs(40_000), 'the reversal negates the payment exactly')
+    // The correction is refused a second time and refused without a
+    // reason — a double-tap cannot turn a bounce into a discount.
+    assert.equal(
+      correctEntry(db, {
+        orgId: seed.orgId, entryId: chequeId, reason: 'Again', whenMs: at(8, 5, 13),
+      }).reason,
+      'already_settled',
+    )
+    assert.equal(
+      correctEntry(db, {
+        orgId: seed.orgId, entryId: chequeId, reason: '  ', whenMs: at(8, 5, 13),
+      }).reason,
+      'no_reason',
+    )
 
     // The debt clock SURVIVES the bounce: the voided payment and its
     // reversal cancel in time as well as in money, so 'owed since' points
@@ -2184,6 +2566,29 @@ describe('a year in the life of the rental house', () => {
     const fx9Costs = assetCosts(db, 'asset-fx9-1')
     assert.equal(fx9Costs.repairMinor, rs(105_000)) // seed + Jan + today
     assert.equal(monthProfit(db, at(4, 10, 0)).spentMinor, monthSpent[4])
+
+    // --- The blacklist the ladder asked about, and the answer is NO ------
+    // MAY's cheque bounced and the day-14 rung told the desk to CONSIDER a
+    // blacklist (ASSUMPTION #escalation-ladder). Since W13 the desk can
+    // act on that — and this month it decides not to: one bounced cheque
+    // from a four-job regular is not an absconding, and Imran pays the
+    // Rs 40,000 again in cash. The door exists; the judgement is still the
+    // owner's, and the year records a NO as clearly as it records a yes.
+    assert.equal(customerView(db, 'cust-imran').blacklisted, false)
+    post('cust-imran', 'payment', -40_000, { k: 9, d: 1, note: 'Cash — replaced the bounced cheque' })
+    assert.equal(books.get('cust-imran').balance, 0)
+    // Refusing him would have taken a reason, and the app would have
+    // refused a blank one — the guard is real whether or not it is used.
+    assert.equal(
+      setBlacklisted(db, { customerId: 'cust-imran', on: true, reason: '  ', whenMs: at(9, 1, 12) }).reason,
+      'no_reason',
+    )
+    assert.equal(customerView(db, 'cust-imran').blacklisted, false)
+    // And a client who IS refused stays refused across the year: Farhan's
+    // February decision still stands in June, reason and date intact.
+    const farhanJun = customerView(db, 'cust-farhan')
+    assert.equal(farhanJun.blacklisted, true)
+    assert.match(farhanJun.blacklistReason, /FIR filed/)
 
     const jun1 = jobOut('Session video — studio day', 'cust-sana',
       [{ productId: 'prod-c300', qty: 1 }, { productId: 'prod-mkh416', qty: 1 }],
@@ -2306,17 +2711,50 @@ describe('a year in the life of the rental house', () => {
       [{ productId: 'prod-fx6', qty: 1 }], iso(11, 1), at(11, 0))
     jobBack(aug1.id, 'cust-bilal', at(11, 1), { k: 11, d: 1, chargeRs: 18_000, payRs: 18_000 })
 
-    // Q1 — "What did the year bill?" The ledger holds it to the paisa; the
-    // app can only ever show ONE month at a time (see MAR).
+    // Q1 — "What did the year bill?" The ledger holds it to the paisa —
+    // LIVE lines only, the one settled rule the app's own month, asset and
+    // margin reads all use (@papa/core SETTLED_ENTRY_IDS_SQL): a reversed
+    // charge and a waived fee never billed anybody. Since W13 the owner can
+    // also ask it month by month on the phone (see the picker, MAR).
     const sqlTotal = Number(
       db.get(
         `select sum(amount_minor) as t from customer_ledger_entries
-          where kind in ('charge','late_fee','damage_charge')`,
+          where kind in ('charge','late_fee','damage_charge')
+            and id not in (
+              select reversal_of from customer_ledger_entries where reversal_of is not null
+              union all
+              select corrects_entry_id from customer_ledger_entries where corrects_entry_id is not null)`,
       ).t,
     )
     const seededCharges = rs(60_000 + 45_000 + 80_000 + 55_000 + 40_000)
     const simCharges = monthCharged.reduce((a, b) => a + b, 0)
     assert.equal(sqlTotal, seededCharges + simCharges)
+
+    // And BOTH rows of every settlement are still in the book, because the
+    // client saw both happen: the raw sum is bigger by exactly the money
+    // the year corrected or forgave.
+    const rawTotal = Number(
+      db.get(
+        `select sum(amount_minor) as t from customer_ledger_entries
+          where kind in ('charge','late_fee','damage_charge')`,
+      ).t,
+    )
+    // The charge-side money the year took back — a reversed charge, a
+    // waived fee. A reversal of a PAYMENT (FEB's bounced cheque) is not in
+    // here: it put money back ON the book, it did not take billing off it.
+    const forgiven = Number(
+      db.get(
+        `select sum(amount_minor) as t from customer_ledger_entries
+          where kind in ('charge','late_fee','damage_charge')
+            and id in (
+              select reversal_of from customer_ledger_entries where reversal_of is not null
+              union all
+              select corrects_entry_id from customer_ledger_entries where corrects_entry_id is not null)`,
+      ).t ?? 0,
+    )
+    assert.ok(forgiven > 0, 'the year corrected and forgave real money')
+    assert.equal(rawTotal - sqlTotal, forgiven,
+      'every settled line is still on the page, and nets to nothing')
 
     // Q1b — "What did the year actually MAKE?" The vendor's-dream question
     // the expense book existed to answer (was `no-expense-book`): earned
@@ -2329,25 +2767,73 @@ describe('a year in the life of the rental house', () => {
     for (let k = 0; k < 12; k++) profitSum += monthProfit(db, at(k, 10, 0)).profitMinor
     assert.equal(profitSum, simCharges - yearSpent)
 
-    // Q2 — "Who is my best client?" Lifetime value is IN the entries every
-    // khata page loads, but no list ranks it; the owed list ranks debt.
-    const lifetime = (id) =>
-      customerView(db, id).entries
-        .filter((e) => CHARGE_KINDS.has(e.kind))
-        .reduce((n, e) => n + e.amountMinor, 0)
-    assert.ok(lifetime('cust-bilal') > lifetime('cust-farhan'))
-    finding('no-lifetime-value-view')
+    // Q2 — "Who is my best client?" The khata page SAYS it now (was
+    // `no-lifetime-value-view`): billed, paid, written off, the jobs the
+    // money touched, the span, and the average job — every figure a sum
+    // over the entries the page already loads.
+    const bilalWorth = lifetimeValue(db, 'cust-bilal')
+    const farhanWorth = lifetimeValue(db, 'cust-farhan')
+    assert.ok(bilalWorth.chargedMinor > farhanWorth.chargedMinor, 'Bilal is the better client')
+    assert.ok(bilalWorth.jobs >= 4, `${bilalWorth.jobs} of Bilal's jobs carried money`)
+    assert.equal(bilalWorth.averageJobMinor, Math.round(bilalWorth.chargedMinor / bilalWorth.jobs))
+    assert.ok(bilalWorth.firstAt < bilalWorth.lastAt, 'a year-long relationship, dated')
+    // And the honest columns: the money the house gave up is its own, not
+    // hidden inside "billed". Farhan absconded with Rs 38,000.
+    assert.equal(farhanWorth.writtenOffMinor, rs(38_000))
+    assert.equal(bilalWorth.writtenOffMinor, 0)
+    // A waived fee is in neither column's favour: Ayesha was billed for it
+    // and forgiven it, so it is never billing — and it is a COURTESY, not
+    // money chased and lost, so it has its own column beside the write-off.
+    const ayeshaWorth = lifetimeValue(db, 'cust-ayesha')
+    assert.ok(
+      ayeshaWorth.waivedMinor + ayeshaWorth.writtenOffMinor >= rs(198_000),
+      'September\u2019s favour is on the record',
+    )
+    assert.ok(ayeshaWorth.waivedMinor > 0, 'and it is on the courtesy side of it')
+    // The one figure that must match the ledger exactly: billed, all time,
+    // is the live charge-side sum on that khata.
+    assert.equal(
+      bilalWorth.chargedMinor,
+      customerView(db, 'cust-bilal').entries
+        .filter((e) => CHARGE_KINDS.has(e.kind) && !customerView(db, 'cust-bilal').settled.has(e.id))
+        .reduce((n, e) => n + e.amountMinor, 0),
+    )
+
+    // Q2b — "And month by month?" The picker answers all twelve from one
+    // screen (was `no-month-history-screen`): every month's own profit,
+    // and the sum of the twelve is the year's.
+    let pickedSum = 0
+    for (let k = 0; k < 12; k++) {
+      const m = monthAccount(db, at(k, 10, 0), at(11, 5))
+      assert.equal(m.month, monthKey(at(k, 10, 0)))
+      assert.equal(m.isThisMonth, k === 11, 'only the last simulated month is "this" one')
+      assert.equal(m.profit.earnedMinor, monthCharged[k], `month ${k} earned`)
+      assert.equal(m.profit.spentMinor, monthSpent[k], `month ${k} spent`)
+      pickedSum += m.profit.profitMinor
+    }
+    assert.equal(pickedSum, simCharges - yearSpent, 'the twelve months ARE the year')
 
     // Q3 — "Who is my worst payer?" Ayesha's Rs 40,000 has been owed since
     // the seeded charge — before the pilot even began. The book knows.
     const ayeshaSince = oldestUnpaidMs(customerView(db, 'cust-ayesha').entries)
     assert.ok(ayeshaSince !== null && ayeshaSince < at(0, -10))
 
-    // Q4 — "Which camera earned best?" Per-asset answers exist; there is no
-    // fleet leaderboard, so the owner opens asset pages one by one (MAR).
+    // Q4 — "Which camera earned best?" Per-asset answers exist, AND the
+    // fleet ranks itself now (was the last of `no-utilization-read`): one
+    // Sehat group, hardest worker first, instead of a page at a time.
     assert.ok(
       assetEarnings(db, 'asset-fx9-1').earnedMinor >
         assetEarnings(db, 'asset-fx6-1').earnedMinor,
+    )
+    const league = workedHardest(db, at(11, 5), 5)
+    assert.ok(league.length > 0, 'the year ends with a league table')
+    assert.ok(
+      league.every((r, i) => i === 0 || league[i - 1].daysOut >= r.daysOut),
+      'hardest worker first',
+    )
+    assert.ok(
+      league.every((r) => r.earnedPerDayMinor === null || r.earnedPerDayMinor >= 0),
+      'no negative earnings per day, and null rather than a divide by zero',
     )
     // …and each page's payback bar carries the year's repairs in its
     // denominator: the FX9's Rs 3.5M plus the seed's, January's and
@@ -2417,48 +2903,48 @@ describe('a year in the life of the rental house', () => {
   })
 
   // ------------------------------------------------------------ the ledger
-  test('the year’s findings are exactly the documented set', () => {
+  test('the year’s findings are exactly the documented set — and it is EMPTY', () => {
     // One id per wall the year hit. If a feature ships and a wall comes
     // down, remove its id here AND its section in docs/year-in-the-life.md.
+    // After thirteen waves the list is EMPTY: every scenario the simulated
+    // year reached for goes through a door the phone has.
+    //
     // Phase B0 took three ids off this list — `no-add-customer`,
     // `no-customer-on-desk-job`, `no-close-job` — by shipping the doors;
     // the expense book (0019) took two more — `no-expense-book`,
     // `no-subrent-intake`. Wave 2 (the fleet lifecycle, 0020) took three:
     // `no-terminal-asset-state`, `no-swap-flow`, `no-cycle-count`; the
     // theft half of `no-blacklist-or-theft-export` shipped too, narrowing
-    // that id to `no-blacklist`. Wave 3 (the living fleet, 0021) takes
-    // `no-service-tracking` off the list — the JUN nudge is real: the
-    // meter grows with the year's scans, the Sehat surface names the
-    // unit, and the desk services it with the cost landing on the book.
-    // Dead stock is a read too, asserted in MAR, so
-    // `no-utilization-read` NARROWS to the missing earners leaderboard.
-    // Wave 5 (the promise calendar, 0022 + the client) takes three:
-    // `no-bookings`, `double-promise` — SEP's wedding and NOV's two
-    // shaadi trucks now leave with different units because the calendar
-    // refuses the second promise BY NAME — and
-    // `turnaway-blind-to-commitments`: an enquiry asked with dates
-    // subtracts confirmed claims and the log counts the committed refusal.
-    // The second year (W8) takes `import-apply-welded`: applyImport lives
-    // in read-model.ts and the year drives the real routine twice. The
-    // eight that remain are Phase B polish doors the waves did not build.
-    // The second year had found two walls on the shipped doors —
-    // `sub-rent-intent-unreplayable` (MAR) and `subhire-cost-unlinkable`
-    // (APR) — and W11 took both: the intent crosses as set_booking_note
-    // (0028) and a job's margin reads the bills tagged to the booking it
-    // came from. docs/year-in-the-life.md keeps the story.
-    assert.deepEqual(
-      [...FINDINGS].sort(),
-      [
-        'no-adjustment-door',
-        'no-blacklist',
-        'no-deposit-door',
-        'no-health-door',
-        'no-lifetime-value-view',
-        'no-month-history-screen',
-        'no-utilization-read',
-        'waived-fee-invisible',
-      ],
-    )
+    // that id to `no-blacklist`. Wave 3 (the living fleet, 0021) took
+    // `no-service-tracking` and the idle-days half of
+    // `no-utilization-read`. Wave 5 (the promise calendar, 0022 + the
+    // client) took `no-bookings`, `double-promise` and
+    // `turnaway-blind-to-commitments`. The second year (W8) took
+    // `import-apply-welded`. W11 took the two walls the shipped doors had
+    // — `sub-rent-intent-unreplayable` and `subhire-cost-unlinkable`.
+    //
+    // W13 — THE MONEY DOORS — takes the last eight, the Phase B polish
+    // the waves kept deferring, each one at the month that hit it:
+    //   `waived-fee-invisible`     SEP: the fee is written and written off,
+    //                              so the favour is on the record.
+    //   `no-deposit-door`          SEP + DEC: hold / apply / refund through
+    //                              0017's own state machine, with the
+    //                              refund's gate read BEFORE the tap.
+    //   `no-adjustment-door`       DEC + FEB + MAY: correct this, write it
+    //                              off, write off the balance — each with a
+    //                              reason, and the double-tap now ASKS.
+    //   `no-health-door`          JAN: three real scan verbs, no swap.
+    //   `no-blacklist`            FEB (the absconded client) and JUN (the
+    //                              bounced cheque, where the answer is no).
+    //   `no-month-history-screen` MAR + AUG: the hisaab's month picker.
+    //   `no-lifetime-value-view`  AUG: what the client has been worth.
+    //   `no-utilization-read`     MAR + AUG: how hard a unit works, and
+    //                              the fleet ranked in one glance.
+    //
+    // docs/year-in-the-life.md keeps the story. An empty list is not the
+    // end of the findings: the next thing to re-live this year on is a
+    // real phone, over a real network, at a real house.
+    assert.deepEqual([...FINDINGS].sort(), [])
   })
 })
 

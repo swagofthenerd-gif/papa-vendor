@@ -49,7 +49,7 @@ export type { MoneyTotal } from './money.ts'
 export {
   projectLedger, oldestUnpaidMs, lateFeeDraft, paybackPercent,
   signedRupees, ledgerDate, monthBounds, balanceCardText, monthlyStatementText,
-  CHARGE_KINDS,
+  CHARGE_KINDS, SETTLED_ENTRY_IDS_SQL,
 } from './ledger.ts'
 export type {
   LedgerEntryKind, LedgerEntryView, LedgerProjection, KhataStrings,
@@ -58,13 +58,13 @@ export type {
 export { EXPENSE_KINDS, liveExpenses, totalExpenses } from './expenses.ts'
 export type { ExpenseKind, ExpenseView } from './expenses.ts'
 export {
-  markTerminal, markFound, swapAsset, cycleCountDiff, recordServiced,
+  markTerminal, markFound, markHealth, swapAsset, cycleCountDiff, recordServiced,
 } from './fleet.ts'
 export type {
-  Disposition, MarkTerminalInput, FleetOpResult,
+  Disposition, MarkTerminalInput, FleetOpResult, HealthCall, MarkHealthInput,
   SwapInput, SwapResult, SwapFlag, CountDiff, RecordServicedInput,
 } from './fleet.ts'
-export { rentalDaysBetween, dispositionFor } from './project.ts'
+export { rentalDaysBetween, dispositionFor, healthFor } from './project.ts'
 export {
   DEFAULT_BOOKING_SETTINGS, ESCALATION_LADDER, HOUR_MS, DAY_MS, WEEKDAYS_SHORT, MONTHS_SHORT,
   blockedPeriod, isLivePencil, pencilCountdown, overlaps, peakOverlap, msOf,
