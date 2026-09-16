@@ -545,12 +545,18 @@ export interface ChargedButReturned {
  * a negotiated settlement) is a real answer only a person can give.
  */
 export function chargedButReturned(db: SqlDriver): ChargedButReturned[] {
-  const reversed = new Set(
+  // SETTLED, not merely reversed — the WHOLE rule (SETTLED_ENTRY_IDS_SQL),
+  // which counts a write-off as well as a reversal. Reading only
+  // `reversal_of` left a charge that had been WRITTEN OFF still offering
+  // "charged, then it came back — Reverse?": the tap called reverseEntry,
+  // the ledger refused it as already settled, nothing was written and the
+  // card came back unarmed. A button that can never do anything is worse
+  // than no button, because the owner keeps pressing it.
+  // The union takes its column name from its first branch, so the rows
+  // come back as `reversal_of` whichever half matched.
+  const settled = new Set(
     db
-      .all<{ reversal_of: string }>(
-        `select reversal_of from customer_ledger_entries
-          where reversal_of is not null`,
-      )
+      .all<{ reversal_of: string }>(SETTLED_ENTRY_IDS_SQL)
       .map((r) => r.reversal_of),
   )
   const rows = db.all<{
@@ -587,7 +593,7 @@ export function chargedButReturned(db: SqlDriver): ChargedButReturned[] {
   const ops = decodeScanOps(db)
   const out: ChargedButReturned[] = []
   for (const r of rows) {
-    if (reversed.has(r.id)) continue
+    if (settled.has(r.id)) continue
     const cameBack = ops.some(
       (op) =>
         op.assetId === r.asset_id &&

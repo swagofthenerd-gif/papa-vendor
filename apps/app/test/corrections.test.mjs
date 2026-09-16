@@ -17,6 +17,7 @@ import { LOCAL_SCHEMA, argsOf, monthlyStatementText, oldestUnpaidMs } from '@pap
 import { seedDemo } from '../src/demo/seed.ts'
 import {
   assetEarnings,
+  chargedButReturned,
   correctEntry,
   customersByBalance,
   customerView,
@@ -31,6 +32,7 @@ import {
   writeOffEntry,
 } from '../src/demo/khata.ts'
 import { holdDeposit } from '../src/demo/deposits.ts'
+import { SessionRegistry } from '../src/demo/sessions.ts'
 import { confirmBooking, createBooking } from '../src/demo/bookings.ts'
 import { monthProfit } from '../src/demo/kharcha.ts'
 import { STR_EN } from '../src/strings.ts'
@@ -206,6 +208,34 @@ describe('write it off', () => {
     assert.equal(op.payload.p_corrects_entry_id, charge)
     assert.equal(op.payload.p_reversal_of, null)
     assert.equal(op.payload.p_amount_minor, -rs(20_000))
+  })
+
+  test('a written-off charge whose item came back offers no dead Reverse button', () => {
+    // The notice reads the WHOLE settled rule, not just reversals. A charge
+    // that was written off and whose item then came home used to keep
+    // offering "charged, then it came back — Reverse?", and the tap could
+    // never write anything: the ledger refuses a second settlement, so the
+    // card came back unarmed every time.
+    const charge = recordEntry(db, {
+      orgId: seed.orgId, customerId: 'cust-ayesha', kind: 'charge',
+      amountMinor: rs(90_000), jobId: 'job-doc', assetId: 'asset-fx6-3',
+      note: 'Did not come back', createdAt: NOW,
+    }, ids())
+    // Scanned home through the real session, on an injected clock, so the
+    // check-in genuinely lands after the charge on the book's axis.
+    const registry = new SessionRegistry(db, 'corrections-device', () => ['asset-fx6-3'],
+      () => NOW + 60_000)
+    const entry = registry.open('job-doc', 'in')
+    assert.equal(entry.session.addManually('asset-fx6-3', 'check_in').outcome, 'accepted')
+    assert.deepEqual(
+      chargedButReturned(db).map((n) => n.entryId), [charge],
+      'uncorrected, so the decision is still the owner\'s',
+    )
+
+    writeOffEntry(db, {
+      orgId: seed.orgId, entryId: charge, reason: 'Wrote it off instead', whenMs: NOW + 2 * 60_000,
+    }, ids(NOW + 2 * 60_000))
+    assert.deepEqual(chargedButReturned(db), [], 'settled is settled, whichever way')
   })
 
   test('the statement prints "write-off", never the house\'s own "adjustment"', () => {
